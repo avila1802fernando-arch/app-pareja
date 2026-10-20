@@ -1,16 +1,27 @@
 # Nosotros ❤️
 
-App de pareja: cada vez que uno de los dos la abre, el otro recibe una notificación de "te extraño" en el teléfono, incluso bloqueado. Funciona en Android (Chrome) y en iPhone (iOS 16.4 o superior, instalada en pantalla de inicio).
+App de pareja a distancia. Funciona en Android (Chrome) y en iPhone (iOS 16.4 o superior, instalada en pantalla de inicio), con notificaciones aunque el teléfono esté bloqueado.
 
-Costo: **US$0**. Supabase (base de datos, login, función de envío) y Vercel (hosting) en sus planes gratuitos, sin tarjeta.
+Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) en sus planes gratuitos, sin tarjeta.
+
+## Qué hace
+
+- **Inicio** · Cada vez que uno entra, el otro recibe "te extraño". Botón **Estoy libre para hablar**: el otro ve en vivo "X está libre ahora" y recibe una push; si los dos están libres, aparece grande "¡Los dos están libres!". Se apaga sola a las 2 horas.
+- **Horarios** · Cuadrícula semanal donde cada uno marca cuándo normalmente puede. Se ven los dos horarios y las **horas en común**, siempre con las dos horas locales (Ecuador y Chile no tienen la misma hora).
+- **Calendario** · Llamadas, citas, viajes, aniversarios. Vista mes y lista de próximos. Al crear o cambiar algo, el otro recibe una push; **30 minutos antes** les llega un recordatorio a los dos.
+- **Ajustes** · Nombre, zona horaria, notificaciones y cerrar sesión.
 
 ## Estructura
 
 ```
 public/                 ← la app (HTML, CSS, JS, íconos, service worker)
   config.js             ← TUS claves públicas (editar)
-supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor)
-supabase/functions/notificar/index.ts  ← envía las push
+supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede repetir)
+supabase/cron.sql       ← tarea cada 5 min para recordatorios (editar 2 valores y pegar)
+supabase/functions/
+  _shared/push.ts       ← código común para enviar push
+  notificar/index.ts    ← push por "te extraño", "estoy libre" y cambios del calendario
+  recordatorios/index.ts← recordatorios 30 min antes + apaga "estoy libre" vencidos
 vercel.json
 ```
 
@@ -26,7 +37,6 @@ Crea cuenta, con el mismo correo, en:
 Sube esta carpeta a un repositorio nuevo en GitHub llamado `nosotros` (puede ser privado). Desde tu PC con Windows:
 
 ```bash
-cd nosotros-app
 git init
 git add .
 git commit -m "Nosotros"
@@ -38,7 +48,7 @@ git push -u origin main
 ## Paso 2 · Supabase: proyecto y base de datos (10 min)
 
 1. En Supabase → **New project**. Nombre `nosotros`, región **South America (São Paulo)**. Guarda la contraseña de la base de datos aunque no la vas a usar.
-2. Cuando termine de crearse: menú **SQL Editor** → **New query** → pega todo el contenido de `supabase/schema.sql` → **Run**. Debe decir "Success".
+2. Cuando termine de crearse: menú **SQL Editor** → **New query** → pega todo el contenido de `supabase/schema.sql` → **Run**. Debe decir "Success". (Puedes volver a correrlo cuando el archivo cambie: no borra nada.)
 3. Menú **Project Settings → API**. Copia:
    - **Project URL** → en `public/config.js`, campo `SUPABASE_URL`
    - **anon public** key → campo `SUPABASE_ANON_KEY`
@@ -75,7 +85,7 @@ Haz commit y push de `config.js` ya rellenado.
 
 Desde ahora cada `git push` vuelve a publicar solo.
 
-## Paso 5 · Función que envía las push (10 min)
+## Paso 5 · Funciones que envían las push (10 min)
 
 Instala la CLI de Supabase (una vez):
 
@@ -93,45 +103,70 @@ supabase link --project-ref TU_PROJECT_REF     # el "ref" está en Project Setti
 supabase secrets set VAPID_PUBLIC_KEY="la publica" VAPID_PRIVATE_KEY="la privada" VAPID_SUBJECT="mailto:tu@correo.com" WEBHOOK_SECRET="tu-clave-secreta"
 
 supabase functions deploy notificar --no-verify-jwt
+supabase functions deploy recordatorios --no-verify-jwt
 ```
 
-Al terminar te muestra la URL de la función, parecida a
-`https://TU_REF.supabase.co/functions/v1/notificar`.
+Al terminar te muestra las URLs de las funciones, parecidas a
+`https://TU_REF.supabase.co/functions/v1/notificar` y `.../recordatorios`.
 
-## Paso 6 · Conectar la base de datos con la función (3 min)
+## Paso 6 · Webhooks: la base de datos avisa a la función (5 min)
 
-En Supabase → **Database → Webhooks** → **Create a new hook**:
-- Name: `notificar`
-- Table: `eventos`
-- Events: solo **Insert**
-- Type: **HTTP Request**, método **POST**
-- URL: la URL de la función del paso 5
-- HTTP Headers → **Add new header**: `x-webhook-secret` = la misma clave que pusiste en `WEBHOOK_SECRET`
-- Timeout: 5000
+En Supabase → **Database → Webhooks** → **Create a new hook**. Crea **dos**:
 
-Guardar. Listo: cada vez que alguien entra o toca "te extraño", la base de datos avisa a la función y la función manda la push al otro teléfono.
+| | Webhook 1 | Webhook 2 |
+|---|---|---|
+| Name | `notificar` | `notificar-calendario` |
+| Table | `eventos` | `eventos_cal` |
+| Events | solo **Insert** | **Insert**, **Update** y **Delete** |
+| Type | HTTP Request, **POST** | HTTP Request, **POST** |
+| URL | la URL de `notificar` del paso 5 | la misma URL de `notificar` |
+| HTTP Headers | `x-webhook-secret` = tu `WEBHOOK_SECRET` | igual |
+| Timeout | 5000 | 5000 |
 
-## Paso 7 · Instalar en los teléfonos
+El primero avisa cuando alguien entra, manda "te extraño" o se pone libre (el "estoy libre" también queda registrado en `eventos`, por eso no necesita webhook propio). El segundo avisa cuando se agenda, cambia o cancela algo del calendario.
+
+## Paso 7 · Recordatorios cada 5 minutos (5 min)
+
+1. Supabase → **Database → Extensions**: busca y activa **pg_cron** y **pg_net** (si `cron.sql` falla en la primera línea, es esto).
+2. Abre `supabase/cron.sql` y reemplaza:
+   - `TU_REF` por el *Reference ID* del proyecto (Project Settings → General)
+   - `TU_WEBHOOK_SECRET` por la misma clave del paso 5
+3. Pega el archivo en **SQL Editor** → **Run**.
+
+Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo que empieza en 30 minutos y apaga los "estoy libre" vencidos. Para comprobar que corre: `select * from cron.job_run_details order by start_time desc limit 5;` (debe decir `succeeded`).
+
+## Paso 8 · Instalar en los teléfonos
 
 **Android (Chrome)**
 1. Abre la URL de Vercel. Chrome ofrece "Agregar a pantalla de inicio" (o menú ⋮ → *Instalar app*).
 2. Abre la app desde el ícono, entra con tu correo, escribe tu nombre y **Crear nuestra pareja**. Te da un código de 6 letras.
-3. Toca **Activar notificaciones** y acepta.
+3. En **Ajustes**, toca **Activar notificaciones** y acepta. Revisa ahí que la zona horaria sea la tuya (la app toma la del teléfono).
 
 **iPhone (Safari, iOS 16.4+)**
 1. Abre la URL en **Safari** (no en Chrome ni desde WhatsApp).
 2. Botón Compartir → **Agregar a pantalla de inicio** → Agregar.
 3. Abre la app **desde el ícono** (es obligatorio: fuera de ahí iOS no permite notificaciones).
 4. Entra con su correo, escribe su nombre, pone el código que le pasaste y **Unirme**.
-5. Toca **Activar notificaciones** y acepta. iPhone también pide tener activas las notificaciones en Ajustes → Notificaciones → Nosotros.
+5. En **Ajustes**, toca **Activar notificaciones** y acepta. iPhone también pide tener activas las notificaciones en Ajustes → Notificaciones → Nosotros.
+
+## Si ya tenías la versión anterior funcionando
+
+1. `git pull` / copia los archivos nuevos y haz `git push` (Vercel publica solo).
+2. Supabase → SQL Editor: vuelve a correr **todo** `supabase/schema.sql`.
+3. `supabase functions deploy notificar --no-verify-jwt` y `supabase functions deploy recordatorios --no-verify-jwt`.
+4. Crea el **Webhook 2** del paso 6 (el 1 ya lo tienes).
+5. Haz el paso 7.
 
 ## Prueba
 
-Uno cierra la app y bloquea el teléfono. El otro abre la app. En pocos segundos debe sonar: "Fernando acaba de entrar ❤️ Y te extraña."
+- Uno cierra la app y bloquea el teléfono. El otro abre la app. En pocos segundos debe sonar: "Fernando acaba de entrar ❤️ Y te extraña."
+- Uno toca **Estoy libre para hablar**: al otro le llega "X está libre para una llamada ☎️" y en su Inicio aparece "X está libre ahora".
+- Uno agenda una llamada para dentro de 40 minutos: al otro le llega "X agendó: …" y a los dos, unos 30 minutos antes, "En 30 min: …".
 
-Reglas que ya trae:
-- Si la misma persona entra varias veces en 15 minutos, solo se avisa la primera (para no ser pesados). Puedes cambiarlo en `MINUTOS_SIN_REPETIR` dentro de `index.ts`.
-- El botón "te extraño" siempre avisa, sin límite.
+Ajustes que ya trae (constantes al inicio de cada archivo):
+- `MINUTOS_SIN_REPETIR = 15` en `notificar/index.ts`: si la misma persona entra varias veces en 15 minutos, solo se avisa la primera.
+- `HORAS_LIBRE = 2` en `public/app.js`: cuánto dura "estoy libre".
+- `MINUTOS_ANTES = 30` en `recordatorios/index.ts`: con cuánta anticipación llega el recordatorio.
 
 ## Si algo no funciona
 
@@ -141,4 +176,8 @@ Reglas que ya trae:
 | "Código no válido" al unirse | Que el primero haya tocado "Crear nuestra pareja" y que el código esté bien escrito (sin O ni I ni 0 ni 1, no se usan) |
 | No aparece el botón de notificaciones en iPhone | La app se abrió desde Safari y no desde el ícono de la pantalla de inicio |
 | La push no llega | Supabase → **Edge Functions → notificar → Logs**. Si dice "no autorizado", el header `x-webhook-secret` no coincide. Si dice `enviadas: 0`, la otra persona no activó notificaciones |
+| Llega "te extraño" pero no lo del calendario | Falta el Webhook 2 (tabla `eventos_cal`, con Insert, Update y Delete) |
+| No llegan los recordatorios / "estoy libre" no se apaga solo | `select * from cron.job_run_details order by start_time desc limit 5;` en el SQL Editor. Si no hay filas, falta el paso 7; si dice `failed`, revisa `TU_REF` y el secreto en `cron.sql` |
+| Las horas de mi pareja salen mal | Cada uno revisa su zona horaria en **Ajustes** |
+| `schema.sql` da error | Córrelo completo, de arriba a abajo; está hecho para repetirse sin borrar datos |
 | Vercel muestra 404 | *Root Directory* debe ser `public` |

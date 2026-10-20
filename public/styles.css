@@ -7,14 +7,17 @@
   :root{--bg:#1b1118;--card:#261822;--fg:#f7e6ee;--muted:#b78da0;--line:#3f2a36;--accent:#ff6b93;--accent-soft:#4a2434;--ok:#5fd39a;--ok-soft:#1f3b2e;color-scheme:dark}
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{min-height:100%;margin:0}
 body{
   background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;
   padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
   display:flex;align-items:center;justify-content:center;
 }
+/* con la barra inferior: tarjeta arriba y espacio para la barra */
+body.con-tabs{align-items:flex-start;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:28px 22px;box-shadow:0 20px 50px -30px rgba(90,20,50,.35)}
-section{display:flex;flex-direction:column;gap:22px}
+section,.tab{display:flex;flex-direction:column;gap:22px}
 h1{font-family:var(--display);font-weight:400;font-size:2rem;line-height:1.05;margin:0;letter-spacing:-.01em;text-wrap:balance}
 h1 em{font-style:italic;color:var(--accent)}
 h2{font-family:var(--display);font-weight:500;font-size:1rem;margin:0}
@@ -24,7 +27,8 @@ p{margin:0;line-height:1.5}
 .small-note{font-size:.8rem;color:var(--muted);line-height:1.45}
 .stack{display:flex;flex-direction:column;gap:10px}
 label{font-size:.8rem;color:var(--muted)}
-input{font:inherit;width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--fg)}
+input,select,textarea{font:inherit;width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--fg)}
+textarea{resize:vertical;min-height:70px}
 button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:14px 20px;cursor:pointer;background:var(--accent);color:#fff;font-size:1rem}
 button:active{transform:scale(.97)}
 button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
@@ -57,5 +61,11 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .log ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .log li{display:flex;justify-content:space-between;gap:12px;font-size:.9rem}
 .log li span:last-child{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* barra inferior de pestañas */
+.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:420px;display:flex;gap:4px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;box-shadow:0 20px 50px -30px rgba(90,20,50,.35);z-index:5}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;color:var(--muted);font-size:.68rem;font-weight:700;padding:8px 4px;border-radius:999px}
+.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabs button.on{background:var(--accent-soft);color:var(--accent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:14px 20px;border-radius:999px;font-weight:700;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);max-width:calc(100% - 32px);text-align:center;opacity:0;transition:opacity .3s;pointer-events:none}
+body.con-tabs .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
 .toast.show{opacity:1}

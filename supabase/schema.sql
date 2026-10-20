@@ -167,7 +167,7 @@ create trigger disponibilidad_libre
 do $$
 declare t text;
 begin
-  foreach t in array array['eventos', 'parejas', 'disponibilidad'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

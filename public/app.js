@@ -10,7 +10,11 @@
   let user = null, perfil = null, pareja = null, otro = null, canal = null, toastTimer = null;
 
   // ---------- utilidades ----------
-  function show(name) { Object.keys(S).forEach((k) => (S[k].hidden = k !== name)); }
+  function show(name) {
+    Object.keys(S).forEach((k) => (S[k].hidden = k !== name));
+    $("tabs").hidden = name !== "home";
+    document.body.classList.toggle("con-tabs", name === "home");
+  }
   // Zonas horarias: la mía viene de perfiles.tz (o del teléfono), la de mi pareja de su perfil
   const tzNavegador = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const miTz = () => (perfil && perfil.tz) || tzNavegador;
@@ -129,10 +133,9 @@
     const otroId = pareja.usuario_a === user.id ? pareja.usuario_b : pareja.usuario_a;
     const { data: o } = await sb.from("perfiles").select("*").eq("id", otroId).maybeSingle();
     otro = o || { id: otroId, nombre: "Tu pareja" };
-    $("home-title").innerHTML = "";
-    $("home-title").append(otro.nombre + " ");
-    const em = document.createElement("em"); em.textContent = "te extraña"; $("home-title").append(em, ".");
+    tituloHome();
     $("heart").classList.add("beat");
+    irA(tabDeUrl(location.href));
 
     // Registrar mi entrada (una vez por apertura)
     if (!sessionStorage.getItem("entrada")) {
@@ -158,8 +161,18 @@
         if (id === user.id) dispo.mia = d; else if (id === otro.id) dispo.suya = d;
         renderDispo();
       }
+    ).on("postgres_changes",
+      // si mi pareja cambia su nombre o su zona horaria, lo vemos al instante
+      { event: "UPDATE", schema: "public", table: "perfiles", filter: `id=eq.${otro.id}` },
+      (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); }
     ).subscribe();
     prepararPush();
+  }
+
+  function tituloHome() {
+    $("home-title").innerHTML = "";
+    $("home-title").append(otro.nombre + " ");
+    const em = document.createElement("em"); em.textContent = "te extraña"; $("home-title").append(em, ".");
   }
 
   const AVISOS = {
@@ -196,6 +209,60 @@
     toast(error ? "No se pudo enviar" : "Enviado ❤️");
     b.disabled = false; render();
   });
+
+  // ---------- navegación por pestañas ----------
+  const TABS = ["inicio", "horarios", "calendario", "ajustes"];
+  const AL_ABRIR = {}; // cada pestaña registra aquí qué cargar al abrirse
+  function irA(tab) {
+    if (!TABS.includes(tab)) tab = "inicio";
+    TABS.forEach((t) => ($("tab-" + t).hidden = t !== tab));
+    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    history.replaceState(null, "", tab === "inicio" ? location.pathname : "#" + tab);
+    window.scrollTo(0, 0);
+    if (AL_ABRIR[tab]) AL_ABRIR[tab]();
+  }
+  const tabDeUrl = (u) => (new URL(u, location.origin).hash || "#inicio").slice(1);
+  document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => irA(b.dataset.tab)));
+  // Al tocar una notificación con la app ya abierta, el service worker nos dice a qué pestaña ir
+  if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", (e) => {
+    if (e.data && e.data.url && !S.home.hidden) irA(tabDeUrl(e.data.url));
+  });
+
+  // ---------- ajustes ----------
+  const ZONAS = [
+    "America/Guayaquil", "America/Santiago", "America/Bogota", "America/Lima", "America/Caracas", "America/La_Paz",
+    "America/Asuncion", "America/Montevideo", "America/Argentina/Buenos_Aires", "America/Sao_Paulo",
+    "America/Mexico_City", "America/Panama", "America/Costa_Rica", "America/Guatemala", "America/Havana",
+    "America/Santo_Domingo", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+    "Europe/Madrid", "Europe/London", "Europe/Paris", "Europe/Rome", "UTC",
+  ];
+  const nombreTz = (z) => z.replace(/_/g, " ");
+  function renderAjustes() {
+    $("aj-nombre").value = perfil.nombre || "";
+    const sel = $("aj-tz"); sel.innerHTML = "";
+    [...new Set([miTz(), tzNavegador, ...ZONAS])].forEach((z) => {
+      const o = document.createElement("option"); o.value = z;
+      o.textContent = `${nombreTz(z)} · ${hora(new Date(), z)}`;
+      sel.append(o);
+    });
+    sel.value = miTz();
+    notaTz();
+    $("aj-pareja").textContent = `Vinculado con ${otro.nombre} · su zona: ${nombreTz(suTz())} (ahora son las ${hora(new Date(), suTz())})`;
+  }
+  function notaTz() {
+    $("aj-tz-note").textContent = `Para ti son las ${hora(new Date(), $("aj-tz").value)}; para ${otro.nombre}, las ${hora(new Date(), suTz())}.`;
+  }
+  $("aj-tz").addEventListener("change", notaTz);
+  $("f-ajustes").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nombre = $("aj-nombre").value.trim(), tz = $("aj-tz").value;
+    if (!nombre) return;
+    const { error } = await sb.from("perfiles").update({ nombre, tz }).eq("id", user.id);
+    if (error) { toast("No se pudo guardar"); return; }
+    perfil = { ...perfil, nombre, tz };
+    toast("Guardado ❤️"); render(); renderDispo(); renderAjustes();
+  });
+  AL_ABRIR.ajustes = renderAjustes;
 
   // ---------- disponibilidad para llamar ----------
   const dispo = { mia: null, suya: null };
@@ -253,17 +320,29 @@
     const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
     return Uint8Array.from(raw, (c) => c.charCodeAt(0));
   }
+  // Estado de las notificaciones: texto y botón en Ajustes, atajo en Inicio
   async function prepararPush() {
-    if (!("PushManager" in window) || !("Notification" in window)) {
-      if (isIOS && !isStandalone) $("ios-hint").hidden = false;
+    const estado = $("push-estado"), hint = $("push-hint"), btn = $("btn-push");
+    btn.hidden = true; hint.hidden = true; $("ios-hint").hidden = true;
+    if (isIOS && !isStandalone) {
+      $("ios-hint").hidden = false;
+      estado.textContent = "Falta instalar la app en la pantalla de inicio.";
+      hint.hidden = false; hint.textContent = "Cómo activar las notificaciones";
       return;
     }
-    if (isIOS && !isStandalone) { $("ios-hint").hidden = false; return; }
+    if (!("PushManager" in window) || !("Notification" in window)) {
+      estado.textContent = "Este navegador no permite notificaciones."; return;
+    }
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
-    if (sub && Notification.permission === "granted") { await guardarSub(sub); return; }
-    if (Notification.permission === "denied") return;
-    $("btn-push").hidden = false;
+    if (sub && Notification.permission === "granted") {
+      await guardarSub(sub); estado.textContent = "Activadas en este teléfono ✓"; return;
+    }
+    if (Notification.permission === "denied") {
+      estado.textContent = "Bloqueadas en este navegador. Permítelas en los ajustes del teléfono."; return;
+    }
+    estado.textContent = "Aún no activadas en este teléfono.";
+    btn.hidden = false; hint.hidden = false; hint.textContent = "Activar notificaciones en este teléfono";
   }
   $("btn-push").addEventListener("click", async () => {
     try {
@@ -272,8 +351,12 @@
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(C.VAPID_PUBLIC_KEY) });
       await guardarSub(sub);
-      $("btn-push").hidden = true; toast("Notificaciones activadas ❤️");
+      toast("Notificaciones activadas ❤️");
     } catch (e) { toast("No se pudo activar: " + e.message); }
+    prepararPush();
+  });
+  $("push-hint").addEventListener("click", () => {
+    if (!$("btn-push").hidden) $("btn-push").click(); else irA("ajustes");
   });
   async function guardarSub(sub) {
     const j = sub.toJSON();

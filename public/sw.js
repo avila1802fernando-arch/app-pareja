@@ -19,10 +19,17 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const c of list) if ("focus" in c) return c.focus();
-      return self.clients.openWindow("/");
+      for (const c of list) {
+        if ("focus" in c) {
+          // la app ya está abierta: le decimos a qué pestaña ir
+          c.postMessage({ url });
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
     })
   );
 });

@@ -61,41 +61,110 @@
     <p class="small-note" id="pair-msg"></p>
   </section>
 
-  <!-- Pantalla principal -->
+  <!-- Pantalla principal: pestañas -->
   <section id="s-home" hidden>
-    <div>
-      <p class="eyebrow">Nuestro rincón</p>
-      <h1 id="home-title">Hola.</h1>
+
+    <!-- Pestaña: Inicio -->
+    <div class="tab" id="tab-inicio">
+      <div>
+        <p class="eyebrow">Nuestro rincón</p>
+        <h1 id="home-title">Hola.</h1>
+      </div>
+      <div class="heart" id="heart">
+        <div class="ring"></div>
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <path fill="var(--accent)" d="M50 88 C30 72 10 56 10 36 C10 24 19 15 30 15 C38 15 45 19 50 27 C55 19 62 15 70 15 C81 15 90 24 90 36 C90 56 70 72 50 88 Z"/>
+        </svg>
+      </div>
+      <div class="status">
+        <strong id="status-title">Conectando…</strong>
+        <span class="muted" id="status-when"></span>
+      </div>
+      <div class="status libre-status" id="libre-status" hidden>
+        <strong id="libre-title"></strong>
+        <span class="muted" id="libre-when"></span>
+      </div>
+      <div class="stack">
+        <button type="button" class="libre" id="btn-libre">Estoy libre para hablar</button>
+        <p class="small-note" id="libre-note"></p>
+        <button type="button" id="btn-extrano">Enviar un “te extraño” ahora</button>
+        <button type="button" class="ghost" id="push-hint" hidden>Activar notificaciones en este teléfono</button>
+      </div>
+      <div class="log">
+        <h2>Últimas señales</h2>
+        <ul id="log-list"></ul>
+      </div>
     </div>
-    <div class="heart" id="heart">
-      <div class="ring"></div>
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <path fill="var(--accent)" d="M50 88 C30 72 10 56 10 36 C10 24 19 15 30 15 C38 15 45 19 50 27 C55 19 62 15 70 15 C81 15 90 24 90 36 C90 56 70 72 50 88 Z"/>
-      </svg>
+
+    <!-- Pestaña: Horarios -->
+    <div class="tab" id="tab-horarios" hidden>
+      <div>
+        <p class="eyebrow">Horarios habituales</p>
+        <h1>¿Cuándo <em>puedes</em> normalmente?</h1>
+      </div>
+      <p class="muted">Pronto.</p>
     </div>
-    <div class="status">
-      <strong id="status-title">Conectando…</strong>
-      <span class="muted" id="status-when"></span>
+
+    <!-- Pestaña: Calendario -->
+    <div class="tab" id="tab-calendario" hidden>
+      <div>
+        <p class="eyebrow">Calendario compartido</p>
+        <h1>Lo que <em>viene</em>.</h1>
+      </div>
+      <p class="muted">Pronto.</p>
     </div>
-    <div class="status libre-status" id="libre-status" hidden>
-      <strong id="libre-title"></strong>
-      <span class="muted" id="libre-when"></span>
+
+    <!-- Pestaña: Ajustes -->
+    <div class="tab" id="tab-ajustes" hidden>
+      <div>
+        <p class="eyebrow">Ajustes</p>
+        <h1>Lo nuestro, <em>a tu manera</em>.</h1>
+      </div>
+      <form id="f-ajustes" class="stack">
+        <label for="aj-nombre">Tu nombre o apodo</label>
+        <input id="aj-nombre" maxlength="24" required>
+        <label for="aj-tz">Tu zona horaria</label>
+        <select id="aj-tz"></select>
+        <p class="small-note" id="aj-tz-note"></p>
+        <button type="submit">Guardar</button>
+      </form>
+      <div class="stack">
+        <h2>Notificaciones</h2>
+        <p class="muted" id="push-estado">Comprobando…</p>
+        <button type="button" class="ghost" id="btn-push" hidden>Activar notificaciones en este teléfono</button>
+        <p class="small-note" id="ios-hint" hidden>En iPhone, las notificaciones solo funcionan si abres la app desde el ícono de la pantalla de inicio. Toca <strong>Compartir → Agregar a pantalla de inicio</strong> en Safari y vuelve a entrar desde ahí.</p>
+      </div>
+      <div class="stack">
+        <h2>Pareja</h2>
+        <p class="muted" id="aj-pareja"></p>
+      </div>
+      <button type="button" class="link" id="btn-logout">Cerrar sesión</button>
     </div>
-    <div class="stack">
-      <button type="button" class="libre" id="btn-libre">Estoy libre para hablar</button>
-      <p class="small-note" id="libre-note"></p>
-      <button type="button" id="btn-extrano">Enviar un “te extraño” ahora</button>
-      <button type="button" class="ghost" id="btn-push" hidden>Activar notificaciones en este teléfono</button>
-      <p class="small-note" id="ios-hint" hidden>En iPhone, las notificaciones solo funcionan si abres la app desde el ícono de la pantalla de inicio. Toca <strong>Compartir → Agregar a pantalla de inicio</strong> en Safari y vuelve a entrar desde ahí.</p>
-    </div>
-    <div class="log">
-      <h2>Últimas señales</h2>
-      <ul id="log-list"></ul>
-    </div>
-    <button type="button" class="link" id="btn-logout">Cerrar sesión</button>
+
   </section>
 
 </main>
+
+<!-- Barra inferior (solo con sesión y pareja) -->
+<nav class="tabs" id="tabs" hidden aria-label="Secciones">
+  <button type="button" data-tab="inicio" class="on">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5c-5-3.6-8.5-7-8.5-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5c0 4-3.5 7.4-8.5 11Z"/></svg>
+    <span>Inicio</span>
+  </button>
+  <button type="button" data-tab="horarios">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+    <span>Horarios</span>
+  </button>
+  <button type="button" data-tab="calendario">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+    <span>Calendario</span>
+  </button>
+  <button type="button" data-tab="ajustes">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    <span>Ajustes</span>
+  </button>
+</nav>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>

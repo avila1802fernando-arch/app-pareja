@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nosotros</title>
+  <meta name="theme-color" content="#c9325c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Nosotros">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Nunito:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main class="card" id="app">
+
+  <!-- Pantalla: iniciar sesión -->
+  <section id="s-login" hidden>
+    <p class="eyebrow">Nuestro rincón</p>
+    <h1>Cada vez que entras, <em>yo lo sé</em>.</h1>
+    <p class="muted">Entra con tu correo. Te enviamos un código de 6 dígitos, sin contraseña.</p>
+    <form id="f-email" class="stack">
+      <label for="email">Tu correo</label>
+      <input id="email" type="email" required autocomplete="email" placeholder="tu@correo.com">
+      <button type="submit">Enviarme el código</button>
+    </form>
+    <form id="f-otp" class="stack" hidden>
+      <label for="otp">Código que llegó a tu correo</label>
+      <input id="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="123456">
+      <button type="submit">Entrar</button>
+      <button type="button" class="ghost" id="otp-back">Usar otro correo</button>
+    </form>
+    <p class="small-note" id="login-msg"></p>
+  </section>
+
+  <!-- Pantalla: nombre + vincular pareja -->
+  <section id="s-pair" hidden>
+    <p class="eyebrow">Antes de empezar</p>
+    <h1>¿Cómo te llamas y <em>con quién</em>?</h1>
+    <div class="stack">
+      <label for="nombre">Tu nombre o apodo</label>
+      <input id="nombre" maxlength="24" placeholder="Fernando">
+    </div>
+    <div class="stack">
+      <p class="muted">Uno de los dos crea la pareja y le pasa el código al otro.</p>
+      <button type="button" id="btn-crear">Crear nuestra pareja</button>
+      <div id="codigo-box" class="status" hidden>
+        <span class="muted">Dile a tu pareja que ingrese este código:</span>
+        <strong id="codigo" class="code"></strong>
+        <span class="muted">Esperando a que entre…</span>
+      </div>
+      <form id="f-unirse" class="stack">
+        <label for="codigo-in">¿Tienes un código? Escríbelo aquí</label>
+        <input id="codigo-in" maxlength="6" placeholder="ABC123" autocapitalize="characters">
+        <button type="submit" class="ghost">Unirme</button>
+      </form>
+    </div>
+    <p class="small-note" id="pair-msg"></p>
+  </section>
+
+  <!-- Pantalla principal -->
+  <section id="s-home" hidden>
+    <div>
+      <p class="eyebrow">Nuestro rincón</p>
+      <h1 id="home-title">Hola.</h1>
+    </div>
+    <div class="heart" id="heart">
+      <div class="ring"></div>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <path fill="var(--accent)" d="M50 88 C30 72 10 56 10 36 C10 24 19 15 30 15 C38 15 45 19 50 27 C55 19 62 15 70 15 C81 15 90 24 90 36 C90 56 70 72 50 88 Z"/>
+      </svg>
+    </div>
+    <div class="status">
+      <strong id="status-title">Conectando…</strong>
+      <span class="muted" id="status-when"></span>
+    </div>
+    <div class="stack">
+      <button type="button" id="btn-extrano">Enviar un “te extraño” ahora</button>
+      <button type="button" class="ghost" id="btn-push" hidden>Activar notificaciones en este teléfono</button>
+      <p class="small-note" id="ios-hint" hidden>En iPhone, las notificaciones solo funcionan si abres la app desde el ícono de la pantalla de inicio. Toca <strong>Compartir → Agregar a pantalla de inicio</strong> en Safari y vuelve a entrar desde ahí.</p>
+    </div>
+    <div class="log">
+      <h2>Últimas señales</h2>
+      <ul id="log-list"></ul>
+    </div>
+    <button type="button" class="link" id="btn-logout">Cerrar sesión</button>
+  </section>
+
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Nosotros",
+  "short_name": "Nosotros",
+  "description": "Cada vez que uno de los dos entra, el otro recibe un te extraño.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6eef2",
+  "theme_color": "#c9325c",
+  "lang": "es",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

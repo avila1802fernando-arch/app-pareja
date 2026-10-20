@@ -2,30 +2,17 @@
 // La llama un Database Webhook cada vez que se inserta una fila en `eventos`.
 // Busca las suscripciones push de la OTRA persona y le envía la notificación.
 //
-// Secretos necesarios (supabase secrets set ...):
-//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:tu@correo.com), WEBHOOK_SECRET
-// SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY ya vienen inyectados por Supabase.
+// Secretos y utilidades compartidas: ver ../_shared/push.ts
 
-import webpush from "npm:web-push@3.6.7";
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { autorizado, clienteAdmin, enviarPush, horaEn, type Mensaje } from "../_shared/push.ts";
 
 const MINUTOS_SIN_REPETIR = 15; // no avisar dos "entradas" seguidas en menos de 15 min
 
-webpush.setVapidDetails(
-  Deno.env.get("VAPID_SUBJECT")!,
-  Deno.env.get("VAPID_PUBLIC_KEY")!,
-  Deno.env.get("VAPID_PRIVATE_KEY")!,
-);
-
-const sb = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
+const sb = clienteAdmin();
 
 Deno.serve(async (req) => {
-  if (req.headers.get("x-webhook-secret") !== Deno.env.get("WEBHOOK_SECRET")) {
-    return new Response("no autorizado", { status: 401 });
-  }
+  if (!autorizado(req)) return new Response("no autorizado", { status: 401 });
+
   const payload = await req.json();
   if (payload.type !== "INSERT" || payload.table !== "eventos") {
     return new Response("ignorado", { status: 200 });
@@ -52,26 +39,24 @@ Deno.serve(async (req) => {
   const { data: perfil } = await sb.from("perfiles").select("nombre").eq("id", ev.de_usuario).maybeSingle();
   const nombre = perfil?.nombre ?? "Tu pareja";
 
-  const mensaje = ev.tipo === "entrada"
-    ? { title: `${nombre} acaba de entrar ❤️`, body: "Y te extraña." }
-    : { title: `${nombre} dice: te extraño ❤️`, body: "Entra y respóndele." };
-
-  const { data: subs } = await sb.from("push_subs").select("endpoint, p256dh, auth").eq("usuario_id", otroId);
-  let enviadas = 0;
-  for (const s of subs ?? []) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify(mensaje),
-        { TTL: 60 * 60 },
-      );
-      enviadas++;
-    } catch (e) {
-      // 404/410 = el teléfono se dio de baja: borrar la suscripción
-      const code = (e as { statusCode?: number }).statusCode;
-      if (code === 404 || code === 410) await sb.from("push_subs").delete().eq("endpoint", s.endpoint);
-      else console.error("push falló", code, (e as Error).message);
-    }
+  let mensaje: Mensaje;
+  if (ev.tipo === "entrada") {
+    mensaje = { title: `${nombre} acaba de entrar ❤️`, body: "Y te extraña." };
+  } else if (ev.tipo === "libre") {
+    // ¿Hasta qué hora está libre? Se muestra en la hora local de quien recibe.
+    const [{ data: d }, { data: destino }] = await Promise.all([
+      sb.from("disponibilidad").select("hasta").eq("usuario_id", ev.de_usuario).maybeSingle(),
+      sb.from("perfiles").select("tz").eq("id", otroId).maybeSingle(),
+    ]);
+    mensaje = {
+      title: `${nombre} está libre para una llamada ☎️`,
+      body: d?.hasta ? `Hasta las ${horaEn(d.hasta, destino?.tz)} (tu hora). ¿Hablamos?` : "¿Hablamos?",
+      tag: "libre",
+    };
+  } else {
+    mensaje = { title: `${nombre} dice: te extraño ❤️`, body: "Entra y respóndele." };
   }
+
+  const enviadas = await enviarPush(sb, otroId, mensaje);
   return new Response(JSON.stringify({ enviadas }), { headers: { "content-type": "application/json" } });
 });

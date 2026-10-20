@@ -1,10 +1,10 @@
 :root{
   --bg:#f6eef2;--card:#fffafc;--fg:#3a2230;--muted:#8a6a78;--line:#e6d3dc;
-  --accent:#c9325c;--accent-soft:#f7d6e1;
+  --accent:#c9325c;--accent-soft:#f7d6e1;--ok:#2e9e6b;--ok-soft:#dcf3e6;
   --display:"Fraunces",Georgia,serif;--body:"Nunito","Segoe UI",system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){
-  :root{--bg:#1b1118;--card:#261822;--fg:#f7e6ee;--muted:#b78da0;--line:#3f2a36;--accent:#ff6b93;--accent-soft:#4a2434;color-scheme:dark}
+  :root{--bg:#1b1118;--card:#261822;--fg:#f7e6ee;--muted:#b78da0;--line:#3f2a36;--accent:#ff6b93;--accent-soft:#4a2434;--ok:#5fd39a;--ok-soft:#1f3b2e;color-scheme:dark}
 }
 *{box-sizing:border-box}
 html,body{min-height:100%;margin:0}
@@ -41,6 +41,17 @@ button[disabled]{opacity:.5}
 @media (prefers-reduced-motion:reduce){.heart.beat svg,.heart.beat .ring{animation:none}}
 .status{border-radius:16px;padding:16px 18px;background:var(--accent-soft);display:flex;flex-direction:column;gap:4px}
 .status strong{font-family:var(--display);font-size:1.3rem;font-weight:500;line-height:1.2}
+/* disponibilidad para llamar */
+button.libre{background:var(--card);color:var(--fg);border:2px solid var(--line);display:flex;align-items:center;justify-content:center;gap:10px;padding:16px 20px}
+button.libre::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--line);flex:none;transition:background .2s}
+button.libre.on{background:var(--ok-soft);border-color:var(--ok)}
+button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infinite}
+@keyframes pulso{0%{box-shadow:0 0 0 0 rgba(46,158,107,.5)}100%{box-shadow:0 0 0 10px rgba(46,158,107,0)}}
+.libre-status{background:var(--ok-soft);border:1.5px solid var(--ok)}
+.libre-status.ambos{background:var(--accent);border-color:var(--accent);color:#fff;text-align:center}
+.libre-status.ambos strong{font-size:1.7rem}
+.libre-status.ambos .muted{color:rgba(255,255,255,.85)}
+@media (prefers-reduced-motion:reduce){button.libre.on::before{animation:none}}
 .code{font-family:var(--body);font-size:2rem;letter-spacing:.25em;font-weight:700}
 .log{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:16px}
 .log ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}

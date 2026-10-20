@@ -10,9 +10,9 @@ self.addEventListener("push", (event) => {
       body: data.body,
       icon: "/icons/icon-192.png",
       badge: "/icons/badge-96.png",
-      tag: "nosotros",
+      tag: data.tag || "nosotros",
       renotify: true,
-      data: { url: "/" },
+      data: { url: data.url || "/" },
     })
   );
 });

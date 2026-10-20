@@ -4,11 +4,22 @@
   const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
   const $ = (id) => document.getElementById(id);
 
+  const HORAS_LIBRE = 2; // "Estoy libre para hablar" se apaga solo después de estas horas
+
   const S = { login: $("s-login"), pair: $("s-pair"), home: $("s-home") };
   let user = null, perfil = null, pareja = null, otro = null, canal = null, toastTimer = null;
 
   // ---------- utilidades ----------
   function show(name) { Object.keys(S).forEach((k) => (S[k].hidden = k !== name)); }
+  // Zonas horarias: la mía viene de perfiles.tz (o del teléfono), la de mi pareja de su perfil
+  const tzNavegador = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const miTz = () => (perfil && perfil.tz) || tzNavegador;
+  const suTz = () => (otro && otro.tz) || miTz();
+  function hora(iso, tz) {
+    const opts = { hour: "2-digit", minute: "2-digit" };
+    try { return new Date(iso).toLocaleTimeString("es", { ...opts, timeZone: tz }); }
+    catch (e) { return new Date(iso).toLocaleTimeString("es", opts); }
+  }
   function toast(msg) {
     const t = $("toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 4000);
@@ -57,6 +68,11 @@
   async function cargar() {
     const { data: p } = await sb.from("perfiles").select("*").eq("id", user.id).maybeSingle();
     perfil = p;
+    // Perfiles creados antes de tener zona horaria: guardar la del teléfono
+    if (perfil && !perfil.tz) {
+      await sb.from("perfiles").update({ tz: tzNavegador }).eq("id", user.id);
+      perfil.tz = tzNavegador;
+    }
     const { data: pj } = await sb.from("parejas").select("*")
       .or(`usuario_a.eq.${user.id},usuario_b.eq.${user.id}`).maybeSingle();
     pareja = pj;
@@ -72,9 +88,10 @@
   async function guardarNombre() {
     const nombre = $("nombre").value.trim();
     if (!nombre) { $("pair-msg").textContent = "Escribe tu nombre primero."; return false; }
-    const { error } = await sb.from("perfiles").upsert({ id: user.id, nombre });
+    const tz = miTz();
+    const { error } = await sb.from("perfiles").upsert({ id: user.id, nombre, tz });
     if (error) { $("pair-msg").textContent = error.message; return false; }
-    perfil = { id: user.id, nombre };
+    perfil = { id: user.id, nombre, tz };
     return true;
   }
 
@@ -123,17 +140,38 @@
       sessionStorage.setItem("entrada", "1");
     }
     await render();
+    await cargarDispo();
     if (canal) sb.removeChannel(canal);
-    canal = sb.channel("eventos").on("postgres_changes",
+    canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
       (payload) => {
         const ev = payload.new;
-        if (ev.de_usuario !== user.id) toast(ev.tipo === "entrada" ? `${otro.nombre} acaba de entrar y te extraña ❤️` : `${otro.nombre} dice: te extraño ❤️`);
+        if (ev.de_usuario !== user.id) toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
         render();
+      }
+    ).on("postgres_changes",
+      // sin filtro: RLS solo deja pasar nuestras dos filas
+      { event: "*", schema: "public", table: "disponibilidad" },
+      (payload) => {
+        const d = payload.eventType === "DELETE" ? null : payload.new;
+        const id = d ? d.usuario_id : payload.old.usuario_id;
+        if (id === user.id) dispo.mia = d; else if (id === otro.id) dispo.suya = d;
+        renderDispo();
       }
     ).subscribe();
     prepararPush();
   }
+
+  const AVISOS = {
+    entrada: (n) => `${n} acaba de entrar y te extraña ❤️`,
+    te_extrano: (n) => `${n} dice: te extraño ❤️`,
+    libre: (n) => `${n} está libre para hablar ☎️`,
+  };
+  const SENALES = {
+    entrada: (n) => `${n} entró`,
+    te_extrano: (n) => `${n}: “te extraño”`,
+    libre: (n) => `${n} se puso libre para hablar`,
+  };
 
   async function render() {
     const { data: evs } = await sb.from("eventos").select("*").eq("pareja_id", pareja.id)
@@ -147,7 +185,7 @@
     (evs || []).forEach((e) => {
       const quien = e.de_usuario === user.id ? perfil.nombre : otro.nombre;
       const li = document.createElement("li"), a = document.createElement("span"), b = document.createElement("span");
-      a.textContent = e.tipo === "entrada" ? `${quien} entró` : `${quien}: “te extraño”`;
+      a.textContent = (SENALES[e.tipo] || SENALES.entrada)(quien);
       b.textContent = ago(e.creado_en); li.append(a, b); list.append(li);
     });
   }
@@ -157,6 +195,56 @@
     const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "te_extrano" });
     toast(error ? "No se pudo enviar" : "Enviado ❤️");
     b.disabled = false; render();
+  });
+
+  // ---------- disponibilidad para llamar ----------
+  const dispo = { mia: null, suya: null };
+  let dispoTimer = null;
+  // Una fila cuenta como "libre" solo si no venció (por si el cron aún no la apagó)
+  function estaLibre(d) { return !!(d && d.libre && (!d.hasta || new Date(d.hasta) > new Date())); }
+
+  async function cargarDispo() {
+    const { data } = await sb.from("disponibilidad").select("*").in("usuario_id", [user.id, otro.id]);
+    dispo.mia = (data || []).find((d) => d.usuario_id === user.id) || null;
+    dispo.suya = (data || []).find((d) => d.usuario_id === otro.id) || null;
+    renderDispo();
+  }
+
+  function renderDispo() {
+    const mia = estaLibre(dispo.mia), suya = estaLibre(dispo.suya);
+    const b = $("btn-libre");
+    b.classList.toggle("on", mia);
+    b.textContent = mia ? "Estoy libre · tocar para apagar" : "Estoy libre para hablar";
+    $("libre-note").textContent = mia
+      ? `Se apaga solo a las ${hora(dispo.mia.hasta, miTz())}.`
+      : `Avísale que puedes hablar ahora. Se apaga solo en ${HORAS_LIBRE} h.`;
+
+    const box = $("libre-status");
+    box.hidden = !suya;
+    box.classList.toggle("ambos", mia && suya);
+    if (suya) {
+      $("libre-title").textContent = mia ? "¡Los dos están libres!" : `${otro.nombre} está libre ahora`;
+      $("libre-when").textContent = mia
+        ? "Es el momento de llamar ☎️"
+        : `hasta las ${hora(dispo.suya.hasta, miTz())} tu hora · ${hora(dispo.suya.hasta, suTz())} la suya`;
+    }
+
+    // Volver a pintar cuando venza la más próxima
+    clearTimeout(dispoTimer);
+    const vence = [dispo.mia, dispo.suya].filter(estaLibre).map((d) => new Date(d.hasta).getTime() - Date.now()).filter((ms) => ms > 0);
+    if (vence.length) dispoTimer = setTimeout(renderDispo, Math.min(...vence) + 500);
+  }
+
+  $("btn-libre").addEventListener("click", async () => {
+    const b = $("btn-libre"); b.disabled = true;
+    const libre = !estaLibre(dispo.mia);
+    const hasta = libre ? new Date(Date.now() + HORAS_LIBRE * 3600_000).toISOString() : null;
+    const { data, error } = await sb.from("disponibilidad")
+      .upsert({ usuario_id: user.id, libre, hasta, actualizado_en: new Date().toISOString() })
+      .select().single();
+    if (error) toast("No se pudo cambiar");
+    else { dispo.mia = data; toast(libre ? `Listo, le avisamos a ${otro.nombre} ☎️` : "Ya no estás libre"); }
+    b.disabled = false; renderDispo();
   });
 
   // ---------- notificaciones push ----------

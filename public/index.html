@@ -121,7 +121,17 @@
         <p class="eyebrow">Calendario compartido</p>
         <h1>Lo que <em>viene</em>.</h1>
       </div>
-      <p class="muted">Pronto.</p>
+      <div class="mes-nav">
+        <button type="button" class="ghost" id="mes-prev" aria-label="Mes anterior">‹</button>
+        <strong id="mes-titulo"></strong>
+        <button type="button" class="ghost" id="mes-next" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="mes" id="mes"></div>
+      <button type="button" id="btn-nuevo">Agendar algo</button>
+      <div class="log">
+        <h2 id="prox-titulo">Próximos</h2>
+        <ul id="prox-list" class="prox"></ul>
+      </div>
     </div>
 
     <!-- Pestaña: Ajustes -->
@@ -174,6 +184,33 @@
     <span>Ajustes</span>
   </button>
 </nav>
+
+<!-- Crear / editar un evento del calendario -->
+<dialog id="dlg-evento" class="dlg">
+  <form id="f-evento" class="stack">
+    <h2 id="ev-titulo-form">Agendar</h2>
+    <label for="ev-titulo">Qué</label>
+    <input id="ev-titulo" maxlength="80" required placeholder="Llamada larga">
+    <label for="ev-tipo">Tipo</label>
+    <select id="ev-tipo">
+      <option value="llamada">☎️ Llamada</option>
+      <option value="cita">💞 Cita</option>
+      <option value="viaje">✈️ Viaje</option>
+      <option value="aniversario">🎉 Aniversario</option>
+      <option value="otro">📌 Otro</option>
+    </select>
+    <label for="ev-inicio">Empieza (tu hora)</label>
+    <input id="ev-inicio" type="datetime-local" required>
+    <label for="ev-fin">Termina (opcional)</label>
+    <input id="ev-fin" type="datetime-local">
+    <p class="small-note" id="ev-suya"></p>
+    <label for="ev-nota">Nota (opcional)</label>
+    <textarea id="ev-nota" maxlength="500" rows="2"></textarea>
+    <button type="submit">Guardar</button>
+    <button type="button" class="ghost" id="ev-borrar" hidden>Borrar este evento</button>
+    <button type="button" class="link" id="ev-cancelar">Cancelar</button>
+  </form>
+</dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

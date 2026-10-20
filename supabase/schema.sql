@@ -58,6 +58,24 @@ create table if not exists public.horarios (
   primary key (usuario_id, dia, hora)
 );
 
+-- Calendario compartido
+create table if not exists public.eventos_cal (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  creado_por uuid not null references auth.users(id) on delete cascade,
+  titulo text not null check (char_length(titulo) between 1 and 80),
+  tipo text not null default 'otro' check (tipo in ('llamada', 'cita', 'viaje', 'aniversario', 'otro')),
+  inicio timestamptz not null,
+  fin timestamptz,
+  nota text check (nota is null or char_length(nota) <= 500),
+  recordado_en timestamptz,            -- cuándo se envió el recordatorio (para no repetirlo)
+  actualizado_por uuid references auth.users(id) on delete set null, -- quién hizo el último cambio (lo pone el trigger)
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now(),
+  check (fin is null or fin >= inicio)
+);
+create index if not exists eventos_cal_pareja_idx on public.eventos_cal (pareja_id, inicio);
+
 -- ========== SEGURIDAD (RLS) ==========
 alter table public.perfiles       enable row level security;
 alter table public.parejas        enable row level security;
@@ -65,6 +83,7 @@ alter table public.eventos        enable row level security;
 alter table public.push_subs      enable row level security;
 alter table public.disponibilidad enable row level security;
 alter table public.horarios       enable row level security;
+alter table public.eventos_cal    enable row level security;
 
 -- ¿Este usuario pertenece a esta pareja?
 create or replace function public.es_mi_pareja(p uuid) returns boolean
@@ -130,6 +149,20 @@ drop policy if exists "horarios: propios" on public.horarios;
 create policy "horarios: propios" on public.horarios
   for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 
+-- eventos_cal: es compartido, los dos leen, crean, editan y borran los de su pareja
+drop policy if exists "calendario: leer" on public.eventos_cal;
+create policy "calendario: leer" on public.eventos_cal
+  for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "calendario: crear" on public.eventos_cal;
+create policy "calendario: crear" on public.eventos_cal
+  for insert with check (creado_por = auth.uid() and public.es_mi_pareja(pareja_id));
+drop policy if exists "calendario: editar" on public.eventos_cal;
+create policy "calendario: editar" on public.eventos_cal
+  for update using (public.es_mi_pareja(pareja_id)) with check (public.es_mi_pareja(pareja_id));
+drop policy if exists "calendario: borrar" on public.eventos_cal;
+create policy "calendario: borrar" on public.eventos_cal
+  for delete using (public.es_mi_pareja(pareja_id));
+
 -- ========== UNIRSE A UNA PAREJA CON CÓDIGO ==========
 -- Se ejecuta con privilegios porque el usuario B aún no puede "ver" la pareja.
 create or replace function public.unirse_pareja(p_codigo text)
@@ -180,12 +213,29 @@ create trigger disponibilidad_libre
   after insert or update of libre, hasta on public.disponibilidad
   for each row execute function public.registrar_libre();
 
+-- ========== CALENDARIO: ÚLTIMO CAMBIO ==========
+-- Guarda quién y cuándo cambió el evento (para avisar solo al otro) y,
+-- si se movió la hora de inicio, vuelve a armar el recordatorio.
+create or replace function public.eventos_cal_touch() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.actualizado_en := now();
+  new.actualizado_por := coalesce(auth.uid(), old.actualizado_por, new.creado_por);
+  if new.inicio is distinct from old.inicio then new.recordado_en := null; end if;
+  return new;
+end;
+$$;
+drop trigger if exists eventos_cal_touch on public.eventos_cal;
+create trigger eventos_cal_touch
+  before update on public.eventos_cal
+  for each row execute function public.eventos_cal_touch();
+
 -- ========== TIEMPO REAL ==========
 -- Agrega las tablas a la publicación solo si aún no están (para poder re-ejecutar).
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'horarios'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'horarios', 'eventos_cal'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

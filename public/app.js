@@ -174,6 +174,14 @@
         if (payload.eventType === "DELETE") horarios.suyos.delete(idx(r.dia, r.hora)); else horarios.suyos.add(idx(r.dia, r.hora));
         if (!$("tab-horarios").hidden && mapaMio) renderHorarios();
       }
+    ).on("postgres_changes",
+      // calendario: cualquier cambio recarga la lista (sin filtro, para recibir también los borrados)
+      { event: "*", schema: "public", table: "eventos_cal" },
+      (payload) => {
+        const ev = payload.new;
+        if (payload.eventType === "INSERT" && ev.creado_por !== user.id) toast(`${otro.nombre} agendó: ${ev.titulo}`);
+        if (!$("tab-calendario").hidden) cargarCal();
+      }
     ).subscribe();
     prepararPush();
   }
@@ -453,6 +461,163 @@
   }
   grilla.addEventListener("pointerup", guardarHorario);
   grilla.addEventListener("pointercancel", guardarHorario);
+
+  // ---------- calendario compartido ----------
+  const EMOJI = { llamada: "☎️", cita: "💞", viaje: "✈️", aniversario: "🎉", otro: "📌" };
+  let eventosCal = [], mesVisto = null, diaSel = null, editando = null;
+  const pad = (n) => String(n).padStart(2, "0");
+
+  // Partes de la fecha local de un instante en una zona
+  function partes(iso, tz) {
+    const p = {};
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric" })
+      .formatToParts(new Date(iso)).forEach((x) => (p[x.type] = x.value));
+    return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, mi: +p.minute };
+  }
+  // instante → "YYYY-MM-DDTHH:MM" (lo que usa <input type=datetime-local>) en una zona
+  const aWall = (iso, tz) => { const p = partes(iso, tz); return `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}`; };
+  const claveDia = (iso, tz) => aWall(iso, tz).slice(0, 10);
+  // "YYYY-MM-DDTHH:MM" en una zona → instante ISO (UTC)
+  function aIso(wall, tz) {
+    const [y, m, d, h, mi] = wall.split(/[-T:]/).map(Number);
+    const comoUtc = Date.UTC(y, m - 1, d, h, mi);
+    let utc = comoUtc - offsetMin(tz, new Date(comoUtc)) * 60000;
+    utc = comoUtc - offsetMin(tz, new Date(utc)) * 60000; // segunda pasada por si cae en cambio de hora
+    return new Date(utc).toISOString();
+  }
+  const sumarDia = (k) => { const [y, m, d] = k.split("-").map(Number); const t = new Date(Date.UTC(y, m - 1, d + 1)); return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`; };
+  function fechaCorta(iso, tz) {
+    const opts = { weekday: "short", day: "numeric", month: "short" };
+    try { return new Date(iso).toLocaleDateString("es", { ...opts, timeZone: tz }); }
+    catch (e) { return new Date(iso).toLocaleDateString("es", opts); }
+  }
+  const fechaLarga = (k) => new Date(k + "T00:00:00Z").toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+
+  async function cargarCal() {
+    const { data } = await sb.from("eventos_cal").select("*").eq("pareja_id", pareja.id).order("inicio");
+    eventosCal = data || [];
+    if (!mesVisto) { const p = partes(new Date().toISOString(), miTz()); mesVisto = { y: p.y, m: p.m }; }
+    renderCal();
+  }
+  AL_ABRIR.calendario = cargarCal;
+  function renderCal() { renderMes(); renderLista(); }
+
+  // Vista mes: un punto por evento (hasta 3) en cada día, en mi zona
+  function renderMes() {
+    const { y, m } = mesVisto;
+    const titulo = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("es", { month: "long", year: "numeric", timeZone: "UTC" });
+    $("mes-titulo").textContent = titulo.charAt(0).toUpperCase() + titulo.slice(1);
+    const g = $("mes"); g.innerHTML = "";
+    ORDEN_DIAS.forEach((d) => { const e = document.createElement("div"); e.className = "dia"; e.textContent = DIAS[d]; g.append(e); });
+    const marcas = {};
+    eventosCal.forEach((ev) => {
+      let k = claveDia(ev.inicio, miTz()); const kf = claveDia(ev.fin || ev.inicio, miTz());
+      for (let i = 0; i < 62 && k <= kf; i++) { (marcas[k] = marcas[k] || []).push(ev); k = sumarDia(k); }
+    });
+    const hueco = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7; // lunes = 0
+    const nDias = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const hoy = claveDia(new Date().toISOString(), miTz());
+    for (let i = 0; i < hueco; i++) g.append(document.createElement("div"));
+    for (let d = 1; d <= nDias; d++) {
+      const k = `${y}-${pad(m)}-${pad(d)}`;
+      const c = document.createElement("button"); c.type = "button"; c.className = "celda-mes";
+      c.classList.toggle("hoy", k === hoy); c.classList.toggle("sel", k === diaSel);
+      const n = document.createElement("span"); n.textContent = d; c.append(n);
+      if (marcas[k]) { const dots = document.createElement("i"); dots.textContent = "•".repeat(Math.min(3, marcas[k].length)); c.append(dots); }
+      c.addEventListener("click", () => { diaSel = diaSel === k ? null : k; renderCal(); });
+      g.append(c);
+    }
+  }
+  function cambiarMes(n) {
+    const t = new Date(Date.UTC(mesVisto.y, mesVisto.m - 1 + n, 1));
+    mesVisto = { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1 }; diaSel = null; renderCal();
+  }
+  $("mes-prev").addEventListener("click", () => cambiarMes(-1));
+  $("mes-next").addEventListener("click", () => cambiarMes(1));
+
+  // Lista: los próximos, o los del día tocado en el mes
+  function renderLista() {
+    const list = $("prox-list"); list.innerHTML = "";
+    let evs;
+    if (diaSel) {
+      evs = eventosCal.filter((ev) => claveDia(ev.inicio, miTz()) <= diaSel && claveDia(ev.fin || ev.inicio, miTz()) >= diaSel);
+      $("prox-titulo").textContent = fechaLarga(diaSel);
+    } else {
+      evs = eventosCal.filter((ev) => new Date(ev.fin || ev.inicio).getTime() >= Date.now()).slice(0, 10);
+      $("prox-titulo").textContent = "Próximos";
+    }
+    $("btn-nuevo").textContent = diaSel ? "Agendar ese día" : "Agendar algo";
+    if (!evs.length) {
+      const li = document.createElement("li"); li.className = "muted";
+      li.textContent = diaSel ? "Nada ese día." : "Nada agendado todavía. ¿Una llamada?";
+      list.append(li); return;
+    }
+    evs.forEach((ev) => {
+      const li = document.createElement("li"), a = document.createElement("strong"), b = document.createElement("span");
+      a.textContent = `${EMOJI[ev.tipo] || EMOJI.otro} ${ev.titulo}`;
+      b.textContent = cuando(ev);
+      li.append(a, b);
+      if (ev.nota) { const n = document.createElement("span"); n.className = "nota"; n.textContent = ev.nota; li.append(n); }
+      li.addEventListener("click", () => abrirEvento(ev));
+      list.append(li);
+    });
+  }
+  // "sáb 19 oct · 19:00–20:00 tú · 21:00–22:00 Camila"; si para mi pareja cae otro día, se indica
+  function cuando(ev) {
+    const rango = (tz) => hora(ev.inicio, tz) + (ev.fin ? "–" + hora(ev.fin, tz) : "");
+    if (ev.fin && claveDia(ev.fin, miTz()) !== claveDia(ev.inicio, miTz())) {
+      return `${fechaCorta(ev.inicio, miTz())} ${hora(ev.inicio, miTz())} → ${fechaCorta(ev.fin, miTz())} ${hora(ev.fin, miTz())} (tu hora)`;
+    }
+    const otroDia = claveDia(ev.inicio, suTz()) !== claveDia(ev.inicio, miTz()) ? ` (${fechaCorta(ev.inicio, suTz())})` : "";
+    return `${fechaCorta(ev.inicio, miTz())} · ${rango(miTz())} tú · ${rango(suTz())} ${otro.nombre}${otroDia}`;
+  }
+
+  // Diálogo crear / editar
+  function abrirEvento(ev, k) {
+    editando = ev || null;
+    $("ev-titulo-form").textContent = ev ? "Editar" : "Agendar";
+    $("ev-titulo").value = ev ? ev.titulo : "";
+    $("ev-tipo").value = ev ? ev.tipo : "llamada";
+    $("ev-inicio").value = ev ? aWall(ev.inicio, miTz()) : `${k || claveDia(new Date().toISOString(), miTz())}T20:00`;
+    $("ev-fin").value = ev && ev.fin ? aWall(ev.fin, miTz()) : "";
+    $("ev-nota").value = ev ? ev.nota || "" : "";
+    $("ev-borrar").hidden = !ev;
+    notaSuya();
+    $("dlg-evento").showModal();
+  }
+  function notaSuya() {
+    const w = $("ev-inicio").value;
+    if (!w) { $("ev-suya").textContent = ""; return; }
+    const iso = aIso(w, miTz());
+    $("ev-suya").textContent = `Para ${otro.nombre} es el ${fechaCorta(iso, suTz())} a las ${hora(iso, suTz())}.`;
+  }
+  $("ev-inicio").addEventListener("input", notaSuya);
+  $("btn-nuevo").addEventListener("click", () => abrirEvento(null, diaSel));
+  $("ev-cancelar").addEventListener("click", () => $("dlg-evento").close());
+  $("f-evento").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fila = {
+      titulo: $("ev-titulo").value.trim(), tipo: $("ev-tipo").value,
+      inicio: aIso($("ev-inicio").value, miTz()),
+      fin: $("ev-fin").value ? aIso($("ev-fin").value, miTz()) : null,
+      nota: $("ev-nota").value.trim() || null,
+    };
+    if (fila.fin && fila.fin < fila.inicio) { toast("Termina antes de empezar, revisa las horas"); return; }
+    const q = editando
+      ? sb.from("eventos_cal").update(fila).eq("id", editando.id)
+      : sb.from("eventos_cal").insert({ ...fila, pareja_id: pareja.id, creado_por: user.id });
+    const { error } = await q;
+    if (error) { toast("No se pudo guardar"); return; }
+    $("dlg-evento").close(); toast(editando ? "Cambiado ❤️" : "Agendado ❤️"); cargarCal();
+  });
+  $("ev-borrar").addEventListener("click", async () => {
+    if (!editando || !confirm("¿Borrar este evento?")) return;
+    // Primero un toque (el trigger anota quién borra, para avisar solo al otro) y luego se borra
+    await sb.from("eventos_cal").update({ actualizado_en: new Date().toISOString() }).eq("id", editando.id);
+    const { error } = await sb.from("eventos_cal").delete().eq("id", editando.id);
+    if (error) { toast("No se pudo borrar"); return; }
+    $("dlg-evento").close(); toast("Borrado"); cargarCal();
+  });
 
   // ---------- notificaciones push ----------
   function b64ToU8(s) {

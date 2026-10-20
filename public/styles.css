@@ -77,6 +77,22 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .horario .celda.mio.suyo{background:var(--accent);border-color:var(--accent)}
 .comun li{flex-direction:column;gap:2px}
 .comun li span:last-child{white-space:normal;text-align:left;font-size:.85rem}
+/* calendario compartido */
+.mes-nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mes-nav strong{font-family:var(--display);font-weight:500;font-size:1.15rem}
+.mes-nav button{padding:4px 14px;font-size:1.3rem;line-height:1.2}
+.mes{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.mes .dia{font-size:.7rem;color:var(--muted);text-align:center;font-weight:700;padding-bottom:4px}
+.celda-mes{background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:6px 0 3px;display:flex;flex-direction:column;align-items:center;font-weight:600;font-size:.85rem;min-height:44px}
+.celda-mes i{font-style:normal;color:var(--accent);font-size:1rem;line-height:.7;letter-spacing:-1px}
+.celda-mes.hoy{border-color:var(--accent);color:var(--accent)}
+.celda-mes.sel{background:var(--accent-soft);border-color:var(--accent)}
+.prox li{flex-direction:column;align-items:flex-start;gap:2px;cursor:pointer;padding:8px 0;border-bottom:1px dashed var(--line)}
+.prox li:last-child{border-bottom:0}
+.prox li span:last-child{white-space:normal;text-align:left}
+.prox li .nota{font-size:.8rem;color:var(--muted);font-style:italic}
+.dlg{border:0;padding:24px 20px;width:calc(100% - 32px);max-width:420px;background:var(--card);color:var(--fg);border-radius:24px;box-shadow:0 20px 50px -30px rgba(0,0,0,.6)}
+.dlg::backdrop{background:rgba(40,10,25,.5)}
 /* barra inferior de pestañas */
 .tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:420px;display:flex;gap:4px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;box-shadow:0 20px 50px -30px rgba(90,20,50,.35);z-index:5}
 .tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;color:var(--muted);font-size:.68rem;font-weight:700;padding:8px 4px;border-radius:999px}

@@ -49,12 +49,22 @@ create table if not exists public.disponibilidad (
   actualizado_en timestamptz not null default now()
 );
 
+-- Horarios habituales: una fila por hora marcada, guardada en UTC
+-- (dia 0=domingo … 6=sábado, hora 0-23). Cada uno la ve en su zona horaria.
+create table if not exists public.horarios (
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  dia smallint not null check (dia between 0 and 6),
+  hora smallint not null check (hora between 0 and 23),
+  primary key (usuario_id, dia, hora)
+);
+
 -- ========== SEGURIDAD (RLS) ==========
 alter table public.perfiles       enable row level security;
 alter table public.parejas        enable row level security;
 alter table public.eventos        enable row level security;
 alter table public.push_subs      enable row level security;
 alter table public.disponibilidad enable row level security;
+alter table public.horarios       enable row level security;
 
 -- ¿Este usuario pertenece a esta pareja?
 create or replace function public.es_mi_pareja(p uuid) returns boolean
@@ -112,6 +122,14 @@ drop policy if exists "disponibilidad: propia" on public.disponibilidad;
 create policy "disponibilidad: propia" on public.disponibilidad
   for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 
+-- horarios: leo el mío y el de mi pareja; escribo solo el mío
+drop policy if exists "horarios: leer" on public.horarios;
+create policy "horarios: leer" on public.horarios
+  for select using (usuario_id = auth.uid() or public.es_pareja_de(usuario_id));
+drop policy if exists "horarios: propios" on public.horarios;
+create policy "horarios: propios" on public.horarios
+  for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
+
 -- ========== UNIRSE A UNA PAREJA CON CÓDIGO ==========
 -- Se ejecuta con privilegios porque el usuario B aún no puede "ver" la pareja.
 create or replace function public.unirse_pareja(p_codigo text)
@@ -167,7 +185,7 @@ create trigger disponibilidad_libre
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'horarios'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

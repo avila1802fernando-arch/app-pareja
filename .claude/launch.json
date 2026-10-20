@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nosotros",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3000", "-d", "public"],
+      "port": 3000
+    }
+  ]
+}

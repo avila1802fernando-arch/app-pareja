@@ -165,6 +165,15 @@
       // si mi pareja cambia su nombre o su zona horaria, lo vemos al instante
       { event: "UPDATE", schema: "public", table: "perfiles", filter: `id=eq.${otro.id}` },
       (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); }
+    ).on("postgres_changes",
+      // horario de mi pareja: una fila por hora marcada
+      { event: "*", schema: "public", table: "horarios" },
+      (payload) => {
+        const r = payload.eventType === "DELETE" ? payload.old : payload.new;
+        if (r.usuario_id !== otro.id) return;
+        if (payload.eventType === "DELETE") horarios.suyos.delete(idx(r.dia, r.hora)); else horarios.suyos.add(idx(r.dia, r.hora));
+        if (!$("tab-horarios").hidden && mapaMio) renderHorarios();
+      }
     ).subscribe();
     prepararPush();
   }
@@ -313,6 +322,137 @@
     else { dispo.mia = data; toast(libre ? `Listo, le avisamos a ${otro.nombre} ☎️` : "Ya no estás libre"); }
     b.disabled = false; renderDispo();
   });
+
+  // ---------- horarios habituales ----------
+  // Se guardan en UTC (dia 0=domingo … 6=sábado, hora 0-23) y cada uno los ve en su zona.
+  const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+  const DIAS_LARGO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const ORDEN_DIAS = [1, 2, 3, 4, 5, 6, 0]; // lunes primero
+  const horarios = { mios: new Set(), suyos: new Set() }; // índices UTC: dia*24+hora
+  const idx = (d, h) => d * 24 + h;
+  const hh = (h) => String(h % 24).padStart(2, "0") + ":00";
+  let mapaMio = null, mapaSuyo = null;
+
+  // Desplazamiento (en minutos) de una zona horaria en un instante dado
+  function offsetMin(tz, date) {
+    const p = {};
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })
+      .formatToParts(date).forEach((x) => (p[x.type] = x.value));
+    const comoUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    return Math.round((comoUtc - date.getTime()) / 60000);
+  }
+  // Para una zona: índice UTC → índice local y al revés, tomando la semana actual como referencia
+  function mapaTz(tz) {
+    const aLocal = new Array(168), aUtc = new Array(168);
+    const base = new Date(); base.setUTCHours(0, 0, 0, 0);
+    base.setUTCDate(base.getUTCDate() - base.getUTCDay()); // domingo de esta semana, 00:00 UTC
+    for (let i = 0; i < 168; i++) {
+      const t = new Date(base.getTime() + i * 3600000);
+      const local = new Date(t.getTime() + offsetMin(tz, t) * 60000);
+      const li = idx(local.getUTCDay(), local.getUTCHours());
+      aLocal[i] = li; aUtc[li] = i;
+    }
+    // hueco por cambio de hora (una hora local que no existe esa semana): usar la vecina
+    for (let i = 0; i < 168; i++) if (aUtc[i] === undefined) aUtc[i] = aUtc[(i + 167) % 168];
+    return { aLocal, aUtc };
+  }
+  // Hora local de mi pareja para mi (día, hora) local
+  const horaSuya = (d, h) => mapaSuyo.aLocal[mapaMio.aUtc[idx(d, h % 24)]] % 24;
+
+  async function cargarHorarios() {
+    mapaMio = mapaTz(miTz()); mapaSuyo = mapaTz(suTz());
+    const { data } = await sb.from("horarios").select("usuario_id, dia, hora").in("usuario_id", [user.id, otro.id]);
+    horarios.mios = new Set(); horarios.suyos = new Set();
+    (data || []).forEach((r) => (r.usuario_id === user.id ? horarios.mios : horarios.suyos).add(idx(r.dia, r.hora)));
+    renderHorarios();
+  }
+  AL_ABRIR.horarios = cargarHorarios;
+
+  function renderHorarios() {
+    $("hor-otro").textContent = otro.nombre;
+    const g = $("horario"); g.innerHTML = "";
+    const texto = (cls, t) => { const e = document.createElement("div"); e.className = cls; e.textContent = t; return e; };
+    g.append(texto("dia", ""));
+    ORDEN_DIAS.forEach((d) => g.append(texto("dia", DIAS[d])));
+    for (let h = 0; h < 24; h++) {
+      const lab = texto("hora", hh(h));
+      const s = document.createElement("small"); s.textContent = hh(horaSuya(1, h)); lab.append(s);
+      g.append(lab);
+      ORDEN_DIAS.forEach((d) => {
+        const c = document.createElement("div"); c.className = "celda";
+        const u = mapaMio.aUtc[idx(d, h)];
+        c.dataset.u = u;
+        c.classList.toggle("mio", horarios.mios.has(u));
+        c.classList.toggle("suyo", horarios.suyos.has(u));
+        g.append(c);
+      });
+    }
+    renderComun();
+  }
+
+  // Lista "Horas en común": cruce de los dos, agrupado por mi día local, con las dos horas
+  function renderComun() {
+    const list = $("comun-list"); list.innerHTML = "";
+    const comunes = [...horarios.mios].filter((u) => horarios.suyos.has(u));
+    if (!comunes.length) {
+      const li = document.createElement("li"); li.className = "muted";
+      li.textContent = horarios.suyos.size ? "Todavía no coinciden horas. Marca más o pídele que marque." : `${otro.nombre} todavía no marcó su horario.`;
+      list.append(li); return;
+    }
+    const porDia = {};
+    comunes.forEach((u) => { const l = mapaMio.aLocal[u]; (porDia[Math.floor(l / 24)] = porDia[Math.floor(l / 24)] || []).push(l % 24); });
+    ORDEN_DIAS.filter((d) => porDia[d]).forEach((d) => {
+      const rangos = [];
+      porDia[d].sort((a, b) => a - b).forEach((h) => {
+        const r = rangos[rangos.length - 1];
+        if (r && r.fin === h) r.fin = h + 1; else rangos.push({ ini: h, fin: h + 1 });
+      });
+      const li = document.createElement("li"), a = document.createElement("span"), b = document.createElement("span");
+      a.textContent = DIAS_LARGO[d];
+      b.textContent = rangos.map((r) =>
+        `${hh(r.ini)}–${hh(r.fin)} tú · ${hh(horaSuya(d, r.ini))}–${hh(horaSuya(d, r.fin))} ${otro.nombre}`
+      ).join("  |  ");
+      li.append(a, b); list.append(li);
+    });
+  }
+
+  // Marcar tocando o arrastrando; se guarda al soltar
+  let pintando = null; // { valor, tocados }
+  const grilla = $("horario");
+  function pintar(c) {
+    const u = +c.dataset.u;
+    if (pintando.tocados.has(u)) return;
+    pintando.tocados.add(u);
+    c.classList.toggle("mio", pintando.valor);
+    if (pintando.valor) horarios.mios.add(u); else horarios.mios.delete(u);
+  }
+  grilla.addEventListener("pointerdown", (e) => {
+    const c = e.target.closest(".celda"); if (!c) return;
+    grilla.setPointerCapture(e.pointerId);
+    pintando = { valor: !c.classList.contains("mio"), tocados: new Set() };
+    pintar(c);
+  });
+  grilla.addEventListener("pointermove", (e) => {
+    if (!pintando) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const c = el && el.closest(".celda"); if (c) pintar(c);
+  });
+  async function guardarHorario() {
+    if (!pintando) return;
+    const { valor, tocados } = pintando; pintando = null;
+    const us = [...tocados]; if (!us.length) return;
+    let error;
+    if (valor) {
+      const filas = us.map((u) => ({ usuario_id: user.id, dia: Math.floor(u / 24), hora: u % 24 }));
+      ({ error } = await sb.from("horarios").upsert(filas, { onConflict: "usuario_id,dia,hora" }));
+    } else {
+      const f = us.map((u) => `and(dia.eq.${Math.floor(u / 24)},hora.eq.${u % 24})`).join(",");
+      ({ error } = await sb.from("horarios").delete().eq("usuario_id", user.id).or(f));
+    }
+    if (error) { toast("No se pudo guardar"); cargarHorarios(); } else renderComun();
+  }
+  grilla.addEventListener("pointerup", guardarHorario);
+  grilla.addEventListener("pointercancel", guardarHorario);
 
   // ---------- notificaciones push ----------
   function b64ToU8(s) {

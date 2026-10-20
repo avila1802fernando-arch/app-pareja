@@ -61,6 +61,22 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .log ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .log li{display:flex;justify-content:space-between;gap:12px;font-size:.9rem}
 .log li span:last-child{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* horarios habituales: cuadrícula 7 días x 24 horas */
+.leyenda{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
+.leyenda i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px;border:1px solid var(--line)}
+.leyenda .l-mio{background:var(--accent-soft);border-color:var(--accent)}
+.leyenda .l-suyo{background:var(--ok-soft);border-color:var(--ok)}
+.leyenda .l-ambos{background:var(--accent);border-color:var(--accent)}
+.horario{display:grid;grid-template-columns:52px repeat(7,1fr);gap:3px;user-select:none;-webkit-user-select:none}
+.horario .dia{font-size:.7rem;color:var(--muted);text-align:center;font-weight:700;padding-bottom:4px}
+.horario .hora{font-size:.68rem;color:var(--muted);display:flex;flex-direction:column;justify-content:center;line-height:1.1;font-variant-numeric:tabular-nums}
+.horario .hora small{font-size:.62rem;opacity:.75}
+.horario .celda{height:22px;border-radius:5px;background:var(--bg);border:1px solid var(--line);touch-action:none}
+.horario .celda.mio{background:var(--accent-soft);border-color:var(--accent)}
+.horario .celda.suyo{background:var(--ok-soft);border-color:var(--ok)}
+.horario .celda.mio.suyo{background:var(--accent);border-color:var(--accent)}
+.comun li{flex-direction:column;gap:2px}
+.comun li span:last-child{white-space:normal;text-align:left;font-size:.85rem}
 /* barra inferior de pestañas */
 .tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:420px;display:flex;gap:4px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;box-shadow:0 20px 50px -30px rgba(90,20,50,.35);z-index:5}
 .tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;color:var(--muted);font-size:.68rem;font-weight:700;padding:8px 4px;border-radius:999px}

@@ -89,6 +89,17 @@ create table if not exists public.cartas (
 );
 create index if not exists cartas_pareja_idx on public.cartas (pareja_id, creado_en desc);
 
+-- Lista compartida "Cuando nos veamos": cosas para hacer juntos
+create table if not exists public.deseos (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  creado_por uuid not null references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 140),
+  hecho_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+create index if not exists deseos_pareja_idx on public.deseos (pareja_id, creado_en);
+
 -- Horarios habituales: una fila por hora marcada, guardada en UTC
 -- (dia 0=domingo … 6=sábado, hora 0-23). Cada uno la ve en su zona horaria.
 create table if not exists public.horarios (
@@ -125,6 +136,7 @@ alter table public.disponibilidad enable row level security;
 alter table public.animos         enable row level security;
 alter table public.respuestas     enable row level security;
 alter table public.cartas         enable row level security;
+alter table public.deseos         enable row level security;
 alter table public.horarios       enable row level security;
 alter table public.eventos_cal    enable row level security;
 
@@ -220,6 +232,20 @@ create policy "cartas: escribir" on public.cartas
 drop policy if exists "cartas: borrar las mías" on public.cartas;
 create policy "cartas: borrar las mías" on public.cartas
   for delete using (de_usuario = auth.uid());
+
+-- deseos: lista compartida, los dos agregan, marcan y quitan
+drop policy if exists "deseos: leer" on public.deseos;
+create policy "deseos: leer" on public.deseos
+  for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "deseos: agregar" on public.deseos;
+create policy "deseos: agregar" on public.deseos
+  for insert with check (creado_por = auth.uid() and public.es_mi_pareja(pareja_id));
+drop policy if exists "deseos: marcar" on public.deseos;
+create policy "deseos: marcar" on public.deseos
+  for update using (public.es_mi_pareja(pareja_id)) with check (public.es_mi_pareja(pareja_id));
+drop policy if exists "deseos: quitar" on public.deseos;
+create policy "deseos: quitar" on public.deseos
+  for delete using (public.es_mi_pareja(pareja_id));
 
 -- horarios: leo el mío y el de mi pareja; escribo solo el mío
 drop policy if exists "horarios: leer" on public.horarios;
@@ -433,7 +459,7 @@ create trigger eventos_cal_touch
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'horarios', 'eventos_cal'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

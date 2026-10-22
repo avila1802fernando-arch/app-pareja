@@ -156,6 +156,17 @@
         <button type="button" id="btn-carta">Escribir una carta 💌</button>
         <ul id="cartas-list" class="cartas"></ul>
       </div>
+      <div class="log">
+        <h2>Cuando nos veamos</h2>
+        <p class="small-note">Lo que vamos a hacer juntos. Márquenlo cuando lo cumplan.</p>
+        <form id="f-deseo" class="fila-deseo">
+          <label for="deseo-texto" class="sr">Algo para hacer juntos</label>
+          <input id="deseo-texto" maxlength="140" required placeholder="Ver el atardecer de la mano…">
+          <button type="submit" aria-label="Agregar a la lista">＋</button>
+        </form>
+        <ul id="deseos-list" class="deseos"></ul>
+        <p class="small-note" id="deseos-hechos"></p>
+      </div>
       <details class="log" id="preg-hist">
         <summary><h2>Días anteriores</h2></summary>
         <ul id="hist-list" class="hist"></ul>

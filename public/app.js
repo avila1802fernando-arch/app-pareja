@@ -198,6 +198,13 @@
         cargarCartas();
       }
     ).on("postgres_changes",
+      // lista compartida (sin filtro para recibir también lo que se quita)
+      { event: "*", schema: "public", table: "deseos" },
+      (payload) => {
+        if (payload.eventType === "INSERT" && payload.new.creado_por !== user.id) toast(`${otro.nombre} agregó a la lista: ${payload.new.texto}`);
+        if (!$("tab-juntos").hidden) cargarDeseos();
+      }
+    ).on("postgres_changes",
       // horario de mi pareja: una fila por hora marcada
       { event: "*", schema: "public", table: "horarios" },
       (payload) => {
@@ -964,7 +971,54 @@
       list.append(li);
     });
   }
-  AL_ABRIR.juntos = () => { cargarPregunta(); cargarHistorial(); cargarCartas(); };
+  AL_ABRIR.juntos = () => { cargarPregunta(); cargarHistorial(); cargarCartas(); cargarDeseos(); };
+
+  // ---------- lista "Cuando nos veamos" ----------
+  let deseos = [];
+  async function cargarDeseos() {
+    const { data } = await sb.from("deseos").select("*").eq("pareja_id", pareja.id).order("creado_en");
+    deseos = data || []; renderDeseos();
+  }
+  function renderDeseos() {
+    const list = $("deseos-list"); list.innerHTML = "";
+    const pendientesD = deseos.filter((d) => !d.hecho_en);
+    const hechos = deseos.filter((d) => d.hecho_en).sort((a, b) => b.hecho_en.localeCompare(a.hecho_en));
+    [...pendientesD, ...hechos].forEach((d) => {
+      const li = document.createElement("li"); li.classList.toggle("hecho", !!d.hecho_en);
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "deseo-" + d.id; cb.checked = !!d.hecho_en;
+      const lab = document.createElement("label"); lab.htmlFor = cb.id; lab.textContent = d.texto;
+      if (d.hecho_en) { const s = document.createElement("small"); s.textContent = `✓ ${fechaCorta(d.hecho_en, miTz())}`; lab.append(s); }
+      const x = document.createElement("button"); x.type = "button"; x.className = "quitar"; x.textContent = "×";
+      x.setAttribute("aria-label", `Quitar de la lista: ${d.texto}`);
+      cb.addEventListener("change", async () => {
+        const hecho_en = cb.checked ? new Date().toISOString() : null;
+        const { error } = await sb.from("deseos").update({ hecho_en }).eq("id", d.id);
+        if (error) { toast("No se pudo guardar"); cb.checked = !cb.checked; return; }
+        d.hecho_en = hecho_en;
+        if (hecho_en) { lluvia("💞", 12); toast("¡Uno menos, juntos! 💞"); }
+        renderDeseos();
+      });
+      x.addEventListener("click", async () => {
+        if (!confirm(`¿Quitar “${d.texto}” de la lista?`)) return;
+        const { error } = await sb.from("deseos").delete().eq("id", d.id);
+        if (error) { toast("No se pudo quitar"); return; }
+        deseos = deseos.filter((y) => y.id !== d.id); renderDeseos();
+      });
+      li.append(cb, lab, x); list.append(li);
+    });
+    if (!deseos.length) {
+      const li = document.createElement("li"); li.className = "muted vacia";
+      li.textContent = "Empiecen la lista: ¿qué es lo primero que harán juntos?"; list.append(li);
+    }
+    $("deseos-hechos").textContent = hechos.length ? `Ya cumplieron ${plural(hechos.length, "deseo", "deseos")} juntos 💞` : "";
+  }
+  $("f-deseo").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const texto = $("deseo-texto").value.trim(); if (!texto) return;
+    const { data, error } = await sb.from("deseos").insert({ pareja_id: pareja.id, creado_por: user.id, texto }).select().single();
+    if (error) { toast("No se pudo agregar"); return; }
+    $("deseo-texto").value = ""; deseos.push(data); renderDeseos();
+  });
 
   // ---------- cartas ----------
   let cartas = [], selladas = [];

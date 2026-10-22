@@ -8,7 +8,7 @@
 import webpush from "npm:web-push@3.6.7";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
-export type Mensaje = { title: string; body: string; tag?: string; url?: string };
+export type Mensaje = { title: string; body: string; tag?: string; url?: string; vibrate?: number[] };
 
 // Cliente con permisos totales (solo se usa dentro de las funciones, nunca en el frontend)
 export function clienteAdmin(): SupabaseClient {

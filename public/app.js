@@ -149,7 +149,10 @@
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
       (payload) => {
         const ev = payload.new;
-        if (ev.de_usuario !== user.id) toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
+        if (ev.de_usuario !== user.id) {
+          toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
+          sentir(ev.tipo); sessionStorage.setItem("sentido", ev.id);
+        }
         render();
       }
     ).on("postgres_changes",
@@ -192,21 +195,64 @@
     const em = document.createElement("em"); em.textContent = "te extraña"; $("home-title").append(em, ".");
   }
 
+  // Textos de cada tipo de evento: aviso al llegar (toast) y línea del historial
   const AVISOS = {
     entrada: (n) => `${n} acaba de entrar y te extraña ❤️`,
     te_extrano: (n) => `${n} dice: te extraño ❤️`,
     libre: (n) => `${n} está libre para hablar ☎️`,
+    abrazo: (n) => `${n} te manda un abrazo 🤗`,
+    beso: (n) => `${n} te manda un beso 😘`,
+    pensando: (n) => `${n} está pensando en ti 💭`,
+    buenos_dias: (n) => `Buenos días de parte de ${n} ☀️`,
+    buenas_noches: (n) => `${n} te da las buenas noches 🌙`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
     te_extrano: (n) => `${n}: “te extraño”`,
     libre: (n) => `${n} se puso libre para hablar`,
+    abrazo: (n) => `${n} mandó un abrazo 🤗`,
+    beso: (n) => `${n} mandó un beso 😘`,
+    pensando: (n) => `${n} pensó en ti 💭`,
+    buenos_dias: (n) => `${n}: “buenos días” ☀️`,
+    buenas_noches: (n) => `${n}: “buenas noches” 🌙`,
   };
+  // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
+  const SENTIR = {
+    te_extrano: { emoji: "❤️", vibra: [200, 100, 200] },
+    abrazo: { emoji: "🤗", vibra: [500] },
+    beso: { emoji: "😘", vibra: [80, 60, 80] },
+    pensando: { emoji: "💭", vibra: [60] },
+    buenos_dias: { emoji: "☀️", vibra: [100, 80, 100, 80, 100] },
+    buenas_noches: { emoji: "🌙", vibra: [100, 80, 100, 80, 100] },
+  };
+  function lluvia(emoji, n = 16) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement("span"); s.className = "lluvia"; s.textContent = emoji;
+      s.style.left = Math.random() * 92 + "vw";
+      s.style.fontSize = 20 + Math.random() * 24 + "px";
+      s.style.animationDelay = Math.random() * 0.7 + "s";
+      s.style.setProperty("--x", Math.round(Math.random() * 90 - 45) + "px");
+      s.style.setProperty("--r", Math.round(Math.random() * 50 - 25) + "deg");
+      document.body.append(s); setTimeout(() => s.remove(), 3500);
+    }
+  }
+  function sentir(tipo) {
+    const s = SENTIR[tipo]; if (!s) return;
+    lluvia(s.emoji);
+    try { if (navigator.vibrate) navigator.vibrate(s.vibra); } catch (e) {}
+  }
 
   async function render() {
     const { data: evs } = await sb.from("eventos").select("*").eq("pareja_id", pareja.id)
       .order("creado_en", { ascending: false }).limit(12);
     const suyos = (evs || []).filter((e) => e.de_usuario !== user.id);
+    // Si abriste la app por una señal reciente (p. ej. tocando la notificación del abrazo), la sientes al entrar
+    const ult = suyos[0];
+    if (ult && SENTIR[ult.tipo] && Date.now() - new Date(ult.creado_en).getTime() < 10 * 60000
+        && sessionStorage.getItem("sentido") !== String(ult.id)) {
+      sessionStorage.setItem("sentido", ult.id); sentir(ult.tipo);
+    }
     const ultEntrada = suyos.find((e) => e.tipo === "entrada");
     const ultMsg = suyos.find((e) => e.tipo === "te_extrano");
     $("status-title").textContent = ultEntrada ? `${otro.nombre} entró ${ago(ultEntrada.creado_en)}` : `${otro.nombre} todavía no ha entrado`;
@@ -226,6 +272,18 @@
     toast(error ? "No se pudo enviar" : "Enviado ❤️");
     b.disabled = false; render();
   });
+
+  // Señales rápidas: abrazo, beso, pienso en ti, buenos días, buenas noches
+  document.querySelectorAll("#senales button").forEach((b) => b.addEventListener("click", async () => {
+    const tipo = b.dataset.senal;
+    document.querySelectorAll("#senales button").forEach((x) => (x.disabled = true));
+    const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo });
+    if (error) toast("No se pudo enviar");
+    else { lluvia(SENTIR[tipo].emoji, 6); toast(`Enviado a ${otro.nombre} ${SENTIR[tipo].emoji}`); }
+    // una pausa corta para no mandar diez seguidas sin querer
+    setTimeout(() => document.querySelectorAll("#senales button").forEach((x) => (x.disabled = false)), 1500);
+    render();
+  }));
 
   // ---------- navegación por pestañas ----------
   const TABS = ["inicio", "horarios", "calendario", "ajustes"];

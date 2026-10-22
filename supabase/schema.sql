@@ -24,13 +24,16 @@ create table if not exists public.eventos (
   id bigint generated always as identity primary key,
   pareja_id uuid not null references public.parejas(id) on delete cascade,
   de_usuario uuid not null references auth.users(id) on delete cascade,
-  tipo text not null check (tipo in ('entrada', 'te_extrano', 'libre')),
+  tipo text not null,
   creado_en timestamptz not null default now()
 );
--- Bases creadas antes de 'libre': ampliar el tipo permitido
+-- Tipos de señal permitidos (se redefine aquí para que las bases viejas tomen los nuevos)
 alter table public.eventos drop constraint if exists eventos_tipo_check;
 alter table public.eventos add constraint eventos_tipo_check
-  check (tipo in ('entrada', 'te_extrano', 'libre'));
+  check (tipo in (
+    'entrada', 'te_extrano', 'libre',
+    'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches'
+  ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
 create table if not exists public.push_subs (

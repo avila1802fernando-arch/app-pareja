@@ -1,6 +1,6 @@
 // Edge Function "notificar"
 // La llaman los Database Webhooks:
-//   - `eventos` (INSERT): entrada, "te extraño" o "estoy libre" → push a la otra persona
+//   - `eventos` (INSERT): entrada, "te extraño", "estoy libre", abrazo, beso… → push a la otra persona
 //   - `eventos_cal` (INSERT / UPDATE / DELETE): cambios del calendario → push a la otra persona
 //
 // Secretos y utilidades compartidas: ver ../_shared/push.ts
@@ -9,6 +9,17 @@ import { autorizado, clienteAdmin, enviarPush, fechaEn, horaEn, type Mensaje } f
 
 const MINUTOS_SIN_REPETIR = 15; // no avisar dos "entradas" seguidas en menos de 15 min
 const TIPOS: Record<string, string> = { llamada: "☎️ Llamada", cita: "💞 Cita", viaje: "✈️ Viaje", aniversario: "🎉 Aniversario", otro: "📌 Otro" };
+
+// Señales simples: el texto solo depende del nombre de quien la manda
+const SENALES: Record<string, (n: string) => Mensaje> = {
+  entrada: (n) => ({ title: `${n} acaba de entrar ❤️`, body: "Y te extraña." }),
+  te_extrano: (n) => ({ title: `${n} dice: te extraño ❤️`, body: "Entra y respóndele.", vibrate: [200, 100, 200] }),
+  abrazo: (n) => ({ title: `🤗 ${n} te manda un abrazo`, body: "Bien apretado.", tag: "abrazo", vibrate: [500] }),
+  beso: (n) => ({ title: `😘 ${n} te manda un beso`, body: "Y otro más.", tag: "beso", vibrate: [80, 60, 80] }),
+  pensando: (n) => ({ title: `💭 ${n} está pensando en ti`, body: "Justo ahora.", tag: "pensando", vibrate: [60] }),
+  buenos_dias: (n) => ({ title: `☀️ Buenos días, de parte de ${n}`, body: "Que tengas un día bonito.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
+  buenas_noches: (n) => ({ title: `🌙 ${n} te da las buenas noches`, body: "Que descanses.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
+};
 
 const sb = clienteAdmin();
 
@@ -62,9 +73,7 @@ async function porEvento(ev: Evento) {
   const nombre = await nombreDe(ev.de_usuario);
 
   let mensaje: Mensaje;
-  if (ev.tipo === "entrada") {
-    mensaje = { title: `${nombre} acaba de entrar ❤️`, body: "Y te extraña." };
-  } else if (ev.tipo === "libre") {
+  if (ev.tipo === "libre") {
     // ¿Hasta qué hora está libre? Se muestra en la hora local de quien recibe.
     const [{ data: d }, tz] = await Promise.all([
       sb.from("disponibilidad").select("hasta").eq("usuario_id", ev.de_usuario).maybeSingle(),
@@ -76,7 +85,7 @@ async function porEvento(ev: Evento) {
       tag: "libre",
     };
   } else {
-    mensaje = { title: `${nombre} dice: te extraño ❤️`, body: "Entra y respóndele." };
+    mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
   }
 
   const enviadas = await enviarPush(sb, otroId, mensaje);

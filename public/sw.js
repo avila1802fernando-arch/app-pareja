@@ -12,6 +12,7 @@ self.addEventListener("push", (event) => {
       badge: "/icons/badge-96.png",
       tag: data.tag || "nosotros",
       renotify: true,
+      vibrate: data.vibrate || [120, 60, 120],
       data: { url: data.url || "/" },
     })
   );

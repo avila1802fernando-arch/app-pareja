@@ -61,6 +61,13 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .log ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .log li{display:flex;justify-content:space-between;gap:12px;font-size:.9rem}
 .log li span:last-child{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* señales rápidas */
+.senales{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.senales button{background:var(--bg);color:var(--fg);border:1.5px solid var(--line);border-radius:16px;padding:10px 2px 8px;font-size:.66rem;font-weight:700;line-height:1.15;display:flex;flex-direction:column;align-items:center;gap:4px}
+.senales button b{font-size:1.45rem;line-height:1}
+.senales button:active{background:var(--accent-soft);border-color:var(--accent)}
+.lluvia{position:fixed;bottom:-48px;z-index:20;pointer-events:none;animation:sube 2.6s ease-out forwards}
+@keyframes sube{0%{transform:translate(0,0) scale(.6);opacity:0}12%{opacity:1}100%{transform:translate(var(--x),-88vh) scale(1.15) rotate(var(--r));opacity:0}}
 /* horarios habituales: cuadrícula 7 días x 24 horas */
 .leyenda{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
 .leyenda i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px;border:1px solid var(--line)}

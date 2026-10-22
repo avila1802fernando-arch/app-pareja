@@ -88,6 +88,14 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .senales button:active b{transform:scale(1.25)}
 .lluvia{position:fixed;bottom:-48px;z-index:20;pointer-events:none;animation:sube 2.6s ease-out forwards}
 @keyframes sube{0%{transform:translate(0,0) scale(.6);opacity:0}12%{opacity:1}100%{transform:translate(var(--x),-88vh) scale(1.15) rotate(var(--r));opacity:0}}
+/* ánimo */
+.animo-suyo{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line);font-size:.92rem}
+.animo-suyo b{font-size:1.15rem;margin-right:4px}
+.animo-suyo q{font-family:var(--hand);font-size:1.2rem;color:var(--accent)}
+.animos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.animos button{background:var(--blush);color:var(--fg);border:1.5px solid var(--line);border-radius:18px;padding:12px 4px 10px;font-size:.72rem;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:none;min-height:72px;line-height:1.15}
+.animos button b{font-size:1.7rem;line-height:1}
+.animos button[aria-checked=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 /* horarios habituales: cuadrícula 7 días x 24 horas */
 .leyenda{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
 .leyenda i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px;border:1px solid var(--line)}

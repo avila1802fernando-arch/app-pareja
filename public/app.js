@@ -142,8 +142,7 @@
       await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "entrada" });
       sessionStorage.setItem("entrada", "1");
     }
-    await render();
-    await cargarDispo();
+    await Promise.all([render(), cargarDispo(), cargarAnimos()]);
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -163,6 +162,15 @@
         const id = d ? d.usuario_id : payload.old.usuario_id;
         if (id === user.id) dispo.mia = d; else if (id === otro.id) dispo.suya = d;
         renderDispo();
+      }
+    ).on("postgres_changes",
+      // ánimo: igual que disponibilidad, RLS solo deja pasar nuestras dos filas
+      { event: "*", schema: "public", table: "animos" },
+      (payload) => {
+        const a = payload.eventType === "DELETE" ? null : payload.new;
+        const id = a ? a.usuario_id : payload.old.usuario_id;
+        if (id === user.id) animos.mio = a; else if (id === otro.id) animos.suyo = a;
+        renderAnimos();
       }
     ).on("postgres_changes",
       // si mi pareja cambia su nombre o su zona horaria, lo vemos al instante
@@ -205,6 +213,7 @@
     pensando: (n) => `${n} está pensando en ti 💭`,
     buenos_dias: (n) => `Buenos días de parte de ${n} ☀️`,
     buenas_noches: (n) => `${n} te da las buenas noches 🌙`,
+    animo: (n) => `${n} compartió cómo se siente 💗`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -215,6 +224,7 @@
     pensando: (n) => `${n} pensó en ti 💭`,
     buenos_dias: (n) => `${n}: “buenos días” ☀️`,
     buenas_noches: (n) => `${n}: “buenas noches” 🌙`,
+    animo: (n) => `${n} compartió su ánimo 💗`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -387,6 +397,70 @@
     if (error) toast("No se pudo cambiar");
     else { dispo.mia = data; toast(libre ? `Listo, le avisamos a ${otro.nombre} ☎️` : "Ya no estás libre"); }
     b.disabled = false; renderDispo();
+  });
+
+  // ---------- ánimo: cómo se siente cada uno ----------
+  // `frase`: cómo se lee sobre la otra persona ("Matina tiene sueño"); mismos estados que en notificar
+  const ESTADOS = {
+    feliz: { emoji: "😊", texto: "Feliz", frase: "está feliz" },
+    amor: { emoji: "🥰", texto: "Con mucho amor", frase: "anda con mucho amor" },
+    calma: { emoji: "😌", texto: "En calma", frase: "está en calma" },
+    sueno: { emoji: "😴", texto: "Con sueño", frase: "tiene sueño" },
+    extrano: { emoji: "🥺", texto: "Extrañándote", frase: "te está extrañando" },
+    triste: { emoji: "😢", texto: "Triste", frase: "está triste" },
+    estres: { emoji: "😤", texto: "Con estrés", frase: "tiene estrés" },
+    malestar: { emoji: "🤒", texto: "Con malestar", frase: "no se siente bien" },
+    celebrar: { emoji: "🥳", texto: "Con ganas de celebrar", frase: "tiene ganas de celebrar" },
+  };
+  const animos = { mio: null, suyo: null };
+  let animoElegido = null;
+
+  async function cargarAnimos() {
+    const { data } = await sb.from("animos").select("*").in("usuario_id", [user.id, otro.id]);
+    animos.mio = (data || []).find((a) => a.usuario_id === user.id) || null;
+    animos.suyo = (data || []).find((a) => a.usuario_id === otro.id) || null;
+    renderAnimos();
+  }
+  function renderAnimos() {
+    const s = animos.suyo, p = $("animo-suyo"), e = s && ESTADOS[s.estado];
+    p.hidden = !e;
+    if (e) {
+      p.innerHTML = "";
+      const b = document.createElement("b"); b.textContent = e.emoji;
+      p.append(b, `${otro.nombre} ${e.frase} · ${ago(s.actualizado_en)}`);
+      if (s.nota) { const q = document.createElement("q"); q.textContent = s.nota; p.append(document.createElement("br"), q); }
+    }
+    const m = animos.mio && ESTADOS[animos.mio.estado];
+    $("btn-animo").textContent = m ? `Tu ánimo: ${m.emoji} ${m.texto}` : "¿Cómo te sientes hoy? 💗";
+  }
+
+  function abrirAnimo() {
+    animoElegido = animos.mio ? animos.mio.estado : null;
+    $("animo-nota").value = (animos.mio && animos.mio.nota) || "";
+    $("animo-ayuda").textContent = `${otro.nombre} lo verá en su Inicio y le llegará un aviso.`;
+    const g = $("animos"); g.innerHTML = "";
+    Object.entries(ESTADOS).forEach(([k, e]) => {
+      const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(k === animoElegido));
+      const em = document.createElement("b"); em.textContent = e.emoji; b.append(em, e.texto);
+      b.addEventListener("click", () => {
+        animoElegido = k;
+        g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      });
+      g.append(b);
+    });
+    $("dlg-animo").showModal();
+  }
+  $("btn-animo").addEventListener("click", abrirAnimo);
+  $("animo-cancelar").addEventListener("click", () => $("dlg-animo").close());
+  $("f-animo").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!animoElegido) { toast("Elige cómo te sientes"); return; }
+    const fila = { usuario_id: user.id, estado: animoElegido, nota: $("animo-nota").value.trim() || null, actualizado_en: new Date().toISOString() };
+    const { data, error } = await sb.from("animos").upsert(fila).select().single();
+    if (error) { toast("No se pudo compartir"); return; }
+    animos.mio = data; renderAnimos();
+    $("dlg-animo").close(); toast(`Listo, ${otro.nombre} ya sabe cómo estás ${ESTADOS[animoElegido].emoji}`);
   });
 
   // ---------- horarios habituales ----------

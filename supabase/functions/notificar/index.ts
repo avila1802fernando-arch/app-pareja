@@ -21,6 +21,19 @@ const SENALES: Record<string, (n: string) => Mensaje> = {
   buenas_noches: (n) => ({ title: `🌙 ${n} te da las buenas noches`, body: "Que descanses.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
 };
 
+// Ánimos (los mismos que en public/app.js). `abrazo`: el aviso sugiere mandar uno.
+const ESTADOS: Record<string, { emoji: string; frase: string; abrazo?: boolean }> = {
+  feliz: { emoji: "😊", frase: "está feliz" },
+  amor: { emoji: "🥰", frase: "anda con mucho amor" },
+  calma: { emoji: "😌", frase: "está en calma" },
+  sueno: { emoji: "😴", frase: "tiene sueño" },
+  extrano: { emoji: "🥺", frase: "te está extrañando", abrazo: true },
+  triste: { emoji: "😢", frase: "está triste", abrazo: true },
+  estres: { emoji: "😤", frase: "tiene estrés", abrazo: true },
+  malestar: { emoji: "🤒", frase: "no se siente bien", abrazo: true },
+  celebrar: { emoji: "🥳", frase: "tiene ganas de celebrar" },
+};
+
 const sb = clienteAdmin();
 
 type Pareja = { usuario_a: string; usuario_b: string | null };
@@ -83,6 +96,15 @@ async function porEvento(ev: Evento) {
       title: `${nombre} está libre para una llamada ☎️`,
       body: d?.hasta ? `Hasta las ${horaEn(d.hasta, tz)} (tu hora). ¿Hablamos?` : "¿Hablamos?",
       tag: "libre",
+    };
+  } else if (ev.tipo === "animo") {
+    const { data: a } = await sb.from("animos").select("estado, nota").eq("usuario_id", ev.de_usuario).maybeSingle();
+    const e = ESTADOS[a?.estado ?? ""] ?? { emoji: "💗", frase: "compartió cómo se siente" };
+    const sugerencia = e.abrazo ? "Mándale un abrazo 🤗" : "Entra a ver cómo está.";
+    mensaje = {
+      title: `${e.emoji} ${nombre} ${e.frase}`,
+      body: a?.nota ? `“${a.nota}” · ${sugerencia}` : sugerencia,
+      tag: "animo",
     };
   } else {
     mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);

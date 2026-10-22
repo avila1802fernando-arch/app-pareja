@@ -88,6 +88,7 @@
       <div class="status">
         <strong id="status-title">Conectando…</strong>
         <span class="muted" id="status-when"></span>
+        <p class="animo-suyo" id="animo-suyo" hidden></p>
       </div>
       <div class="status libre-status" id="libre-status" hidden>
         <strong id="libre-title"></strong>
@@ -104,6 +105,7 @@
           <button type="button" data-senal="buenos_dias"><b>☀️</b>Buen día</button>
           <button type="button" data-senal="buenas_noches"><b>🌙</b>Buenas noches</button>
         </div>
+        <button type="button" class="ghost animo-mio" id="btn-animo">¿Cómo te sientes hoy?</button>
         <button type="button" class="ghost" id="push-hint" hidden>Activar notificaciones en este teléfono</button>
       </div>
       <div class="log">
@@ -200,6 +202,19 @@
     <span>Ajustes</span>
   </button>
 </nav>
+
+<!-- Cómo me siento -->
+<dialog id="dlg-animo" class="dlg">
+  <form id="f-animo" class="stack">
+    <h2>¿Cómo te sientes?</h2>
+    <p class="small-note" id="animo-ayuda"></p>
+    <div class="animos" id="animos" role="radiogroup" aria-label="Cómo te sientes"></div>
+    <label for="animo-nota">Cuéntale un poquito (opcional)</label>
+    <input id="animo-nota" maxlength="80" placeholder="Día largo, pero pensándote">
+    <button type="submit">Compartir</button>
+    <button type="button" class="link" id="animo-cancelar">Cancelar</button>
+  </form>
+</dialog>
 
 <!-- Crear / editar un evento del calendario -->
 <dialog id="dlg-evento" class="dlg">

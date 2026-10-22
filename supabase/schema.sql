@@ -32,7 +32,8 @@ alter table public.eventos drop constraint if exists eventos_tipo_check;
 alter table public.eventos add constraint eventos_tipo_check
   check (tipo in (
     'entrada', 'te_extrano', 'libre',
-    'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches'
+    'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches',
+    'animo'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -49,6 +50,14 @@ create table if not exists public.disponibilidad (
   usuario_id uuid primary key references auth.users(id) on delete cascade,
   libre boolean not null default false,
   hasta timestamptz,
+  actualizado_en timestamptz not null default now()
+);
+
+-- Ánimo: cómo se siente cada uno ahora (una fila por persona)
+create table if not exists public.animos (
+  usuario_id uuid primary key references auth.users(id) on delete cascade,
+  estado text not null check (estado in ('feliz', 'amor', 'calma', 'sueno', 'extrano', 'triste', 'estres', 'malestar', 'celebrar')),
+  nota text check (nota is null or char_length(nota) <= 80),
   actualizado_en timestamptz not null default now()
 );
 
@@ -85,6 +94,7 @@ alter table public.parejas        enable row level security;
 alter table public.eventos        enable row level security;
 alter table public.push_subs      enable row level security;
 alter table public.disponibilidad enable row level security;
+alter table public.animos         enable row level security;
 alter table public.horarios       enable row level security;
 alter table public.eventos_cal    enable row level security;
 
@@ -142,6 +152,14 @@ create policy "disponibilidad: leer" on public.disponibilidad
   for select using (usuario_id = auth.uid() or public.es_pareja_de(usuario_id));
 drop policy if exists "disponibilidad: propia" on public.disponibilidad;
 create policy "disponibilidad: propia" on public.disponibilidad
+  for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
+
+-- animos: leo el mío y el de mi pareja; escribo solo el mío
+drop policy if exists "animos: leer" on public.animos;
+create policy "animos: leer" on public.animos
+  for select using (usuario_id = auth.uid() or public.es_pareja_de(usuario_id));
+drop policy if exists "animos: propio" on public.animos;
+create policy "animos: propio" on public.animos
   for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 
 -- horarios: leo el mío y el de mi pareja; escribo solo el mío
@@ -216,6 +234,33 @@ create trigger disponibilidad_libre
   after insert or update of libre, hasta on public.disponibilidad
   for each row execute function public.registrar_libre();
 
+-- ========== SEÑALES QUE NACEN DE OTRAS TABLAS ==========
+-- Igual que "estoy libre": cada una deja un evento y el webhook de `eventos` avisa al otro.
+-- Busca la pareja completa de un usuario.
+create or replace function public.pareja_de(u uuid) returns uuid
+language sql stable security definer set search_path = public as $$
+  select id from public.parejas
+   where usuario_b is not null and (usuario_a = u or usuario_b = u)
+   limit 1;
+$$;
+
+-- Ánimo: avisa cuando cambia el estado o la nota
+create or replace function public.registrar_animo() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  pid uuid := public.pareja_de(new.usuario_id);
+begin
+  if pid is not null and (tg_op = 'INSERT' or new.estado is distinct from old.estado or new.nota is distinct from old.nota) then
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (pid, new.usuario_id, 'animo');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists animos_aviso on public.animos;
+create trigger animos_aviso
+  after insert or update on public.animos
+  for each row execute function public.registrar_animo();
+
 -- ========== CALENDARIO: ÚLTIMO CAMBIO ==========
 -- Guarda quién y cuándo cambió el evento (para avisar solo al otro) y,
 -- si se movió la hora de inicio, vuelve a armar el recordatorio.
@@ -238,7 +283,7 @@ create trigger eventos_cal_touch
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'horarios', 'eventos_cal'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'horarios', 'eventos_cal'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

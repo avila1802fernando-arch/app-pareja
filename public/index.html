@@ -11,7 +11,9 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Nunito:wght@400;600;700&display=swap">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Nunito:wght@400;600;700&display=swap">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -73,7 +75,14 @@
       <div class="heart" id="heart">
         <div class="ring"></div>
         <svg viewBox="0 0 100 100" aria-hidden="true">
-          <path fill="var(--accent)" d="M50 88 C30 72 10 56 10 36 C10 24 19 15 30 15 C38 15 45 19 50 27 C55 19 62 15 70 15 C81 15 90 24 90 36 C90 56 70 72 50 88 Z"/>
+          <defs>
+            <linearGradient id="g-corazon" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" style="stop-color:var(--heart-a)"/>
+              <stop offset="1" style="stop-color:var(--heart-b)"/>
+            </linearGradient>
+          </defs>
+          <path fill="url(#g-corazon)" d="M50 88 C30 72 10 56 10 36 C10 24 19 15 30 15 C38 15 45 19 50 27 C55 19 62 15 70 15 C81 15 90 24 90 36 C90 56 70 72 50 88 Z"/>
+          <path fill="#fff" opacity=".28" d="M28 24 C20 25 16 31 17 38 C19 32 23 28 30 27 Z"/>
         </svg>
       </div>
       <div class="status">

@@ -119,6 +119,20 @@ async function porEvento(ev: Evento) {
       tag: "pregunta",
       url: "/#juntos",
     };
+  } else if (ev.tipo === "carta") {
+    const [{ data: c }, tz] = await Promise.all([
+      sb.from("cartas").select("abrir_en").eq("de_usuario", ev.de_usuario)
+        .order("creado_en", { ascending: false }).limit(1).maybeSingle(),
+      tzDe(otroId),
+    ]);
+    const sellada = !!c?.abrir_en && new Date(c.abrir_en) > new Date();
+    mensaje = {
+      title: sellada ? `💌 ${nombre} te escribió una carta sellada` : `💌 ${nombre} te escribió una carta`,
+      body: sellada ? `Podrás abrirla el ${fechaEn(c!.abrir_en!, tz)} (tu hora).` : "Ábrela con calma.",
+      tag: "carta",
+      url: "/#juntos",
+      vibrate: [100, 50, 100, 50, 300],
+    };
   } else {
     mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
   }

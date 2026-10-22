@@ -145,7 +145,7 @@
     // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
     clearInterval(relojTimer); renderRelojes();
     relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
-    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta()]);
+    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas()]);
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -155,6 +155,7 @@
           toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
           sentir(ev.tipo); sessionStorage.setItem("sentido", ev.id);
           if (ev.tipo === "respuesta") cargarPregunta();
+          if (ev.tipo === "carta") cargarCartas();
         }
         render();
       }
@@ -188,6 +189,14 @@
       // si mi pareja corrige su respuesta (las nuevas llegan como evento 'respuesta')
       { event: "UPDATE", schema: "public", table: "respuestas", filter: `pareja_id=eq.${pareja.id}` },
       (payload) => { if (payload.new.usuario_id === otro.id) cargarPregunta(); }
+    ).on("postgres_changes",
+      // cartas: me entero cuando mi pareja abre la que le escribí
+      { event: "UPDATE", schema: "public", table: "cartas", filter: `pareja_id=eq.${pareja.id}` },
+      (payload) => {
+        const c = payload.new, antes = cartas.find((x) => x.id === c.id);
+        if (c.de_usuario === user.id && c.leida_en && antes && !antes.leida_en) toast(`${otro.nombre} abrió tu carta 💌`);
+        cargarCartas();
+      }
     ).on("postgres_changes",
       // horario de mi pareja: una fila por hora marcada
       { event: "*", schema: "public", table: "horarios" },
@@ -228,6 +237,7 @@
     buenas_noches: (n) => `${n} te da las buenas noches 🌙`,
     animo: (n) => `${n} compartió cómo se siente 💗`,
     respuesta: (n) => `${n} respondió la pregunta del día 💭`,
+    carta: (n) => `${n} te escribió una carta 💌`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -240,6 +250,7 @@
     buenas_noches: (n) => `${n}: “buenas noches” 🌙`,
     animo: (n) => `${n} compartió su ánimo 💗`,
     respuesta: (n) => `${n} respondió la pregunta del día 💭`,
+    carta: (n) => `${n} escribió una carta 💌`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -249,6 +260,7 @@
     pensando: { emoji: "💭", vibra: [60] },
     buenos_dias: { emoji: "☀️", vibra: [100, 80, 100, 80, 100] },
     buenas_noches: { emoji: "🌙", vibra: [100, 80, 100, 80, 100] },
+    carta: { emoji: "💌", vibra: [100, 50, 100, 50, 300] },
   };
   function lluvia(emoji, n = 16) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -952,10 +964,123 @@
       list.append(li);
     });
   }
-  AL_ABRIR.juntos = () => { cargarPregunta(); cargarHistorial(); };
+  AL_ABRIR.juntos = () => { cargarPregunta(); cargarHistorial(); cargarCartas(); };
+
+  // ---------- cartas ----------
+  let cartas = [], selladas = [];
+  async function cargarCartas() {
+    const [{ data: cs }, { data: sl }] = await Promise.all([
+      sb.from("cartas").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(40),
+      sb.rpc("cartas_selladas"),
+    ]);
+    cartas = cs || []; selladas = sl || [];
+    renderCartas();
+  }
+  function renderCartas() {
+    const list = $("cartas-list"); list.innerHTML = "";
+    const item = (icono, titulo, detalle, clase, alTocar) => {
+      const li = document.createElement("li"); if (clase) li.className = clase;
+      const i = document.createElement("span"); i.className = "c-icono"; i.textContent = icono; i.setAttribute("aria-hidden", "true");
+      const t = document.createElement("span"); t.className = "c-texto";
+      const a = document.createElement("strong"), b = document.createElement("small");
+      a.textContent = titulo; b.textContent = detalle; t.append(a, b); li.append(i, t);
+      if (alTocar) {
+        li.tabIndex = 0; li.setAttribute("role", "button");
+        li.addEventListener("click", alTocar);
+        li.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); alTocar(); } });
+      }
+      list.append(li);
+    };
+    selladas.forEach((s) => {
+      const dias = diasEntre(diaHoy(), claveDia(s.abrir_en, miTz()));
+      item("🔒", `Carta sellada de ${otro.nombre}`,
+        `Se abre el ${fechaCorta(s.abrir_en, miTz())} a las ${hora(s.abrir_en, miTz())}` + (dias > 0 ? ` · en ${plural(dias, "día", "días")}` : ""),
+        "sellada");
+    });
+    cartas.forEach((c) => {
+      if (c.de_usuario === user.id) {
+        const estado = c.abrir_en && new Date(c.abrir_en) > new Date() ? `🔒 sellada hasta el ${fechaCorta(c.abrir_en, miTz())}`
+          : c.leida_en ? `leída ✓ ${ago(c.leida_en)}` : "aún sin abrir";
+        item("✉️", `Para ${otro.nombre}`, `${fechaCorta(c.creado_en, miTz())} · ${estado}`, "", () => leerCarta(c));
+      } else {
+        item("💌", `Carta de ${otro.nombre}`, c.leida_en ? `${fechaCorta(c.creado_en, miTz())}` : "nueva · tócala para abrirla",
+          c.leida_en ? "" : "nueva", () => leerCarta(c));
+      }
+    });
+    if (!selladas.length && !cartas.length) {
+      const li = document.createElement("li"); li.className = "muted vacia";
+      li.textContent = "Todavía no hay cartas. ¿Escribes la primera?"; list.append(li);
+    }
+    pendientes.cartas = cartas.some((c) => c.de_usuario !== user.id && !c.leida_en);
+    actualizarPuntos();
+  }
+
+  // Leer: primero se abre el sobre, luego aparece la carta
+  function leerCarta(c) {
+    const mia = c.de_usuario === user.id, dlg = $("dlg-leer");
+    const reducido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $("leer-meta").textContent = mia ? `Para ${otro.nombre} · ${fechaCorta(c.creado_en, miTz())}` : `De ${otro.nombre} · escrita el ${fechaCorta(c.creado_en, miTz())}`;
+    $("leer-texto").textContent = c.texto;
+    $("leer-firma").textContent = `con amor, ${mia ? perfil.nombre : otro.nombre}`;
+    dlg.classList.remove("abierto");
+    dlg.showModal();
+    setTimeout(() => dlg.classList.add("abierto"), reducido ? 0 : 1250);
+    if (!mia && !c.leida_en) {
+      setTimeout(() => lluvia("💌", 12), reducido ? 0 : 1250);
+      sb.rpc("marcar_leida", { p_id: c.id }).then(({ error }) => {
+        if (!error) { c.leida_en = new Date().toISOString(); renderCartas(); }
+      });
+    }
+  }
+  $("leer-cerrar").addEventListener("click", () => $("dlg-leer").close());
+
+  // Escribir: el borrador se guarda en este teléfono mientras escribes
+  const borrador = {
+    leer: () => { try { return localStorage.getItem("borrador-carta") || ""; } catch (e) { return ""; } },
+    guardar: (t) => { try { localStorage.setItem("borrador-carta", t); } catch (e) {} },
+    borrar: () => { try { localStorage.removeItem("borrador-carta"); } catch (e) {} },
+  };
+  $("btn-carta").addEventListener("click", () => {
+    $("carta-para").textContent = `Una carta para ${otro.nombre}`;
+    $("carta-texto").value = borrador.leer();
+    $("carta-sellar").checked = false; $("carta-abrir").hidden = true; $("carta-abrir").value = "";
+    notaCarta(); $("dlg-carta").showModal();
+  });
+  $("carta-texto").addEventListener("input", () => borrador.guardar($("carta-texto").value));
+  $("carta-sellar").addEventListener("change", () => {
+    const sellar = $("carta-sellar").checked;
+    $("carta-abrir").hidden = !sellar;
+    $("carta-abrir").min = aWall(new Date().toISOString(), miTz());
+    // por defecto, dentro de una semana a las 9 de la mañana
+    if (sellar && !$("carta-abrir").value) $("carta-abrir").value = aWall(new Date(Date.now() + 7 * 86400000).toISOString(), miTz()).slice(0, 11) + "09:00";
+    notaCarta();
+  });
+  $("carta-abrir").addEventListener("input", notaCarta);
+  function notaCarta() {
+    const w = $("carta-abrir").value;
+    if (!$("carta-sellar").checked || !w) { $("carta-nota").textContent = `${otro.nombre} la recibirá ahora mismo.`; return; }
+    const iso = aIso(w, miTz());
+    $("carta-nota").textContent = `Quedará sellada hasta el ${fechaCorta(iso, suTz())} a las ${hora(iso, suTz())}, hora de ${otro.nombre}. Le avisaremos cuando pueda abrirla.`;
+  }
+  $("carta-cancelar").addEventListener("click", () => $("dlg-carta").close());
+  $("f-carta").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const texto = $("carta-texto").value.trim(); if (!texto) return;
+    let abrir_en = null;
+    if ($("carta-sellar").checked && $("carta-abrir").value) {
+      abrir_en = aIso($("carta-abrir").value, miTz());
+      if (new Date(abrir_en) <= new Date()) { toast("Elige una fecha futura para sellarla"); return; }
+    }
+    const { error } = await sb.from("cartas").insert({ pareja_id: pareja.id, de_usuario: user.id, texto, abrir_en });
+    if (error) { toast("No se pudo enviar"); return; }
+    borrador.borrar();
+    $("dlg-carta").close(); lluvia("💌", 12);
+    toast(abrir_en ? "Carta sellada y enviada 🔒💌" : `Carta enviada a ${otro.nombre} 💌`);
+    cargarCartas();
+  });
 
   // Puntito en la pestaña Juntos cuando algo te espera ahí
-  const pendientes = { pregunta: false };
+  const pendientes = { pregunta: false, cartas: false };
   function actualizarPuntos() {
     pendientes.pregunta = respHoy.suyaRespondio && !respHoy.mia;
     const hay = Object.values(pendientes).some(Boolean);

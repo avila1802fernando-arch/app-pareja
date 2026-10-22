@@ -150,6 +150,12 @@
           <button type="button" class="link" id="resp-editar">Cambiar mi respuesta</button>
         </div>
       </div>
+      <div class="log">
+        <h2>Cartas</h2>
+        <p class="small-note">Para leer con calma. Puedes sellarla hasta una fecha especial.</p>
+        <button type="button" id="btn-carta">Escribir una carta 💌</button>
+        <ul id="cartas-list" class="cartas"></ul>
+      </div>
       <details class="log" id="preg-hist">
         <summary><h2>Días anteriores</h2></summary>
         <ul id="hist-list" class="hist"></ul>
@@ -265,6 +271,31 @@
     <button type="submit">Compartir</button>
     <button type="button" class="link" id="animo-cancelar">Cancelar</button>
   </form>
+</dialog>
+
+<!-- Escribir una carta -->
+<dialog id="dlg-carta" class="dlg">
+  <form id="f-carta" class="stack">
+    <h2 id="carta-para">Una carta</h2>
+    <label for="carta-texto" class="sr">Tu carta</label>
+    <textarea id="carta-texto" class="papel" maxlength="4000" rows="9" required placeholder="Escribe lo que sientes…"></textarea>
+    <label class="check"><input type="checkbox" id="carta-sellar"> Sellarla hasta una fecha especial 🔒</label>
+    <input type="datetime-local" id="carta-abrir" hidden aria-label="Se podrá abrir desde (tu hora)">
+    <p class="small-note" id="carta-nota"></p>
+    <button type="submit">Enviar con amor</button>
+    <button type="button" class="link" id="carta-cancelar">Guardar borrador y cerrar</button>
+  </form>
+</dialog>
+
+<!-- Leer una carta: primero se abre el sobre -->
+<dialog id="dlg-leer" class="dlg dlg-leer">
+  <div class="sobre" aria-hidden="true"><div class="solapa"></div><div class="sello">♥</div></div>
+  <article class="carta-leer">
+    <p class="eyebrow" id="leer-meta"></p>
+    <div class="papel" id="leer-texto"></div>
+    <p class="firma" id="leer-firma"></p>
+  </article>
+  <button type="button" id="leer-cerrar">Cerrar</button>
 </dialog>
 
 <!-- Crear / editar un evento del calendario -->

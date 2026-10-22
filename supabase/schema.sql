@@ -35,7 +35,7 @@ alter table public.eventos add constraint eventos_tipo_check
   check (tipo in (
     'entrada', 'te_extrano', 'libre',
     'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches',
-    'animo', 'respuesta'
+    'animo', 'respuesta', 'carta'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -76,6 +76,19 @@ create table if not exists public.respuestas (
 );
 create index if not exists respuestas_pareja_idx on public.respuestas (pareja_id, dia desc);
 
+-- Cartas de uno para el otro. Con `abrir_en` quedan selladas: el texto no se entrega antes de esa fecha.
+create table if not exists public.cartas (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 4000),
+  abrir_en timestamptz,            -- null = se puede leer ya
+  leida_en timestamptz,
+  avisada_en timestamptz,          -- cuándo `recordatorios` avisó que ya se podía abrir
+  creado_en timestamptz not null default now()
+);
+create index if not exists cartas_pareja_idx on public.cartas (pareja_id, creado_en desc);
+
 -- Horarios habituales: una fila por hora marcada, guardada en UTC
 -- (dia 0=domingo … 6=sábado, hora 0-23). Cada uno la ve en su zona horaria.
 create table if not exists public.horarios (
@@ -111,6 +124,7 @@ alter table public.push_subs      enable row level security;
 alter table public.disponibilidad enable row level security;
 alter table public.animos         enable row level security;
 alter table public.respuestas     enable row level security;
+alter table public.cartas         enable row level security;
 alter table public.horarios       enable row level security;
 alter table public.eventos_cal    enable row level security;
 
@@ -194,6 +208,18 @@ create policy "respuestas: crear" on public.respuestas
 drop policy if exists "respuestas: editar la mía" on public.respuestas;
 create policy "respuestas: editar la mía" on public.respuestas
   for update using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
+
+-- cartas: veo las que escribí y las que me escribieron; las selladas, solo cuando llega su fecha.
+-- No se editan (como una carta de verdad); quien la escribió puede borrarla. "Leída" va por marcar_leida().
+drop policy if exists "cartas: leer" on public.cartas;
+create policy "cartas: leer" on public.cartas
+  for select using (de_usuario = auth.uid() or (public.es_mi_pareja(pareja_id) and (abrir_en is null or abrir_en <= now())));
+drop policy if exists "cartas: escribir" on public.cartas;
+create policy "cartas: escribir" on public.cartas
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id) and leida_en is null and avisada_en is null);
+drop policy if exists "cartas: borrar las mías" on public.cartas;
+create policy "cartas: borrar las mías" on public.cartas
+  for delete using (de_usuario = auth.uid());
 
 -- horarios: leo el mío y el de mi pareja; escribo solo el mío
 drop policy if exists "horarios: leer" on public.horarios;
@@ -352,6 +378,39 @@ $$;
 grant execute on function public.respondio_pareja(date) to authenticated;
 grant execute on function public.racha_preguntas(date) to authenticated;
 
+-- ========== CARTAS ==========
+-- Avisa cuando llega una carta (si está sellada, la push dice hasta cuándo)
+create or replace function public.registrar_carta() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.de_usuario, 'carta');
+  return new;
+end;
+$$;
+drop trigger if exists cartas_aviso on public.cartas;
+create trigger cartas_aviso
+  after insert on public.cartas
+  for each row execute function public.registrar_carta();
+
+-- Cartas selladas que me escribieron: solo de quién y cuándo se abren (el texto sigue oculto)
+create or replace function public.cartas_selladas()
+returns table (id uuid, de_usuario uuid, abrir_en timestamptz, creado_en timestamptz)
+language sql stable security definer set search_path = public as $$
+  select c.id, c.de_usuario, c.abrir_en, c.creado_en from public.cartas c
+   where public.es_mi_pareja(c.pareja_id) and c.de_usuario <> auth.uid() and c.abrir_en > now()
+   order by c.abrir_en;
+$$;
+
+-- Marcar como leída una carta que me escribieron (y que ya se puede abrir)
+create or replace function public.marcar_leida(p_id uuid) returns void
+language sql security definer set search_path = public as $$
+  update public.cartas set leida_en = now()
+   where id = p_id and leida_en is null and de_usuario <> auth.uid()
+     and public.es_mi_pareja(pareja_id) and (abrir_en is null or abrir_en <= now());
+$$;
+grant execute on function public.cartas_selladas() to authenticated;
+grant execute on function public.marcar_leida(uuid) to authenticated;
+
 -- ========== CALENDARIO: ÚLTIMO CAMBIO ==========
 -- Guarda quién y cuándo cambió el evento (para avisar solo al otro) y,
 -- si se movió la hora de inicio, vuelve a armar el recordatorio.
@@ -374,7 +433,7 @@ create trigger eventos_cal_touch
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'horarios', 'eventos_cal'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'horarios', 'eventos_cal'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

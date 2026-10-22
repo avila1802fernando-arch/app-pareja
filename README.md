@@ -98,23 +98,25 @@ Desde ahora cada `git push` vuelve a publicar solo.
 
 ## Paso 5 · Funciones que envían las push (10 min)
 
-Instala la CLI de Supabase (una vez):
+La CLI de Supabase se usa con `npx` (no hace falta instalarla; Supabase no permite `npm install -g`).
 
-```bash
-npm install -g supabase
+Crea un archivo `.env` en la carpeta del proyecto (ya está en `.gitignore`, no se sube) con:
+
+```
+VAPID_PUBLIC_KEY=la publica
+VAPID_PRIVATE_KEY=la privada
+VAPID_SUBJECT=https://tu-app.vercel.app
+WEBHOOK_SECRET=una-clave-larga-inventada
 ```
 
 Luego, dentro de la carpeta del proyecto:
 
 ```bash
-supabase login
-supabase link --project-ref TU_PROJECT_REF     # el "ref" está en Project Settings → General
-
-# Inventa una clave secreta larga para el webhook, por ejemplo con: openssl rand -hex 24
-supabase secrets set VAPID_PUBLIC_KEY="la publica" VAPID_PRIVATE_KEY="la privada" VAPID_SUBJECT="mailto:tu@correo.com" WEBHOOK_SECRET="tu-clave-secreta"
-
-supabase functions deploy notificar --no-verify-jwt
-supabase functions deploy recordatorios --no-verify-jwt
+npx supabase login
+npx supabase link --project-ref TU_PROJECT_REF     # el "ref" está en Project Settings → General
+npx supabase secrets set --env-file .env
+npx supabase functions deploy notificar --no-verify-jwt
+npx supabase functions deploy recordatorios --no-verify-jwt
 ```
 
 Al terminar te muestra las URLs de las funciones, parecidas a
@@ -168,8 +170,8 @@ Cada vez que llega una versión nueva:
 2. Supabase → SQL Editor: vuelve a correr **todo** `supabase/schema.sql` (no borra nada).
 3. Vuelve a publicar las funciones:
    ```bash
-   supabase functions deploy notificar --no-verify-jwt
-   supabase functions deploy recordatorios --no-verify-jwt
+   npx supabase functions deploy notificar --no-verify-jwt
+   npx supabase functions deploy recordatorios --no-verify-jwt
    ```
 4. Si todavía no los tienes: el **Webhook 2** del paso 6 y el paso 7 (pg_cron). Las funciones nuevas (señales, ánimo, pregunta del día, cartas, lista) **no necesitan webhooks ni secretos nuevos**.
 

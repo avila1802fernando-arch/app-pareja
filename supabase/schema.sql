@@ -35,7 +35,7 @@ alter table public.eventos add constraint eventos_tipo_check
   check (tipo in (
     'entrada', 'te_extrano', 'libre',
     'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches',
-    'animo'
+    'animo', 'respuesta'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -62,6 +62,19 @@ create table if not exists public.animos (
   nota text check (nota is null or char_length(nota) <= 80),
   actualizado_en timestamptz not null default now()
 );
+
+-- Pregunta del día: la respuesta de cada uno. La del otro solo se ve después de responder.
+-- `pregunta` guarda el texto para que el historial no cambie si se editan las preguntas.
+create table if not exists public.respuestas (
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  dia date not null,
+  pregunta text not null check (char_length(pregunta) <= 300),
+  texto text not null check (char_length(texto) between 1 and 500),
+  creado_en timestamptz not null default now(),
+  primary key (usuario_id, dia)
+);
+create index if not exists respuestas_pareja_idx on public.respuestas (pareja_id, dia desc);
 
 -- Horarios habituales: una fila por hora marcada, guardada en UTC
 -- (dia 0=domingo … 6=sábado, hora 0-23). Cada uno la ve en su zona horaria.
@@ -97,6 +110,7 @@ alter table public.eventos        enable row level security;
 alter table public.push_subs      enable row level security;
 alter table public.disponibilidad enable row level security;
 alter table public.animos         enable row level security;
+alter table public.respuestas     enable row level security;
 alter table public.horarios       enable row level security;
 alter table public.eventos_cal    enable row level security;
 
@@ -117,6 +131,12 @@ language sql stable security definer set search_path = public as $$
     where (usuario_a = auth.uid() and usuario_b = u)
        or (usuario_b = auth.uid() and usuario_a = u)
   );
+$$;
+
+-- ¿Ya respondí la pregunta de ese día? (sin pasar por RLS, para usarla dentro de la política)
+create or replace function public.ya_respondi(d date) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.respuestas where usuario_id = auth.uid() and dia = d);
 $$;
 
 -- perfiles: cada uno edita el suyo; puede leer el de su pareja
@@ -163,6 +183,17 @@ create policy "animos: leer" on public.animos
 drop policy if exists "animos: propio" on public.animos;
 create policy "animos: propio" on public.animos
   for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
+
+-- respuestas: la mía siempre; la de mi pareja solo los días que yo también respondí
+drop policy if exists "respuestas: leer" on public.respuestas;
+create policy "respuestas: leer" on public.respuestas
+  for select using (usuario_id = auth.uid() or (public.es_mi_pareja(pareja_id) and public.ya_respondi(dia)));
+drop policy if exists "respuestas: crear" on public.respuestas;
+create policy "respuestas: crear" on public.respuestas
+  for insert with check (usuario_id = auth.uid() and public.es_mi_pareja(pareja_id));
+drop policy if exists "respuestas: editar la mía" on public.respuestas;
+create policy "respuestas: editar la mía" on public.respuestas
+  for update using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 
 -- horarios: leo el mío y el de mi pareja; escribo solo el mío
 drop policy if exists "horarios: leer" on public.horarios;
@@ -282,6 +313,45 @@ create trigger animos_aviso
   after insert or update on public.animos
   for each row execute function public.registrar_animo();
 
+-- Pregunta del día: avisa cuando alguien responde
+create or replace function public.registrar_respuesta() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.usuario_id, 'respuesta');
+  return new;
+end;
+$$;
+drop trigger if exists respuestas_aviso on public.respuestas;
+create trigger respuestas_aviso
+  after insert on public.respuestas
+  for each row execute function public.registrar_respuesta();
+
+-- ========== PREGUNTA DEL DÍA ==========
+-- ¿Mi pareja ya respondió ese día? (sí/no, sin mostrar qué dijo)
+create or replace function public.respondio_pareja(p_dia date) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.respuestas r where r.dia = p_dia and public.es_pareja_de(r.usuario_id));
+$$;
+
+-- Racha: días seguidos en que respondieron los dos (si hoy aún falta alguien, cuenta hasta ayer)
+create or replace function public.racha_preguntas(p_hoy date) returns integer
+language plpgsql stable security definer set search_path = public as $$
+declare
+  pid uuid := public.pareja_de(auth.uid());
+  d date := p_hoy;
+  n integer := 0;
+begin
+  if pid is null then return 0; end if;
+  if (select count(*) from public.respuestas where pareja_id = pid and dia = d) < 2 then d := d - 1; end if;
+  while (select count(*) from public.respuestas where pareja_id = pid and dia = d) >= 2 loop
+    n := n + 1; d := d - 1;
+  end loop;
+  return n;
+end;
+$$;
+grant execute on function public.respondio_pareja(date) to authenticated;
+grant execute on function public.racha_preguntas(date) to authenticated;
+
 -- ========== CALENDARIO: ÚLTIMO CAMBIO ==========
 -- Guarda quién y cuándo cambió el evento (para avisar solo al otro) y,
 -- si se movió la hora de inicio, vuelve a armar el recordatorio.
@@ -304,7 +374,7 @@ create trigger eventos_cal_touch
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'horarios', 'eventos_cal'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'horarios', 'eventos_cal'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

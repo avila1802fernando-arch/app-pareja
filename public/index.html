@@ -129,6 +129,33 @@
       </div>
     </div>
 
+    <!-- Pestaña: Juntos -->
+    <div class="tab" id="tab-juntos" hidden>
+      <div>
+        <p class="eyebrow">Juntos</p>
+        <h1>Más <em>cerquita</em>.</h1>
+      </div>
+      <div class="pregunta">
+        <p class="preg-meta"><span>Pregunta del día</span><span id="preg-racha"></span></p>
+        <p class="preg-texto" id="preg-texto">…</p>
+        <form id="f-respuesta" class="stack">
+          <label for="resp-texto" class="sr">Tu respuesta</label>
+          <textarea id="resp-texto" maxlength="500" rows="3" required placeholder="Tu respuesta, con el corazón…"></textarea>
+          <button type="submit" id="resp-enviar">Responder</button>
+          <p class="small-note" id="resp-nota"></p>
+        </form>
+        <div class="respuestas" id="respuestas" hidden>
+          <div class="resp mia"><span class="quien">Tú</span><p id="resp-mia"></p></div>
+          <div class="resp suya"><span class="quien" id="resp-su-nombre"></span><p id="resp-suya"></p></div>
+          <button type="button" class="link" id="resp-editar">Cambiar mi respuesta</button>
+        </div>
+      </div>
+      <details class="log" id="preg-hist">
+        <summary><h2>Días anteriores</h2></summary>
+        <ul id="hist-list" class="hist"></ul>
+      </details>
+    </div>
+
     <!-- Pestaña: Horarios -->
     <div class="tab" id="tab-horarios" hidden>
       <div>
@@ -209,6 +236,10 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5c-5-3.6-8.5-7-8.5-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5c0 4-3.5 7.4-8.5 11Z"/></svg>
     <span>Inicio</span>
   </button>
+  <button type="button" data-tab="juntos" aria-label="Juntos">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 18.5C5 16 2.5 13.6 2.5 10.6a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 3-2.5 5.4-6 7.9Z"/><path d="M15.2 5.6a3 3 0 0 1 6.3 1.4c0 2.3-1.6 4.2-4.2 6.2"/></svg>
+    <span>Juntos</span>
+  </button>
   <button type="button" data-tab="horarios">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
     <span>Horarios</span>
@@ -267,6 +298,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="/config.js"></script>
+<script src="/preguntas.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

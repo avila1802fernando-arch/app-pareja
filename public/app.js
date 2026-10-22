@@ -145,7 +145,7 @@
     // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
     clearInterval(relojTimer); renderRelojes();
     relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
-    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos()]);
+    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta()]);
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -154,6 +154,7 @@
         if (ev.de_usuario !== user.id) {
           toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
           sentir(ev.tipo); sessionStorage.setItem("sentido", ev.id);
+          if (ev.tipo === "respuesta") cargarPregunta();
         }
         render();
       }
@@ -183,6 +184,10 @@
       // "juntos desde" cambiado por cualquiera de los dos
       { event: "UPDATE", schema: "public", table: "parejas", filter: `id=eq.${pareja.id}` },
       (payload) => { pareja = { ...pareja, ...payload.new }; renderJuntos(); }
+    ).on("postgres_changes",
+      // si mi pareja corrige su respuesta (las nuevas llegan como evento 'respuesta')
+      { event: "UPDATE", schema: "public", table: "respuestas", filter: `pareja_id=eq.${pareja.id}` },
+      (payload) => { if (payload.new.usuario_id === otro.id) cargarPregunta(); }
     ).on("postgres_changes",
       // horario de mi pareja: una fila por hora marcada
       { event: "*", schema: "public", table: "horarios" },
@@ -222,6 +227,7 @@
     buenos_dias: (n) => `Buenos días de parte de ${n} ☀️`,
     buenas_noches: (n) => `${n} te da las buenas noches 🌙`,
     animo: (n) => `${n} compartió cómo se siente 💗`,
+    respuesta: (n) => `${n} respondió la pregunta del día 💭`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -233,6 +239,7 @@
     buenos_dias: (n) => `${n}: “buenos días” ☀️`,
     buenas_noches: (n) => `${n}: “buenas noches” 🌙`,
     animo: (n) => `${n} compartió su ánimo 💗`,
+    respuesta: (n) => `${n} respondió la pregunta del día 💭`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -304,7 +311,7 @@
   }));
 
   // ---------- navegación por pestañas ----------
-  const TABS = ["inicio", "horarios", "calendario", "ajustes"];
+  const TABS = ["inicio", "juntos", "horarios", "calendario", "ajustes"];
   const AL_ABRIR = {}; // cada pestaña registra aquí qué cargar al abrirse
   function irA(tab) {
     if (!TABS.includes(tab)) tab = "inicio";
@@ -640,7 +647,10 @@
     try { return new Date(iso).toLocaleDateString("es", { ...opts, timeZone: tz }); }
     catch (e) { return new Date(iso).toLocaleDateString("es", opts); }
   }
-  const fechaLarga = (k) => new Date(k + "T00:00:00Z").toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  const fechaLarga = (k) => {
+    const t = new Date(k + "T00:00:00Z").toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
 
   async function cargarCal() {
     const { data } = await sb.from("eventos_cal").select("*").eq("pareja_id", pareja.id).order("inicio");
@@ -849,6 +859,110 @@
     $("espera-txt").textContent = ini > ahora ? `Ya pasó el ${pct}% de la espera ♥` : "";
   }
   $("juntos-poner").addEventListener("click", () => { irA("ajustes"); $("aj-desde").focus(); });
+
+  // ---------- pregunta del día ----------
+  const PREGUNTAS = window.NOSOTROS_PREGUNTAS || ["¿Qué es lo que más te gusta de nosotros?"];
+  const respHoy = { mia: null, suya: null, suyaRespondio: false };
+  let editandoResp = false;
+  // La pregunta cambia a medianoche de quien vive más al oeste: así a nadie le cambia antes de dormir
+  function diaPregunta() {
+    const ahora = new Date();
+    const tz = offsetMin(miTz(), ahora) <= offsetMin(suTz(), ahora) ? miTz() : suTz();
+    return claveDia(ahora.toISOString(), tz);
+  }
+  const preguntaDe = (dia) => {
+    const n = PREGUNTAS.length;
+    return PREGUNTAS[((diasEntre("2026-01-01", dia) % n) + n) % n];
+  };
+
+  async function cargarPregunta() {
+    const dia = diaPregunta();
+    $("preg-texto").textContent = preguntaDe(dia);
+    $("resp-su-nombre").textContent = otro.nombre;
+    const [{ data: filas }, { data: suya }, { data: racha }] = await Promise.all([
+      sb.from("respuestas").select("*").eq("pareja_id", pareja.id).eq("dia", dia),
+      sb.rpc("respondio_pareja", { p_dia: dia }),
+      sb.rpc("racha_preguntas", { p_hoy: dia }),
+    ]);
+    respHoy.mia = (filas || []).find((r) => r.usuario_id === user.id) || null;
+    respHoy.suya = (filas || []).find((r) => r.usuario_id === otro.id) || null;
+    respHoy.suyaRespondio = !!suya;
+    $("preg-racha").textContent = racha > 1 ? `🔥 ${racha} días seguidos` : "";
+    renderPregunta();
+  }
+  function renderPregunta() {
+    const { mia, suya, suyaRespondio } = respHoy;
+    const responder = !mia || editandoResp;
+    $("f-respuesta").hidden = !responder;
+    $("respuestas").hidden = responder;
+    if (responder) {
+      if (mia) $("resp-texto").value = mia.texto;
+      $("resp-enviar").textContent = mia ? "Guardar cambio" : "Responder";
+      $("resp-nota").textContent = mia ? ""
+        : suyaRespondio ? `${otro.nombre} ya respondió 👀 Responde para ver lo que dijo.`
+        : "Cuando respondan los dos, cada uno verá la respuesta del otro.";
+    } else {
+      $("resp-mia").textContent = mia.texto;
+      $("resp-suya").textContent = suya ? suya.texto : "Todavía no responde. Te avisamos cuando lo haga 💌";
+      $("resp-suya").classList.toggle("espera-resp", !suya);
+    }
+    actualizarPuntos();
+  }
+  $("f-respuesta").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const texto = $("resp-texto").value.trim(); if (!texto) return;
+    const dia = diaPregunta(), primera = !respHoy.mia;
+    const { error } = primera
+      ? await sb.from("respuestas").insert({ pareja_id: pareja.id, usuario_id: user.id, dia, pregunta: preguntaDe(dia), texto })
+      : await sb.from("respuestas").update({ texto }).eq("usuario_id", user.id).eq("dia", dia);
+    if (error) { toast("No se pudo guardar"); return; }
+    editandoResp = false;
+    if (primera) lluvia("💗", 10);
+    await cargarPregunta(); cargarHistorial();
+  });
+  $("resp-editar").addEventListener("click", () => { editandoResp = true; renderPregunta(); $("resp-texto").focus(); });
+
+  // Días anteriores (último mes). La respuesta de tu pareja aparece solo en los días que respondiste.
+  async function cargarHistorial() {
+    const dia = diaPregunta();
+    const desde = new Date(utcDe(dia) - 30 * 86400000).toISOString().slice(0, 10);
+    const { data } = await sb.from("respuestas").select("*").eq("pareja_id", pareja.id)
+      .lt("dia", dia).gte("dia", desde).order("dia", { ascending: false });
+    const porDia = {};
+    (data || []).forEach((r) => {
+      const d = (porDia[r.dia] = porDia[r.dia] || { pregunta: r.pregunta });
+      d[r.usuario_id === user.id ? "mia" : "suya"] = r.texto;
+    });
+    const list = $("hist-list"); list.innerHTML = "";
+    const dias = Object.keys(porDia).sort().reverse();
+    if (!dias.length) {
+      const li = document.createElement("li"); li.className = "muted";
+      li.textContent = "Aquí se irán guardando sus respuestas 💗"; list.append(li); return;
+    }
+    dias.forEach((d) => {
+      const r = porDia[d], li = document.createElement("li");
+      const f = document.createElement("span"); f.className = "hist-dia"; f.textContent = fechaLarga(d);
+      const q = document.createElement("strong"); q.textContent = r.pregunta;
+      li.append(f, q);
+      [["Tú", r.mia], [otro.nombre, r.suya]].forEach(([quien, texto]) => {
+        if (!texto) return;
+        const p = document.createElement("p"), b = document.createElement("b");
+        b.textContent = quien + ": "; p.append(b, texto); li.append(p);
+      });
+      list.append(li);
+    });
+  }
+  AL_ABRIR.juntos = () => { cargarPregunta(); cargarHistorial(); };
+
+  // Puntito en la pestaña Juntos cuando algo te espera ahí
+  const pendientes = { pregunta: false };
+  function actualizarPuntos() {
+    pendientes.pregunta = respHoy.suyaRespondio && !respHoy.mia;
+    const hay = Object.values(pendientes).some(Boolean);
+    const b = document.querySelector('#tabs button[data-tab="juntos"]');
+    b.classList.toggle("punto", hay);
+    b.setAttribute("aria-label", hay ? "Juntos: hay algo nuevo para ti" : "Juntos");
+  }
 
   // ---------- notificaciones push ----------
   function b64ToU8(s) {

@@ -106,6 +106,19 @@ async function porEvento(ev: Evento) {
       body: a?.nota ? `“${a.nota}” · ${sugerencia}` : sugerencia,
       tag: "animo",
     };
+  } else if (ev.tipo === "respuesta") {
+    // ¿Quien recibe ya respondió ese día? Entonces ya puede leerla; si no, que responda primero.
+    const { data: r } = await sb.from("respuestas").select("dia").eq("usuario_id", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    const { count } = r
+      ? await sb.from("respuestas").select("dia", { count: "exact", head: true }).eq("usuario_id", otroId).eq("dia", r.dia)
+      : { count: 0 };
+    mensaje = {
+      title: `💭 ${nombre} respondió la pregunta del día`,
+      body: (count ?? 0) > 0 ? "Ya puedes leer lo que dijo." : "Responde tú para ver lo que dijo 👀",
+      tag: "pregunta",
+      url: "/#juntos",
+    };
   } else {
     mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
   }

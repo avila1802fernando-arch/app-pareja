@@ -114,6 +114,33 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .animos button{background:var(--blush);color:var(--fg);border:1.5px solid var(--line);border-radius:18px;padding:12px 4px 10px;font-size:.72rem;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:none;min-height:72px;line-height:1.15}
 .animos button b{font-size:1.7rem;line-height:1}
 .animos button[aria-checked=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+/* pestaña Juntos: pregunta del día */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.pregunta{position:relative;border-radius:24px;padding:20px 18px;background:linear-gradient(160deg,var(--accent-soft),var(--blush) 65%);border:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.pregunta::after{content:"";position:absolute;top:-10px;right:18px;width:34px;height:34px;background:var(--grad);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 88C30 72 10 56 10 36 10 24 19 15 30 15c8 0 15 4 20 12 5-8 12-12 20-12 11 0 20 9 20 21 0 20-20 36-40 52Z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 88C30 72 10 56 10 36 10 24 19 15 30 15c8 0 15 4 20 12 5-8 12-12 20-12 11 0 20 9 20 21 0 20-20 36-40 52Z'/%3E%3C/svg%3E") center/contain no-repeat;transform:rotate(12deg)}
+.preg-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700;padding-right:30px}
+.preg-meta span{white-space:nowrap}
+.preg-meta span:last-child{text-transform:none;letter-spacing:0;color:var(--accent);font-size:.82rem}
+.preg-texto{font-family:var(--display);font-style:italic;font-size:1.4rem;line-height:1.25;text-wrap:balance}
+.pregunta textarea{background:var(--card)}
+.respuestas{display:flex;flex-direction:column;gap:10px}
+.resp{max-width:88%;padding:10px 14px 12px;border-radius:18px;display:flex;flex-direction:column;gap:2px}
+.resp p{font-family:var(--hand);font-size:1.35rem;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}
+.resp .quien{font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.resp.mia{align-self:flex-end;background:var(--card);border-bottom-right-radius:6px}
+.resp.suya{align-self:flex-start;background:var(--accent-soft);border-bottom-left-radius:6px}
+.resp p.espera-resp{font-family:var(--body);font-size:.88rem;color:var(--muted)}
+details.log summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;min-height:44px}
+details.log summary::-webkit-details-marker{display:none}
+details.log summary::after{content:"＋";color:var(--accent);font-weight:700}
+details.log[open] summary::after{content:"－"}
+.hist li{flex-direction:column;align-items:flex-start;gap:4px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.hist li:last-child{border-bottom:0}
+.hist .hist-dia{font-size:.72rem;color:var(--muted);white-space:normal}
+.hist strong{font-family:var(--display);font-weight:500;font-style:italic}
+.hist p{font-size:.9rem}
+.hist p b{color:var(--accent)}
+.tabs button.punto::after{content:"";position:absolute;top:5px;left:calc(50% + 7px);width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--card)}
 /* horarios habituales: cuadrícula 7 días x 24 horas */
 .leyenda{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
 .leyenda i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px;border:1px solid var(--line)}

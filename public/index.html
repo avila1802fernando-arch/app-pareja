@@ -72,6 +72,12 @@
         <p class="eyebrow">Nuestro rincón</p>
         <h1 id="home-title">Hola.</h1>
       </div>
+      <div class="relojes" aria-label="La hora de cada uno">
+        <span><small>Tú</small><b id="reloj-mio">--:--</b><i id="ico-mio" aria-hidden="true"></i></span>
+        <em id="reloj-dif"></em>
+        <span><small id="reloj-su-nombre">Tu pareja</small><b id="reloj-suyo">--:--</b><i id="ico-suyo" aria-hidden="true"></i></span>
+      </div>
+      <p class="small-note reloj-nota" id="reloj-nota" hidden></p>
       <div class="heart" id="heart">
         <div class="ring"></div>
         <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -84,7 +90,16 @@
           <path fill="url(#g-corazon)" d="M50 88 C30 72 10 56 10 36 C10 24 19 15 30 15 C38 15 45 19 50 27 C55 19 62 15 70 15 C81 15 90 24 90 36 C90 56 70 72 50 88 Z"/>
           <path fill="#fff" opacity=".28" d="M28 24 C20 25 16 31 17 38 C19 32 23 28 30 27 Z"/>
         </svg>
+        <strong class="heart-num" id="heart-num" hidden></strong>
       </div>
+      <div class="cuenta" id="cuenta" hidden>
+        <p class="mano cuenta-txt" id="cuenta-txt"></p>
+        <p class="small-note" id="cuenta-ev"></p>
+        <div class="espera" id="espera" role="progressbar" aria-label="Cuánto falta para vernos" aria-valuemin="0" aria-valuemax="100"><span id="espera-bar"></span></div>
+        <p class="small-note" id="espera-txt"></p>
+      </div>
+      <p class="juntos" id="juntos" hidden></p>
+      <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo están juntos? Agrégalo 💞</button>
       <div class="status">
         <strong id="status-title">Conectando…</strong>
         <span class="muted" id="status-when"></span>
@@ -175,6 +190,11 @@
       <div class="stack">
         <h2>Pareja</h2>
         <p class="muted" id="aj-pareja"></p>
+        <form id="f-desde" class="stack">
+          <label for="aj-desde">Juntos desde</label>
+          <input id="aj-desde" type="date">
+          <button type="submit" class="ghost">Guardar fecha</button>
+        </form>
       </div>
       <button type="button" class="link" id="btn-logout">Cerrar sesión</button>
     </div>

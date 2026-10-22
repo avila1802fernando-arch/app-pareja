@@ -142,7 +142,10 @@
       await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "entrada" });
       sessionStorage.setItem("entrada", "1");
     }
-    await Promise.all([render(), cargarDispo(), cargarAnimos()]);
+    // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
+    clearInterval(relojTimer); renderRelojes();
+    relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
+    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos()]);
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -175,7 +178,11 @@
     ).on("postgres_changes",
       // si mi pareja cambia su nombre o su zona horaria, lo vemos al instante
       { event: "UPDATE", schema: "public", table: "perfiles", filter: `id=eq.${otro.id}` },
-      (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); }
+      (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); renderRelojes(); }
+    ).on("postgres_changes",
+      // "juntos desde" cambiado por cualquiera de los dos
+      { event: "UPDATE", schema: "public", table: "parejas", filter: `id=eq.${pareja.id}` },
+      (payload) => { pareja = { ...pareja, ...payload.new }; renderJuntos(); }
     ).on("postgres_changes",
       // horario de mi pareja: una fila por hora marcada
       { event: "*", schema: "public", table: "horarios" },
@@ -192,6 +199,7 @@
         const ev = payload.new;
         if (payload.eventType === "INSERT" && ev.creado_por !== user.id) toast(`${otro.nombre} agendó: ${ev.titulo}`);
         if (!$("tab-calendario").hidden) cargarCal();
+        cargarJuntos();
       }
     ).subscribe();
     prepararPush();
@@ -332,8 +340,17 @@
     });
     sel.value = miTz();
     notaTz();
-    $("aj-pareja").textContent = `Vinculado con ${otro.nombre} · su zona: ${nombreTz(suTz())} (ahora son las ${hora(new Date(), suTz())})`;
+    $("aj-pareja").textContent = `Tu pareja: ${otro.nombre} · ${nombreTz(suTz())} (allá son las ${hora(new Date(), suTz())})`;
+    $("aj-desde").value = pareja.desde || "";
+    $("aj-desde").max = diaHoy();
   }
+  $("f-desde").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { data, error } = await sb.rpc("fijar_desde", { p_fecha: $("aj-desde").value || null });
+    if (error || !data) { toast("No se pudo guardar la fecha"); return; }
+    pareja = { ...pareja, ...data }; renderJuntos();
+    toast(pareja.desde ? "Guardado 💞" : "Fecha quitada");
+  });
   function notaTz() {
     $("aj-tz-note").textContent = `Para ti son las ${hora(new Date(), $("aj-tz").value)}; para ${otro.nombre}, las ${hora(new Date(), suTz())}.`;
   }
@@ -740,7 +757,7 @@
       : sb.from("eventos_cal").insert({ ...fila, pareja_id: pareja.id, creado_por: user.id });
     const { error } = await q;
     if (error) { toast("No se pudo guardar"); return; }
-    $("dlg-evento").close(); toast(editando ? "Cambiado ❤️" : "Agendado ❤️"); cargarCal();
+    $("dlg-evento").close(); toast(editando ? "Cambiado ❤️" : "Agendado ❤️"); cargarCal(); cargarJuntos();
   });
   $("ev-borrar").addEventListener("click", async () => {
     if (!editando || !confirm("¿Borrar este evento?")) return;
@@ -748,8 +765,90 @@
     await sb.from("eventos_cal").update({ actualizado_en: new Date().toISOString() }).eq("id", editando.id);
     const { error } = await sb.from("eventos_cal").delete().eq("id", editando.id);
     if (error) { toast("No se pudo borrar"); return; }
-    $("dlg-evento").close(); toast("Borrado"); cargarCal();
+    $("dlg-evento").close(); toast("Borrado"); cargarCal(); cargarJuntos();
   });
+
+  // ---------- relojes, juntos desde y cuenta regresiva para vernos ----------
+  let relojTimer = null, proximo = null;
+  const diaHoy = () => claveDia(new Date().toISOString(), miTz());
+  const utcDe = (k) => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+  const diasEntre = (k1, k2) => Math.round((utcDe(k2) - utcDe(k1)) / 86400000);
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+  const icono = (h) => (h < 6 ? "🌙" : h < 8 ? "🌅" : h < 18 ? "☀️" : h < 20 ? "🌇" : "🌙");
+
+  function renderRelojes() {
+    const ahora = new Date(), iso = ahora.toISOString();
+    $("reloj-mio").textContent = hora(ahora, miTz());
+    $("reloj-suyo").textContent = hora(ahora, suTz());
+    $("reloj-su-nombre").textContent = otro.nombre;
+    const hs = partes(iso, suTz()).h;
+    $("ico-mio").textContent = icono(partes(iso, miTz()).h);
+    $("ico-suyo").textContent = icono(hs);
+    const dif = Math.round((offsetMin(suTz(), ahora) - offsetMin(miTz(), ahora)) / 60);
+    $("reloj-dif").textContent = dif === 0 ? "misma hora" : dif > 0 ? `+${dif} h` : `−${-dif} h`;
+    $("reloj-nota").hidden = hs >= 7;
+    $("reloj-nota").textContent = `Shh… para ${otro.nombre} es de madrugada 😴. Tus señales le esperan al despertar.`;
+  }
+
+  // Años, meses y días entre dos claves "YYYY-MM-DD"
+  function duracion(desde, hasta) {
+    const [y1, m1, d1] = desde.split("-").map(Number), [y2, m2] = hasta.split("-").map(Number);
+    // "desde" + n meses; si ese día no existe en el mes (31 de febrero), el último del mes
+    const sumar = (n) => {
+      const y = y1 + Math.floor((m1 - 1 + n) / 12), m = ((m1 - 1 + n) % 12) + 1;
+      return `${y}-${pad(m)}-${pad(Math.min(d1, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
+    };
+    let meses = (y2 - y1) * 12 + (m2 - m1);
+    if (sumar(meses) > hasta) meses--;
+    return { a: Math.floor(meses / 12), m: meses % 12, d: diasEntre(sumar(meses), hasta) };
+  }
+  function textoJuntos(desde) {
+    const hoy = diaHoy();
+    if (desde > hoy) return null;
+    const total = diasEntre(desde, hoy);
+    if (total === 0) return "💞 Hoy empieza lo nuestro";
+    const { a, m, d } = duracion(desde, hoy);
+    const p = [a && plural(a, "año", "años"), m && plural(m, "mes", "meses"), d && plural(d, "día", "días")].filter(Boolean);
+    const t = p.length > 1 ? p.slice(0, -1).join(", ") + " y " + p[p.length - 1] : p[0];
+    if (d === 0) return `🎉 ¡Hoy cumplen ${t} juntos!`;
+    return `💞 Juntos hace ${t}` + (a || m ? ` · ${total.toLocaleString("es")} días` : "");
+  }
+
+  // El próximo viaje o cita del calendario es el encuentro que contamos
+  async function cargarJuntos() {
+    const hace60 = new Date(Date.now() - 60 * 86400000).toISOString();
+    const { data } = await sb.from("eventos_cal").select("titulo, tipo, inicio, fin, creado_en")
+      .eq("pareja_id", pareja.id).in("tipo", ["viaje", "cita"]).gte("inicio", hace60).order("inicio").limit(20);
+    proximo = (data || []).find((ev) => new Date(ev.fin || ev.inicio).getTime() >= Date.now()) || null;
+    renderJuntos();
+  }
+  function renderJuntos() {
+    const tj = pareja.desde ? textoJuntos(pareja.desde) : null;
+    $("juntos").hidden = !tj; if (tj) $("juntos").textContent = tj;
+    $("juntos-poner").hidden = !!pareja.desde;
+
+    const num = $("heart-num");
+    num.hidden = $("cuenta").hidden = !proximo;
+    if (!proximo) return;
+    const ahora = Date.now(), ini = new Date(proximo.inicio).getTime();
+    const dias = diasEntre(diaHoy(), claveDia(proximo.inicio, miTz()));
+    let n, txt;
+    if (ini <= ahora) { n = "💞"; txt = "¡Por fin juntos!"; }
+    else if (dias <= 0) { n = "¡Hoy!"; txt = "hoy se ven, por fin"; }
+    else if (dias === 1) { n = "1"; txt = "día para vernos · ¡es mañana!"; }
+    else { n = String(dias); txt = "días para vernos"; }
+    num.textContent = n; num.classList.toggle("chico", n.length > 3);
+    $("cuenta-txt").textContent = txt;
+    $("cuenta-ev").textContent = `${EMOJI[proximo.tipo] || EMOJI.otro} ${proximo.titulo} · ${fechaCorta(proximo.inicio, miTz())}`;
+    // cuánto de la espera ya pasó: desde que se agendó hasta que empieza
+    const desdeMs = new Date(proximo.creado_en).getTime();
+    const pct = ini > desdeMs ? Math.min(100, Math.max(0, Math.round(((ahora - desdeMs) / (ini - desdeMs)) * 100))) : 100;
+    $("espera").hidden = ini <= ahora;
+    $("espera").setAttribute("aria-valuenow", pct);
+    $("espera-bar").style.width = pct + "%";
+    $("espera-txt").textContent = ini > ahora ? `Ya pasó el ${pct}% de la espera ♥` : "";
+  }
+  $("juntos-poner").addEventListener("click", () => { irA("ajustes"); $("aj-desde").focus(); });
 
   // ---------- notificaciones push ----------
   function b64ToU8(s) {

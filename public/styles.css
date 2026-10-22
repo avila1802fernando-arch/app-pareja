@@ -2,7 +2,7 @@
   --bg:#fbf0f4;--card:#fffafc;--fg:#3a2230;--muted:#8a6a78;--line:#efd9e2;
   --accent:#c9325c;--accent-soft:#fbe0e9;--blush:#fdeef3;--on-accent:#fff;
   --grad:linear-gradient(135deg,#b8285a,#d23d6e);
-  --glow:rgba(201,50,92,.45);--hi:rgba(255,255,255,.7);--heart-a:#f0628f;--heart-b:#b8285a;
+  --glow:rgba(201,50,92,.45);--hi:rgba(255,255,255,.7);--heart-a:#f0628f;--heart-b:#b8285a;--on-heart:#fff;
   --ok:#2e9e6b;--ok-soft:#dcf3e6;
   --display:"Fraunces",Georgia,serif;--body:"Nunito","Segoe UI",system-ui,sans-serif;--hand:"Caveat","Segoe Print",cursive;
 }
@@ -11,7 +11,7 @@
     --bg:#1b1118;--card:#261822;--fg:#f7e6ee;--muted:#c49aad;--line:#3f2a36;
     --accent:#ff6b93;--accent-soft:#4a2434;--blush:#2f1d29;--on-accent:#2a0f1c;
     --grad:linear-gradient(135deg,#ff6b93,#ff92b0);
-    --glow:rgba(255,107,147,.35);--hi:rgba(255,255,255,.03);--heart-a:#ff9ab8;--heart-b:#ff5a86;
+    --glow:rgba(255,107,147,.35);--hi:rgba(255,255,255,.03);--heart-a:#ff9ab8;--heart-b:#ff5a86;--on-heart:#3a0f22;
     --ok:#5fd39a;--ok-soft:#1f3b2e;color-scheme:dark;
   }
 }
@@ -61,7 +61,25 @@ button[disabled]{opacity:.5}
 .heart .ring{position:absolute;inset:0;margin:auto;width:150px;height:150px;border-radius:50%;border:2px solid var(--accent);opacity:0}
 .heart.beat .ring{animation:ring 1.8s ease-out infinite}
 @keyframes ring{0%{transform:scale(.6);opacity:.5}100%{transform:scale(1.3);opacity:0}}
-@media (prefers-reduced-motion:reduce){.heart.beat svg,.heart.beat .ring{animation:none}}
+/* número de días dentro del corazón */
+.heart-num{position:absolute;left:50%;top:50%;transform:translate(-50%,-62%);color:var(--on-heart);font-family:var(--display);font-weight:600;font-size:2.3rem;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;pointer-events:none}
+.heart-num.chico{font-size:1.35rem}
+.heart.beat .heart-num{animation:beatn 1.1s ease-in-out infinite}
+@keyframes beatn{0%,100%{transform:translate(-50%,-62%) scale(1)}30%{transform:translate(-50%,-62%) scale(1.12)}50%{transform:translate(-50%,-62%) scale(1.02)}70%{transform:translate(-50%,-62%) scale(1.1)}}
+@media (prefers-reduced-motion:reduce){.heart.beat svg,.heart.beat .ring,.heart.beat .heart-num{animation:none}}
+.cuenta{text-align:center;margin-top:-18px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cuenta-txt{font-size:1.75rem;color:var(--accent);line-height:1.05}
+.espera{width:100%;max-width:240px;height:8px;border-radius:999px;background:var(--accent-soft);overflow:hidden;margin-top:8px}
+.espera span{display:block;width:0;height:100%;background:var(--grad);border-radius:inherit;transition:width .8s ease}
+.juntos{font-family:var(--hand);font-weight:500;font-size:1.4rem;text-align:center;line-height:1.15;margin-top:-6px}
+/* relojes: la hora de cada uno */
+.relojes{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--blush);border:1px solid var(--line);border-radius:999px;padding:8px 16px;margin-top:-8px}
+.relojes span{display:flex;align-items:baseline;gap:6px;min-width:0}
+.relojes small{font-size:.72rem;color:var(--muted);font-weight:700;max-width:6.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.relojes b{font-family:var(--display);font-weight:500;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.relojes i{font-style:normal}
+.relojes em{font-style:normal;font-size:.72rem;color:var(--accent);font-weight:700;white-space:nowrap}
+.reloj-nota{text-align:center;margin-top:-14px}
 .status{border-radius:20px;padding:16px 18px;background:linear-gradient(135deg,var(--accent-soft),var(--blush));display:flex;flex-direction:column;gap:4px}
 .status strong{font-family:var(--display);font-size:1.3rem;font-weight:500;line-height:1.2}
 /* disponibilidad para llamar */

@@ -19,6 +19,8 @@ create table if not exists public.parejas (
   creado_en timestamptz not null default now(),
   check (usuario_a <> usuario_b)
 );
+-- Desde cuándo están juntos (para el contador del Inicio). Se cambia con fijar_desde().
+alter table public.parejas add column if not exists desde date;
 
 create table if not exists public.eventos (
   id bigint generated always as identity primary key,
@@ -208,6 +210,25 @@ begin
 end;
 $$;
 grant execute on function public.unirse_pareja(text) to authenticated;
+
+-- ========== DESDE CUÁNDO ESTAMOS JUNTOS ==========
+-- Por función (y no con un permiso de UPDATE) para que solo se pueda tocar esta fecha.
+create or replace function public.fijar_desde(p_fecha date)
+returns public.parejas
+language plpgsql security definer set search_path = public as $$
+declare
+  fila public.parejas;
+begin
+  if p_fecha is not null and (p_fecha > current_date + 1 or p_fecha < date '1950-01-01') then
+    raise exception 'fecha no válida';
+  end if;
+  update public.parejas set desde = p_fecha
+   where usuario_a = auth.uid() or usuario_b = auth.uid()
+  returning * into fila;
+  return fila;
+end;
+$$;
+grant execute on function public.fijar_desde(date) to authenticated;
 
 -- ========== "ESTOY LIBRE" → EVENTO ==========
 -- Cuando alguien pasa a libre, queda registrado en `eventos` (tipo 'libre').

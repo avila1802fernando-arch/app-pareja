@@ -6,22 +6,33 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
 
 ## Qué hace
 
-- **Inicio** · Cada vez que uno entra, el otro recibe "te extraño". Botón **Estoy libre para hablar**: el otro ve en vivo "X está libre ahora" y recibe una push; si los dos están libres, aparece grande "¡Los dos están libres!". Se apaga sola a las 2 horas.
-- **Horarios** · Cuadrícula semanal donde cada uno marca cuándo normalmente puede. Se ven los dos horarios y las **horas en común**, siempre con las dos horas locales (Ecuador y Chile no tienen la misma hora).
+- **Inicio**
+  - Cada vez que uno entra, el otro recibe "te extraño".
+  - **Relojes**: la hora de cada uno, con la diferencia (+2 h o +3 h según el horario de verano de Chile).
+  - **Cuenta regresiva**: el corazón muestra los días que faltan para el próximo *viaje* o *cita* del calendario, con una barra de cuánto de la espera ya pasó. Debajo, "Juntos hace 1 año, 3 meses…" (la fecha se pone en Ajustes) y "¡Hoy cumplen…!" en aniversarios y mesiversarios.
+  - **Estoy libre para hablar**: el otro lo ve en vivo y recibe una push; si los dos están libres, aparece "¡Los dos están libres!". Se apaga sola a las 2 horas.
+  - **Señales**: abrazo 🤗, beso 😘, pienso en ti 💭, buenos días ☀️ y buenas noches 🌙. Llegan como push con vibración y, con la app abierta, llueven emojis por la pantalla.
+  - **Ánimo**: cada uno comparte cómo se siente (y una nota corta); si es triste o con estrés, la push le sugiere al otro mandar un abrazo.
+- **Juntos**
+  - **Pregunta del día**: la misma para los dos. La respuesta del otro solo se puede leer después de responder. Racha 🔥 de días seguidos e historial.
+  - **Cartas**: para leer con calma, en papel y con letra manuscrita. Se pueden **sellar hasta una fecha** (el aniversario, el día del viaje…): hasta entonces solo se ve de quién es y cuándo se abre, y llega un aviso cuando ya se puede abrir.
+  - **Cuando nos veamos**: lista compartida de cosas para hacer juntos, para ir tachando.
+- **Horarios** · Cuadrícula semanal donde cada uno marca cuándo normalmente puede. Se ven los dos horarios y las **horas en común**, siempre con las dos horas locales.
 - **Calendario** · Llamadas, citas, viajes, aniversarios. Vista mes y lista de próximos. Al crear o cambiar algo, el otro recibe una push; **30 minutos antes** les llega un recordatorio a los dos.
-- **Ajustes** · Nombre, zona horaria, notificaciones y cerrar sesión.
+- **Ajustes** · Nombre, zona horaria, "juntos desde", notificaciones y cerrar sesión.
 
 ## Estructura
 
 ```
 public/                 ← la app (HTML, CSS, JS, íconos, service worker)
   config.js             ← TUS claves públicas (editar)
+  preguntas.js          ← las preguntas del día (puedes agregar las tuyas)
 supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede repetir)
 supabase/cron.sql       ← tarea cada 5 min para recordatorios (editar 2 valores y pegar)
 supabase/functions/
   _shared/push.ts       ← código común para enviar push
-  notificar/index.ts    ← push por "te extraño", "estoy libre" y cambios del calendario
-  recordatorios/index.ts← recordatorios 30 min antes + apaga "estoy libre" vencidos
+  notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día y calendario
+  recordatorios/index.ts← recordatorios 30 min antes, cartas que ya se pueden abrir y apaga "estoy libre" vencidos
 vercel.json
 ```
 
@@ -123,7 +134,7 @@ En Supabase → **Database → Webhooks** → **Create a new hook**. Crea **dos*
 | HTTP Headers | `x-webhook-secret` = tu `WEBHOOK_SECRET` | igual |
 | Timeout | 5000 | 5000 |
 
-El primero avisa cuando alguien entra, manda "te extraño" o se pone libre (el "estoy libre" también queda registrado en `eventos`, por eso no necesita webhook propio). El segundo avisa cuando se agenda, cambia o cancela algo del calendario.
+El primero avisa cuando alguien entra, manda "te extraño" o una señal, se pone libre, comparte su ánimo, responde la pregunta del día o escribe una carta (todo eso queda registrado en `eventos`, por eso no necesita webhooks propios). El segundo avisa cuando se agenda, cambia o cancela algo del calendario.
 
 ## Paso 7 · Recordatorios cada 5 minutos (5 min)
 
@@ -133,7 +144,7 @@ El primero avisa cuando alguien entra, manda "te extraño" o se pone libre (el "
    - `TU_WEBHOOK_SECRET` por la misma clave del paso 5
 3. Pega el archivo en **SQL Editor** → **Run**.
 
-Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo que empieza en 30 minutos y apaga los "estoy libre" vencidos. Para comprobar que corre: `select * from cron.job_run_details order by start_time desc limit 5;` (debe decir `succeeded`).
+Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo que empieza en 30 minutos, avisa de las cartas selladas que ya se pueden abrir y apaga los "estoy libre" vencidos. Para comprobar que corre: `select * from cron.job_run_details order by start_time desc limit 5;` (debe decir `succeeded`).
 
 ## Paso 8 · Instalar en los teléfonos
 
@@ -149,24 +160,33 @@ Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo 
 4. Entra con su correo, escribe su nombre, pone el código que le pasaste y **Unirme**.
 5. En **Ajustes**, toca **Activar notificaciones** y acepta. iPhone también pide tener activas las notificaciones en Ajustes → Notificaciones → Nosotros.
 
-## Si ya tenías la versión anterior funcionando
+## Si ya tenías una versión anterior funcionando
 
-1. `git pull` / copia los archivos nuevos y haz `git push` (Vercel publica solo).
-2. Supabase → SQL Editor: vuelve a correr **todo** `supabase/schema.sql`.
-3. `supabase functions deploy notificar --no-verify-jwt` y `supabase functions deploy recordatorios --no-verify-jwt`.
-4. Crea el **Webhook 2** del paso 6 (el 1 ya lo tienes).
-5. Haz el paso 7.
+Cada vez que llega una versión nueva:
+
+1. `git push` (Vercel publica solo).
+2. Supabase → SQL Editor: vuelve a correr **todo** `supabase/schema.sql` (no borra nada).
+3. Vuelve a publicar las funciones:
+   ```bash
+   supabase functions deploy notificar --no-verify-jwt
+   supabase functions deploy recordatorios --no-verify-jwt
+   ```
+4. Si todavía no los tienes: el **Webhook 2** del paso 6 y el paso 7 (pg_cron). Las funciones nuevas (señales, ánimo, pregunta del día, cartas, lista) **no necesitan webhooks ni secretos nuevos**.
 
 ## Prueba
 
 - Uno cierra la app y bloquea el teléfono. El otro abre la app. En pocos segundos debe sonar: "Fernando acaba de entrar ❤️ Y te extraña."
 - Uno toca **Estoy libre para hablar**: al otro le llega "X está libre para una llamada ☎️" y en su Inicio aparece "X está libre ahora".
 - Uno agenda una llamada para dentro de 40 minutos: al otro le llega "X agendó: …" y a los dos, unos 30 minutos antes, "En 30 min: …".
+- Uno toca **Abrazo** 🤗: al otro le llega la push con vibración; si tenía la app abierta, llueven abrazos por la pantalla.
+- Uno escribe una carta **sellada** para dentro de 10 minutos: el otro ve "🔒 Carta sellada de X · se abre…" y, cuando llega la hora (con un margen de hasta 5 minutos), le llega "Ya puedes abrir la carta de X".
+- Agreguen el viaje que tengan planeado en **Calendario** con tipo *Viaje*: el corazón del Inicio empieza a contar los días.
 
 Ajustes que ya trae (constantes al inicio de cada archivo):
 - `MINUTOS_SIN_REPETIR = 15` en `notificar/index.ts`: si la misma persona entra varias veces en 15 minutos, solo se avisa la primera.
 - `HORAS_LIBRE = 2` en `public/app.js`: cuánto dura "estoy libre".
 - `MINUTOS_ANTES = 30` en `recordatorios/index.ts`: con cuánta anticipación llega el recordatorio.
+- `public/preguntas.js`: la lista de preguntas del día. Agrega las tuyas al final (las respuestas viejas guardan el texto de su pregunta, así que no se mezclan).
 
 ## Si algo no funciona
 
@@ -179,5 +199,8 @@ Ajustes que ya trae (constantes al inicio de cada archivo):
 | Llega "te extraño" pero no lo del calendario | Falta el Webhook 2 (tabla `eventos_cal`, con Insert, Update y Delete) |
 | No llegan los recordatorios / "estoy libre" no se apaga solo | `select * from cron.job_run_details order by start_time desc limit 5;` en el SQL Editor. Si no hay filas, falta el paso 7; si dice `failed`, revisa `TU_REF` y el secreto en `cron.sql` |
 | Las horas de mi pareja salen mal | Cada uno revisa su zona horaria en **Ajustes** |
+| El corazón no muestra la cuenta regresiva | El encuentro debe estar en Calendario con tipo **Viaje** o **Cita** |
+| Error al compartir ánimo, responder o mandar una señal nueva | Falta volver a correr `schema.sql` completo (crea las tablas nuevas y amplía los tipos de `eventos`) |
+| No llega el aviso de "ya puedes abrir la carta" | Igual que los recordatorios: revisa `cron.job_run_details` (paso 7) |
 | `schema.sql` da error | Córrelo completo, de arriba a abajo; está hecho para repetirse sin borrar datos |
 | Vercel muestra 404 | *Root Directory* debe ser `public` |

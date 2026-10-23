@@ -78,7 +78,13 @@ button[disabled]{opacity:.5}
 .cuenta-txt{font-size:1.75rem;color:var(--accent);line-height:1.05}
 .espera{width:100%;max-width:240px;height:8px;border-radius:999px;background:var(--accent-soft);overflow:hidden;margin-top:8px}
 .espera span{display:block;width:0;height:100%;background:var(--grad);border-radius:inherit;transition:width .8s ease}
-.juntos{font-family:var(--hand);font-weight:500;font-size:1.4rem;text-align:center;line-height:1.15;margin-top:-6px}
+.fechas{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:-6px;text-align:center}
+.juntos{font-family:var(--hand);font-weight:500;font-size:1.4rem;text-align:center;line-height:1.15}
+.juntos.conocidos{font-size:1.2rem;color:var(--muted)}
+.juntos.hoy{color:var(--accent);font-size:1.6rem}
+.celda-mes.especial{border-color:var(--accent-soft);background:linear-gradient(160deg,var(--accent-soft),var(--blush))}
+.celda-mes em{font-style:normal;font-size:.7rem;line-height:1}
+.prox li.especial{cursor:default}
 /* relojes: la hora de cada uno */
 .relojes{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--blush);border:1px solid var(--line);border-radius:999px;padding:8px 16px;margin-top:-8px}
 .relojes span{display:flex;align-items:baseline;gap:6px;min-width:0}

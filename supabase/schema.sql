@@ -19,8 +19,10 @@ create table if not exists public.parejas (
   creado_en timestamptz not null default now(),
   check (usuario_a <> usuario_b)
 );
--- Desde cuándo están juntos (para el contador del Inicio). Se cambia con fijar_desde().
+-- Fechas de la pareja: `desde` = novios desde, `conocidos` = el día que se conocieron.
+-- Sus días del mes son especiales (aviso mensual). Se cambian con fijar_fechas().
 alter table public.parejas add column if not exists desde date;
+alter table public.parejas add column if not exists conocidos date;
 
 create table if not exists public.eventos (
   id bigint generated always as identity primary key,
@@ -294,24 +296,46 @@ end;
 $$;
 grant execute on function public.unirse_pareja(text) to authenticated;
 
--- ========== DESDE CUÁNDO ESTAMOS JUNTOS ==========
--- Por función (y no con un permiso de UPDATE) para que solo se pueda tocar esta fecha.
-create or replace function public.fijar_desde(p_fecha date)
+-- ========== FECHAS DE LA PAREJA ==========
+-- Por función (y no con un permiso de UPDATE) para que solo se puedan tocar estas fechas.
+create or replace function public.fijar_fechas(p_conocidos date, p_desde date)
 returns public.parejas
 language plpgsql security definer set search_path = public as $$
 declare
   fila public.parejas;
 begin
-  if p_fecha is not null and (p_fecha > current_date + 1 or p_fecha < date '1950-01-01') then
+  if (p_conocidos is not null and (p_conocidos > current_date + 1 or p_conocidos < date '1950-01-01'))
+     or (p_desde is not null and (p_desde > current_date + 1 or p_desde < date '1950-01-01')) then
     raise exception 'fecha no válida';
   end if;
-  update public.parejas set desde = p_fecha
+  update public.parejas set conocidos = p_conocidos, desde = p_desde
    where usuario_a = auth.uid() or usuario_b = auth.uid()
   returning * into fila;
   return fila;
 end;
 $$;
+grant execute on function public.fijar_fechas(date, date) to authenticated;
+
+-- Versión anterior (solo "desde"), por si algún teléfono tiene la app vieja abierta
+create or replace function public.fijar_desde(p_fecha date)
+returns public.parejas
+language sql security definer set search_path = public as $$
+  update public.parejas set desde = p_fecha
+   where (usuario_a = auth.uid() or usuario_b = auth.uid())
+     and (p_fecha is null or p_fecha between date '1950-01-01' and current_date + 1)
+  returning *;
+$$;
 grant execute on function public.fijar_desde(date) to authenticated;
+
+-- Avisos de días especiales ya enviados (para mandar uno solo por persona y día).
+-- Solo la usa la función `recordatorios` (service role): RLS sin políticas = nadie más la ve.
+create table if not exists public.avisos_dia (
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  clave text not null,
+  dia date not null,
+  primary key (usuario_id, clave, dia)
+);
+alter table public.avisos_dia enable row level security;
 
 -- ========== "ESTOY LIBRE" → EVENTO ==========
 -- Cuando alguien pasa a libre, queda registrado en `eventos` (tipo 'libre').

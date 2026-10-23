@@ -36,6 +36,7 @@
       <button type="button" class="ghost" id="btn-modo">Crear una cuenta nueva</button>
     </form>
     <p class="small-note" id="login-msg"></p>
+    <button type="button" class="link" id="btn-instalar-login" hidden>Instalar la app en este dispositivo 📲</button>
   </section>
 
   <!-- Pantalla: nombre + vincular pareja -->
@@ -99,8 +100,12 @@
         <div class="espera" id="espera" role="progressbar" aria-label="Cuánto falta para vernos" aria-valuemin="0" aria-valuemax="100"><span id="espera-bar"></span></div>
         <p class="small-note" id="espera-txt"></p>
       </div>
-      <p class="juntos" id="juntos" hidden></p>
-      <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo están juntos? Agrégalo 💞</button>
+      <div class="fechas">
+        <p class="juntos" id="juntos" hidden></p>
+        <p class="juntos conocidos" id="conocidos-txt" hidden></p>
+        <p class="small-note" id="especial-prox" hidden></p>
+      </div>
+      <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo son novios? Agrégalo 💞</button>
      </div>
      <div class="col">
       <div class="status">
@@ -248,15 +253,23 @@
         <button type="button" class="ghost" id="btn-push" hidden>Activar notificaciones en este teléfono</button>
         <p class="small-note" id="ios-hint" hidden>En iPhone, las notificaciones solo funcionan si abres la app desde el ícono de la pantalla de inicio. Toca <strong>Compartir → Agregar a pantalla de inicio</strong> en Safari y vuelve a entrar desde ahí.</p>
       </div>
+      <div class="stack">
+        <h2>La app en tu pantalla</h2>
+        <p class="muted" id="instalar-estado"></p>
+        <button type="button" class="ghost" id="btn-instalar" hidden>Instalar la app 📲</button>
+      </div>
      </div>
      <div class="col">
       <div class="stack">
         <h2>Pareja</h2>
         <p class="muted" id="aj-pareja"></p>
         <form id="f-desde" class="stack">
-          <label for="aj-desde">Juntos desde</label>
+          <label for="aj-conocidos">Nos conocimos el</label>
+          <input id="aj-conocidos" type="date">
+          <label for="aj-desde">Somos novios desde</label>
           <input id="aj-desde" type="date">
-          <button type="submit" class="ghost">Guardar fecha</button>
+          <p class="small-note">Esos días de cada mes son especiales: les llega un aviso a los dos a las 9 de la mañana.</p>
+          <button type="submit" class="ghost">Guardar fechas</button>
         </form>
       </div>
       <form id="f-clave" class="stack">

@@ -129,9 +129,20 @@
   $("btn-crear").addEventListener("click", async () => {
     if (!(await guardarNombre())) return;
     const codigo = Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
-    const { data, error } = await sb.from("parejas").insert({ usuario_a: user.id, codigo }).select().single();
+    // Las fechas de config.js quedan guardadas desde el principio
+    const F = C.FECHAS || {};
+    const { data, error } = await sb.from("parejas")
+      .insert({ usuario_a: user.id, codigo, desde: F.novios || null, conocidos: F.conocidos || null }).select().single();
     if (error) { $("pair-msg").textContent = error.message; return; }
     pareja = data; mostrarCodigo(codigo); esperarPareja();
+    // …y el primer encuentro queda en el calendario como viaje (el corazón del Inicio cuenta los días)
+    if (F.encuentro && F.encuentro >= claveDia(new Date().toISOString(), miTz())) {
+      await sb.from("eventos_cal").insert({
+        pareja_id: data.id, creado_por: user.id, tipo: "viaje",
+        titulo: F.lugar ? `Nos vemos por primera vez en ${F.lugar} 💞` : "Nos vemos por primera vez 💞",
+        inicio: aIso(F.encuentro + "T09:00", miTz()), nota: "Cambien la hora cuando tengan el vuelo ✈️",
+      });
+    }
   });
 
   function mostrarCodigo(codigo) {
@@ -168,6 +179,12 @@
     if (!sessionStorage.getItem("entrada")) {
       await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "entrada" });
       sessionStorage.setItem("entrada", "1");
+    }
+    // Parejas creadas antes de tener fechas: se toman las de config.js
+    const F = C.FECHAS || {};
+    if (!pareja.desde && !pareja.conocidos && (F.novios || F.conocidos)) {
+      const { data } = await sb.rpc("fijar_fechas", { p_conocidos: F.conocidos || null, p_desde: F.novios || null });
+      if (data && data.id) pareja = { ...pareja, ...data };
     }
     // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
     clearInterval(relojTimer); renderRelojes();
@@ -395,8 +412,10 @@
     notaTz();
     $("aj-pareja").textContent = `Tu pareja: ${otro.nombre} · ${nombreTz(suTz())} (allá son las ${hora(new Date(), suTz())})`;
     $("aj-desde").value = pareja.desde || "";
-    $("aj-desde").max = diaHoy();
+    $("aj-conocidos").value = pareja.conocidos || "";
+    $("aj-desde").max = $("aj-conocidos").max = diaHoy();
     $("aj-usuario").textContent = `Tu usuario: ${usuarioDe(user.email)}`;
+    renderInstalar();
   }
   $("f-clave").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -408,11 +427,35 @@
   });
   $("f-desde").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const { data, error } = await sb.rpc("fijar_desde", { p_fecha: $("aj-desde").value || null });
-    if (error || !data) { toast("No se pudo guardar la fecha"); return; }
+    const { data, error } = await sb.rpc("fijar_fechas", {
+      p_conocidos: $("aj-conocidos").value || null, p_desde: $("aj-desde").value || null,
+    });
+    if (error || !data) { toast("No se pudieron guardar las fechas"); return; }
     pareja = { ...pareja, ...data }; renderJuntos();
-    toast(pareja.desde ? "Guardado 💞" : "Fecha quitada");
+    toast("Fechas guardadas 💞");
   });
+
+  // ---------- instalar la app (PWA) ----------
+  // Android y computador: el navegador ofrece instalarla (beforeinstallprompt). iPhone: desde Safari.
+  let promptInstalar = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); promptInstalar = e; renderInstalar(); });
+  window.addEventListener("appinstalled", () => { promptInstalar = null; toast("App instalada 💗"); renderInstalar(); });
+  function renderInstalar() {
+    const estado = $("instalar-estado");
+    $("btn-instalar").hidden = $("btn-instalar-login").hidden = !promptInstalar;
+    if (isStandalone) estado.textContent = "Ya la estás usando instalada ✓";
+    else if (promptInstalar) estado.textContent = "Instálala para abrirla con su propio ícono, a pantalla completa.";
+    else if (isIOS) estado.textContent = "En Safari, toca Compartir y luego “Agregar a pantalla de inicio”.";
+    else estado.textContent = "En el menú del navegador, elige “Instalar app” o “Agregar a pantalla de inicio”.";
+  }
+  async function instalar() {
+    if (!promptInstalar) return;
+    promptInstalar.prompt();
+    await promptInstalar.userChoice;
+    promptInstalar = null; renderInstalar();
+  }
+  $("btn-instalar").addEventListener("click", instalar);
+  $("btn-instalar-login").addEventListener("click", instalar);
   function notaTz() {
     $("aj-tz-note").textContent = `Para ti son las ${hora(new Date(), $("aj-tz").value)}; para ${otro.nombre}, las ${hora(new Date(), suTz())}.`;
   }
@@ -737,6 +780,13 @@
       const c = document.createElement("button"); c.type = "button"; c.className = "celda-mes";
       c.classList.toggle("hoy", k === hoy); c.classList.toggle("sel", k === diaSel);
       const n = document.createElement("span"); n.textContent = d; c.append(n);
+      // días especiales del mes (el de novios y el de conocerse)
+      const esp = especialesDe(k);
+      if (esp.length) {
+        c.classList.add("especial");
+        const em = document.createElement("em"); em.textContent = esp.map((x) => x.e.emoji).join(""); c.append(em);
+        c.setAttribute("aria-label", `${d}: ${esp.map((x) => textoEspecial(x.e, x.f, k, false)).join(", ")}`);
+      }
       if (marcas[k]) { const dots = document.createElement("i"); dots.textContent = "•".repeat(Math.min(3, marcas[k].length)); c.append(dots); }
       c.addEventListener("click", () => { diaSel = diaSel === k ? null : k; renderCal(); });
       g.append(c);
@@ -761,6 +811,18 @@
       $("prox-titulo").textContent = "Próximos";
     }
     $("btn-nuevo").textContent = diaSel ? "Agendar ese día" : "Agendar algo";
+    // Día especial: arriba de la lista (el día tocado, o el próximo si no hay día elegido)
+    const prox = diaSel ? null : proximoEspecial();
+    const especiales = diaSel ? especialesDe(diaSel).map((x) => ({ ...x, k: diaSel })) : prox ? [prox] : [];
+    especiales.forEach((x) => {
+      const li = document.createElement("li"); li.className = "especial";
+      const a = document.createElement("strong"), b = document.createElement("span");
+      a.textContent = textoEspecial(x.e, x.f, x.k, false);
+      b.textContent = x.e.clave === "novios" ? "Día especial de cada mes · les llega un aviso a los dos" : "El día que se conocieron · les llega un aviso a los dos";
+      if (!diaSel) b.textContent = `${fechaCorta(x.k + "T12:00:00Z", "UTC")} · ${b.textContent}`;
+      li.append(a, b); list.append(li);
+    });
+    if (!evs.length && especiales.length) return;
     if (!evs.length) {
       const li = document.createElement("li"); li.className = "muted";
       li.textContent = diaSel ? "Nada ese día." : "Nada agendado todavía. ¿Una llamada?";
@@ -867,16 +929,55 @@
     if (sumar(meses) > hasta) meses--;
     return { a: Math.floor(meses / 12), m: meses % 12, d: diasEntre(sumar(meses), hasta) };
   }
-  function textoJuntos(desde) {
+  // "1 año, 3 meses y 4 días"
+  const unir = (p) => (p.length > 1 ? p.slice(0, -1).join(", ") + " y " + p[p.length - 1] : p[0]);
+  const tiempo = (a, m, d) => unir([a && plural(a, "año", "años"), m && plural(m, "mes", "meses"), d && plural(d, "día", "días")].filter(Boolean));
+
+  // Días especiales de cada mes: el día en que se hicieron novios (`desde`) y en que se conocieron
+  const ESPECIALES = [
+    { clave: "novios", campo: "desde", emoji: "💗" },
+    { clave: "conocidos", campo: "conocidos", emoji: "💫" },
+  ];
+  // El mismo día del mes que `fecha`; si el mes es más corto, el último día
+  const diaDelMes = (fecha, y, m) => Math.min(+fecha.slice(8, 10), new Date(Date.UTC(y, m, 0)).getUTCDate());
+  const esEspecial = (fecha, k) => { const [y, m, d] = k.split("-").map(Number); return k > fecha && d === diaDelMes(fecha, y, m); };
+  // Los especiales que caen en el día k: [{ e, f }]
+  const especialesDe = (k) => ESPECIALES.map((e) => ({ e, f: pareja[e.campo] })).filter((x) => x.f && esEspecial(x.f, k));
+  // Texto de un día especial (hoy o en el calendario)
+  function textoEspecial(e, fecha, k, hoy) {
+    const { a, m } = duracion(fecha, k), t = tiempo(a, m, 0), redondo = m === 0;
+    const uno = (a === 1 && m === 0) || (a === 0 && m === 1);
+    if (e.clave === "novios") {
+      if (!hoy) return `${e.emoji} ${t} de novios`;
+      return redondo ? `🎉 ¡Hoy cumplen ${t} de novios!` : `${e.emoji} ¡Feliz mesiversario! Hoy cumplen ${t} de novios`;
+    }
+    if (!hoy) return `${e.emoji} ${t} desde que se conocieron`;
+    return `${redondo ? "🎉" : e.emoji} Hoy ${uno ? "se cumple" : "se cumplen"} ${t} desde que se conocieron`;
+  }
+  // Línea normal: "Novios hace 2 meses y 15 días · 76 días"
+  function textoDesde(e, fecha) {
     const hoy = diaHoy();
-    if (desde > hoy) return null;
-    const total = diasEntre(desde, hoy);
-    if (total === 0) return "💞 Hoy empieza lo nuestro";
-    const { a, m, d } = duracion(desde, hoy);
-    const p = [a && plural(a, "año", "años"), m && plural(m, "mes", "meses"), d && plural(d, "día", "días")].filter(Boolean);
-    const t = p.length > 1 ? p.slice(0, -1).join(", ") + " y " + p[p.length - 1] : p[0];
-    if (d === 0) return `🎉 ¡Hoy cumplen ${t} juntos!`;
-    return `💞 Juntos hace ${t}` + (a || m ? ` · ${total.toLocaleString("es")} días` : "");
+    if (!fecha || fecha > hoy) return null;
+    if (esEspecial(fecha, hoy)) return { hoy: true, texto: textoEspecial(e, fecha, hoy, true) };
+    const total = diasEntre(fecha, hoy);
+    if (total === 0) return { hoy: true, texto: e.clave === "novios" ? "💞 Hoy empieza lo nuestro" : "💫 Hoy se conocieron" };
+    const { a, m, d } = duracion(fecha, hoy), t = tiempo(a, m, d);
+    const extra = a || m ? ` · ${total.toLocaleString("es")} días` : "";
+    return { hoy: false, texto: e.clave === "novios" ? `💞 Novios hace ${t}${extra}` : `💫 Se conocieron hace ${t}` };
+  }
+  // El próximo día especial (sin contar hoy)
+  function proximoEspecial() {
+    const hoy = diaHoy(); let mejor = null;
+    ESPECIALES.forEach((e) => {
+      const f = pareja[e.campo]; if (!f) return;
+      let [y, m] = hoy.split("-").map(Number);
+      for (let i = 0; i < 3; i++) {
+        const k = `${y}-${pad(m)}-${pad(diaDelMes(f, y, m))}`;
+        if (k > hoy && k > f) { if (!mejor || k < mejor.k) mejor = { k, e, f }; break; }
+        if (++m > 12) { m = 1; y++; }
+      }
+    });
+    return mejor;
   }
 
   // El próximo viaje o cita del calendario es el encuentro que contamos
@@ -888,9 +989,27 @@
     renderJuntos();
   }
   function renderJuntos() {
-    const tj = pareja.desde ? textoJuntos(pareja.desde) : null;
-    $("juntos").hidden = !tj; if (tj) $("juntos").textContent = tj;
-    $("juntos-poner").hidden = !!pareja.desde;
+    const lineas = [["juntos", ESPECIALES[0], pareja.desde], ["conocidos-txt", ESPECIALES[1], pareja.conocidos]];
+    let hoyEspecial = null;
+    lineas.forEach(([id, e, fecha]) => {
+      const l = textoDesde(e, fecha), p = $(id);
+      p.hidden = !l; if (!l) return;
+      p.textContent = l.texto; p.classList.toggle("hoy", l.hoy);
+      if (l.hoy) hoyEspecial = hoyEspecial || e.clave;
+    });
+    const prox = proximoEspecial(), np = $("especial-prox");
+    np.hidden = !prox;
+    if (prox) {
+      const dias = diasEntre(diaHoy(), prox.k);
+      np.textContent = `Próximo día especial: ${textoEspecial(prox.e, prox.f, prox.k, false)} · ${fechaCorta(prox.k + "T12:00:00Z", "UTC")} · ${dias === 1 ? "mañana" : "en " + plural(dias, "día", "días")}`;
+    }
+    $("juntos-poner").hidden = !!(pareja.desde || pareja.conocidos);
+    // Un día especial se celebra con una lluvia de corazones, una vez por día
+    if (hoyEspecial) {
+      const clave = "celebrado-" + diaHoy();
+      let ya = false; try { ya = localStorage.getItem(clave) === "1"; localStorage.setItem(clave, "1"); } catch (e) {}
+      if (!ya) setTimeout(() => lluvia(hoyEspecial === "novios" ? "💗" : "💫", 18), 600);
+    }
 
     const num = $("heart-num");
     num.hidden = $("cuenta").hidden = !proximo;
@@ -913,7 +1032,7 @@
     $("espera-bar").style.width = pct + "%";
     $("espera-txt").textContent = ini > ahora ? `Ya pasó el ${pct}% de la espera ♥` : "";
   }
-  $("juntos-poner").addEventListener("click", () => { irA("ajustes"); $("aj-desde").focus(); });
+  $("juntos-poner").addEventListener("click", () => { irA("ajustes"); $("aj-conocidos").focus(); });
 
   // ---------- pregunta del día ----------
   const PREGUNTAS = window.NOSOTROS_PREGUNTAS || ["¿Qué es lo que más te gusta de nosotros?"];

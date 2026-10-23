@@ -8,7 +8,7 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
 
 - **Inicio**
   - Cada vez que uno entra, el otro recibe "te extraño".
-  - **Relojes**: la hora de cada uno, con la diferencia (+2 h o +3 h según el horario de verano de Chile).
+  - **Relojes**: la hora de cada uno, con la diferencia. Se calcula sola con la zona horaria de cada perfil: Ecuador está siempre en UTC−5 y Chile en UTC−3 con su horario de verano (septiembre–abril) o UTC−4 el resto del año, así que se ve "+2 h" o "+1 h".
   - **Cuenta regresiva**: el corazón muestra los días que faltan para el próximo *viaje* o *cita* del calendario, con una barra de cuánto de la espera ya pasó. Debajo, "Juntos hace 1 año, 3 meses…" (la fecha se pone en Ajustes) y "¡Hoy cumplen…!" en aniversarios y mesiversarios.
   - **Estoy libre para hablar**: el otro lo ve en vivo y recibe una push; si los dos están libres, aparece "¡Los dos están libres!". Se apaga sola a las 2 horas.
   - **Señales**: abrazo 🤗, beso 😘, pienso en ti 💭, buenos días ☀️ y buenas noches 🌙. Llegan como push con vibración y, con la app abierta, llueven emojis por la pantalla.

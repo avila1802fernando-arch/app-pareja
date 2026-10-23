@@ -1,6 +1,6 @@
 // Edge Function "notificar"
 // La llaman los Database Webhooks:
-//   - `eventos` (INSERT): entrada, "te extraño", "estoy libre", abrazo, beso… → push a la otra persona
+//   - `eventos` (INSERT): entrada, "te extraño", "estoy libre", abrazo, beso, a dormir… → push a la otra persona
 //   - `eventos_cal` (INSERT / UPDATE / DELETE): cambios del calendario → push a la otra persona
 //
 // Secretos y utilidades compartidas: ver ../_shared/push.ts
@@ -168,6 +168,22 @@ async function porEvento(ev: Evento) {
     const { data: c } = await sb.from("canciones").select("titulo").eq("de_usuario", ev.de_usuario)
       .order("creado_en", { ascending: false }).limit(1).maybeSingle();
     mensaje = { title: `🎶 ${nombre} te dedicó una canción`, body: c?.titulo ?? "Entra a escucharla 💗", tag: "cancion", url: "/" };
+  } else if (ev.tipo === "a_dormir") {
+    // ¿Quien recibe ya está acostado? Entonces ahora duermen juntos
+    const desde = new Date(Date.now() - 14 * 3600_000).toISOString();
+    const { count } = await sb.from("noches").select("id", { count: "exact", head: true })
+      .eq("usuario_id", otroId).is("fin", null).gte("inicio", desde);
+    mensaje = (count ?? 0) > 0
+      ? { title: `🌙 ${nombre} ya se acostó contigo`, body: "Ahora sí, a dormir juntos 💤 Que sueñen bonito.", tag: "noche", url: "/", vibrate: [60, 80, 60] }
+      : { title: `🌙 ${nombre} se fue a la camita`, body: "Te espera para dormir juntos 💤", tag: "noche", url: "/", vibrate: [60, 80, 60] };
+  } else if (ev.tipo === "despierto") {
+    const { data: n } = await sb.from("noches").select("sueno").eq("usuario_id", ev.de_usuario)
+      .not("fin", "is", null).order("fin", { ascending: false }).limit(1).maybeSingle();
+    mensaje = {
+      title: `☀️ ${nombre} despertó y te da los buenos días`,
+      body: n?.sueno ? `Soñó: “${n.sueno}”` : "Que tengas un día precioso 💛",
+      tag: "noche", url: "/", vibrate: [100, 80, 100, 80, 100],
+    };
   } else {
     mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
   }

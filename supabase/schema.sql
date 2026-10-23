@@ -44,7 +44,8 @@ alter table public.eventos add constraint eventos_tipo_check
     'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches',
     'animo', 'respuesta', 'carta',
     'momento', 'riego', 'vale', 'canje', 'razon',
-    'latido', 'notita', 'cancion'
+    'latido', 'notita', 'cancion',
+    'a_dormir', 'despierto'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -691,6 +692,69 @@ drop trigger if exists canciones_aviso on public.canciones;
 create trigger canciones_aviso after insert on public.canciones
   for each row execute function public.evento_desde_tabla('cancion');
 
+-- ========== DORMIR JUNTOS ==========
+-- Una fila por noche y persona: "Me voy a dormir" la abre y "Buenos días" la cierra (con lo que soñó, si quiere).
+-- Si los dos tienen su noche abierta a la vez, están durmiendo juntos.
+create table if not exists public.noches (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  inicio timestamptz not null default now(),
+  fin timestamptz,
+  sueno text check (sueno is null or char_length(sueno) <= 280),
+  check (fin is null or fin >= inicio)
+);
+create index if not exists noches_pareja_idx on public.noches (pareja_id, inicio desc);
+alter table public.noches enable row level security;
+-- Se lee entre los dos; se escribe solo con acostarme() y despertar()
+drop policy if exists "noches: leer" on public.noches;
+create policy "noches: leer" on public.noches for select using (public.es_mi_pareja(pareja_id));
+
+-- Me voy a dormir: si ya tengo una noche abierta (de las últimas 14 h) devuelve esa
+create or replace function public.acostarme() returns public.noches
+language plpgsql security definer set search_path = public as $$
+declare
+  p uuid;
+  n public.noches;
+begin
+  select id into p from public.parejas
+   where (usuario_a = auth.uid() or usuario_b = auth.uid()) and usuario_b is not null;
+  if p is null then return null; end if;
+  select * into n from public.noches
+   where usuario_id = auth.uid() and fin is null and inicio > now() - interval '14 hours'
+   order by inicio desc limit 1;
+  if found then return n; end if;
+  insert into public.noches (pareja_id, usuario_id) values (p, auth.uid()) returning * into n;
+  return n;
+end;
+$$;
+grant execute on function public.acostarme() to authenticated;
+
+-- Buenos días: cierra mi última noche abierta y guarda el sueño
+create or replace function public.despertar(p_sueno text default null) returns public.noches
+language sql security definer set search_path = public as $$
+  update public.noches set fin = now(), sueno = nullif(left(btrim(p_sueno), 280), '')
+   where id = (select id from public.noches where usuario_id = auth.uid() and fin is null order by inicio desc limit 1)
+  returning *;
+$$;
+grant execute on function public.despertar(text) to authenticated;
+
+drop trigger if exists noches_aviso on public.noches;
+create trigger noches_aviso after insert on public.noches
+  for each row execute function public.evento_desde_tabla('a_dormir');
+create or replace function public.registrar_despertar() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.fin is null and new.fin is not null then
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.usuario_id, 'despierto');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists noches_despierto on public.noches;
+create trigger noches_despierto after update on public.noches
+  for each row execute function public.registrar_despertar();
+
 -- ========== FOTOS (Supabase Storage) ==========
 -- Bucket PRIVADO. Rutas: <pareja_id>/<usuario_id>/<archivo>. Solo la pareja las ve; cada uno sube y borra las suyas.
 create or replace function public.es_mi_pareja_txt(p text) returns boolean
@@ -718,7 +782,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
-                                'momentos', 'riegos', 'vales', 'notitas', 'canciones'] loop
+                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

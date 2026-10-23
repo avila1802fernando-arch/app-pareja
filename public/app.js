@@ -1,6 +1,8 @@
 /* Nosotros — app principal */
 (function () {
   const C = window.NOSOTROS_CONFIG;
+  // Por si algo falla al conectar: la pantalla de carga nunca se queda pegada
+  setTimeout(() => quitarCarga(), 10000);
   // La sesión queda guardada en el teléfono y se renueva sola: no hay que volver a entrar
   // hasta tocar "Cerrar sesión".
   const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY, {
@@ -20,6 +22,18 @@
     Object.keys(S).forEach((k) => (S[k].hidden = k !== name));
     $("tabs").hidden = name !== "home";
     document.body.classList.toggle("con-tabs", name === "home");
+    // el Inicio quita la carga cuando ya tiene todo (ver entrar)
+    if (name !== "home") quitarCarga();
+  }
+  // Pantalla de carga: se va con un fundido, pero no antes de que los corazoncitos alcancen a juntarse.
+  // Sin $ ni variables de afuera: también se llama si la app no alcanzó a arrancar.
+  function quitarCarga() {
+    const c = document.getElementById("carga");
+    if (!c || c.classList.contains("fuera")) return Promise.resolve();
+    return new Promise((ok) => setTimeout(() => {
+      if (!c.classList.contains("fuera")) { c.classList.add("fuera"); setTimeout(() => c.remove(), 600); }
+      ok();
+    }, Math.max(0, 1400 - performance.now())));
   }
   // Zonas horarias: la mía viene de perfiles.tz (o del teléfono), la de mi pareja de su perfil
   const tzNavegador = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -226,6 +240,7 @@
     $("bienvenida").hidden = vista;
     await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
       cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones()]);
+    await quitarCarga(); ritualDelDia();
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -1062,9 +1077,13 @@
   }
 
   // Saludo según la hora de cada uno
-  function renderSaludo() {
+  function momentoDelDia() {
     const h = partes(new Date().toISOString(), miTz()).h;
-    const [s, e] = h >= 5 && h < 12 ? ["Buenos días", "☀️"] : h >= 12 && h < 19 ? ["Buenas tardes", "🌤️"] : ["Buenas noches", "🌙"];
+    return h >= 5 && h < 12 ? "manana" : h >= 12 && h < 19 ? "tarde" : "noche";
+  }
+  const SALUDOS = { manana: ["Buenos días", "☀️"], tarde: ["Buenas tardes", "🌤️"], noche: ["Buenas noches", "🌙"] };
+  function renderSaludo() {
+    const [s, e] = SALUDOS[momentoDelDia()];
     $("saludo").textContent = `${s}, ${perfil.nombre} ${e}`;
   }
   // Una frase bonita por día (la misma para los dos)
@@ -1085,10 +1104,71 @@
     "Cada «buenas noches» tuyo me abriga.", "Lo nuestro no entiende de kilómetros.",
     "Eres mi persona favorita en cualquier país.", "Prometo un abrazo por cada día de espera.",
   ];
-  function renderFrase() {
+  function fraseDeHoy() {
     const n = FRASES.length, i = ((diasEntre("2026-01-01", diaPregunta()) % n) + n) % n;
-    $("frase-dia").textContent = FRASES[i];
+    return FRASES[i];
   }
+  function renderFrase() { $("frase-dia").textContent = fraseDeHoy(); }
+
+  // La primera vez que se abre la app cada día: cielo según la hora, un corazón que se dibuja y unas palabras
+  let granDiaHoy = false; // ese día la celebración del gran día va sola
+  function ritualDelDia() {
+    const r = $("ritual"), hoy = diaHoy();
+    if (!r.hidden || granDiaHoy || !perfil || !otro) return;
+    let visto = null; try { visto = localStorage.getItem("ritual-dia"); } catch (e) {}
+    if (visto === hoy) return;
+    try { localStorage.setItem("ritual-dia", hoy); } catch (e) {}
+
+    const momento = momentoDelDia(), [s, e] = SALUDOS[momento];
+    let fecha = "";
+    try { fecha = new Date().toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long", timeZone: miTz() }); } catch (err) {}
+    $("ritual-fecha").textContent = fecha;
+    $("ritual-saludo").textContent = `${s}, ${perfil.nombre} ${e}`;
+    // cuánto llevamos (o el texto del día especial, si hoy es 8)
+    const j = $("ritual-juntos"), l = textoDesde(ESPECIALES[0], pareja.desde);
+    j.hidden = !l;
+    if (l && l.hoy) j.textContent = l.texto;
+    else if (l) { const n = diasEntre(pareja.desde, hoy); j.innerHTML = `Llevamos <b>${n.toLocaleString("es")}</b> ${n === 1 ? "día" : "días"} de novios 💞`; }
+    // cuánto falta para vernos
+    const f = $("ritual-falta"), dias = proximo ? diasEntre(hoy, claveDia(proximo.inicio, miTz())) : null;
+    f.hidden = dias === null;
+    if (dias > 1) f.innerHTML = `y faltan <b>${dias.toLocaleString("es")}</b> días para vernos ✈️`;
+    else if (dias === 1) f.textContent = "¡y mañana por fin nos vemos! 😭💞";
+    else if (dias !== null) f.textContent = "y hoy estamos juntos 💞";
+    $("ritual-frase").textContent = fraseDeHoy();
+    $("ritual-firma").textContent = `${otro.nombre} y tú, un día más cerca 💗`;
+
+    // estrellas de noche, lucecitas de día
+    const cielo = $("ritual-estrellas"); cielo.innerHTML = "";
+    for (let i = 0; i < (momento === "noche" ? 46 : 18); i++) {
+      const st = document.createElement("i"), t = momento === "noche" ? 1.5 + Math.random() * 2 : 4 + Math.random() * 10;
+      st.style.left = Math.random() * 100 + "%";
+      st.style.top = (momento === "noche" ? Math.random() * 70 : 40 + Math.random() * 60) + "%";
+      st.style.width = st.style.height = t + "px";
+      st.style.animationDelay = -Math.random() * 7 + "s";
+      if (momento !== "noche") st.style.filter = `blur(${t / 4}px)`;
+      cielo.append(st);
+    }
+    // cada línea entra después de la anterior, mientras el corazón se termina de dibujar
+    let d = 1.3;
+    r.querySelectorAll(".ritual-cont > :not(.ritual-corazon)").forEach((el) => {
+      if (el.hidden) return;
+      el.style.animationDelay = d + "s"; d += el.id === "ritual-frase" ? 0.7 : 0.45;
+    });
+    r.className = "ritual " + momento;
+    r.hidden = false; document.body.classList.add("sin-scroll");
+    setTimeout(() => { if (!r.hidden) $("ritual-entrar").focus({ preventScroll: true }); }, d * 1000);
+  }
+  function cerrarRitual() {
+    const r = $("ritual"); if (r.hidden || r.classList.contains("fuera")) return;
+    r.classList.add("fuera"); document.body.classList.remove("sin-scroll");
+    setTimeout(() => { r.hidden = true; r.classList.remove("fuera"); }, 600);
+    lluvia("💗", 20);
+  }
+  $("ritual-entrar").addEventListener("click", cerrarRitual);
+  $("ritual").addEventListener("keydown", (e) => { if (e.key === "Escape") cerrarRitual(); });
+  // si la app quedó abierta desde ayer, al volver a ella también saluda
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !S.home.hidden) ritualDelDia(); });
   // Celebrar algo una sola vez en este teléfono (lluvia de emojis)
   function celebrarUnaVez(clave, emoji) {
     let ya = false; try { ya = localStorage.getItem(clave) === "1"; localStorage.setItem(clave, "1"); } catch (e) {}
@@ -1098,6 +1178,7 @@
   // El gran día: cuando por fin se ven, una celebración a pantalla completa (una vez)
   function granDia() {
     if (!celebrarUnaVez("gran-dia-" + proximo.inicio.slice(0, 10), "💞")) return;
+    granDiaHoy = true;
     $("gran-texto").textContent = /primera vez/i.test(proximo.titulo)
       ? "Hoy se ven por primera vez. Abrácense muy fuerte 🤗" : proximo.titulo;
     setTimeout(() => $("dlg-gran-dia").showModal(), 900);
@@ -1276,6 +1357,7 @@
       $("resp-suya").textContent = suya ? suya.texto : "Todavía no responde. Te avisamos cuando lo haga 💌";
       $("resp-suya").classList.toggle("espera-resp", !suya);
     }
+    respHoy.cargada = true;
     actualizarPuntos();
   }
   $("f-respuesta").addEventListener("submit", async (e) => {
@@ -1495,6 +1577,37 @@
     const b = document.querySelector('#tabs button[data-tab="juntos"]');
     b.classList.toggle("punto", hay);
     b.setAttribute("aria-label", hay ? "Juntos: hay algo nuevo para ti" : "Juntos");
+    renderHoyToca();
+  }
+
+  // Tarjeta "Hoy te toca" en el Inicio: lo pendiente, y un toque lleva directo a cada cosa
+  function irAJuntos(id, enfocar) {
+    irA("juntos");
+    setTimeout(() => {
+      const el = $(id); if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      animar(el, "pop");
+      if (enfocar) $(enfocar).focus({ preventScroll: true });
+    }, 120);
+  }
+  function renderHoyToca() {
+    const items = [];
+    const nueva = cartas.find((c) => c.de_usuario !== user.id && !c.leida_en);
+    if (nueva) items.push(["💌", `Leer la carta de ${otro.nombre}`, () => leerCarta(nueva)]);
+    if (respHoy.cargada && !respHoy.mia) items.push(["💬",
+      respHoy.suyaRespondio ? `Responder la pregunta: ${otro.nombre} ya respondió` : "Responder la pregunta del día",
+      () => irAJuntos("f-respuesta", "resp-texto")]);
+    if (pendientes.girasol) items.push(["🌻", `Regar el girasol: ${otro.nombre} ya lo regó`, () => irAJuntos("btn-regar")]);
+    if (pendientes.frasco) items.push(["🫙", "Sacar una razón del frasco", () => irAJuntos("btn-sacar")]);
+    const ul = $("hoy-toca-list"); ul.innerHTML = "";
+    items.forEach(([ico, texto, alTocar]) => {
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; b.innerHTML = `<b aria-hidden="true">${ico}</b><span></span><i aria-hidden="true">›</i>`;
+      b.querySelector("span").textContent = texto;
+      b.addEventListener("click", alTocar);
+      li.append(b); ul.append(li);
+    });
+    $("hoy-toca").hidden = !items.length;
   }
 
   // ---------- fotos (bucket privado de Storage) ----------

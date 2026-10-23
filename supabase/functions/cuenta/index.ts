@@ -6,11 +6,15 @@
 // Se publica con --no-verify-jwt porque la llama alguien que todavía no tiene sesión.
 // SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY ya vienen inyectados por Supabase.
 // MAX_CUENTAS (opcional, por defecto 6): tope de cuentas, para que nadie llene la base.
+// USUARIOS_PERMITIDOS (opcional): lista separada por comas, p. ej. "fernando,martina".
+//   Si existe, solo esos usuarios se pueden crear: la app queda solo para ustedes dos.
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const DOMINIO = "nosotros.invalid"; // el mismo que en public/app.js
 const MAX_CUENTAS = Number(Deno.env.get("MAX_CUENTAS") ?? 6);
+const PERMITIDOS = (Deno.env.get("USUARIOS_PERMITIDOS") ?? "")
+  .split(",").map((u) => u.trim().toLowerCase()).filter(Boolean);
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +39,9 @@ Deno.serve(async (req) => {
   }
   if (clave.length < 8 || clave.length > 72) {
     return responder({ error: "La contraseña debe tener entre 8 y 72 caracteres." }, 400);
+  }
+  if (PERMITIDOS.length && !PERMITIDOS.includes(usuario)) {
+    return responder({ error: "Esta app es privada y ese usuario no está permitido 💗" }, 403);
   }
 
   // Tope de cuentas: esta app es para una pareja (y alguna de prueba)

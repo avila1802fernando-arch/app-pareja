@@ -134,6 +134,8 @@ npx supabase functions deploy recordatorios --no-verify-jwt
 
 `cuenta` es la que crea las cuentas desde la app: sin ella, "Crear una cuenta nueva" no funciona.
 
+**App solo para ustedes dos:** agrega al `.env` la línea `USUARIOS_PERMITIDOS=fernando,martina` (y vuelve a correr `secrets set`). Así la función `cuenta` solo deja crear esos dos usuarios y rechaza a cualquier otro.
+
 Al terminar te muestra las URLs de las funciones, parecidas a
 `https://TU_REF.supabase.co/functions/v1/notificar` y `.../recordatorios`.
 

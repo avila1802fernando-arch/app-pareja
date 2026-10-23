@@ -77,6 +77,7 @@
         <div>
           <p class="eyebrow">Nuestro rincón</p>
           <h1 id="home-title">Hola.</h1>
+          <p class="presente" id="presente" hidden></p>
         </div>
       </div>
       <div class="relojes" aria-label="La hora de cada uno">
@@ -86,7 +87,8 @@
       </div>
       <p class="small-note reloj-nota" id="reloj-nota" hidden></p>
       <p class="distancia" id="distancia" hidden></p>
-      <div class="heart" id="heart">
+      <p class="luna" id="luna" hidden></p>
+      <div class="heart" id="heart" role="button" tabindex="0" aria-label="Mandar besitos. Mantén presionado para mandar tu latido">
         <div class="ring"></div>
         <svg viewBox="0 0 100 100" aria-hidden="true">
           <defs>
@@ -100,6 +102,8 @@
         </svg>
         <strong class="heart-num" id="heart-num" hidden></strong>
       </div>
+      <p class="latido-juntos" id="latido-juntos" hidden>💞 Sus corazones laten juntos</p>
+      <p class="small-note heart-tip" id="heart-tip">Toca el corazón para mandarle besitos · mantenlo para mandar tu latido</p>
       <div class="cuenta" id="cuenta" hidden>
         <p class="mano cuenta-txt" id="cuenta-txt"></p>
         <p class="small-note" id="cuenta-ev"></p>
@@ -114,6 +118,16 @@
       <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo son novios? Agrégalo 💞</button>
      </div>
      <div class="col">
+      <div class="notita" id="notita-suya" hidden>
+        <p class="notita-de" id="notita-de"></p>
+        <p class="notita-texto" id="notita-texto"></p>
+        <button type="button" id="notita-guardar">💗 Guardar en mi corazón</button>
+      </div>
+      <div class="cancion" id="cancion-suya" hidden>
+        <span class="cancion-disco" aria-hidden="true">🎶</span>
+        <span class="cancion-info"><small id="cancion-de"></small><strong id="cancion-titulo"></strong><em id="cancion-nota"></em></span>
+        <a class="cancion-play" id="cancion-play" target="_blank" rel="noopener noreferrer" hidden>▶ Escuchar</a>
+      </div>
       <div class="status">
         <strong id="status-title">Conectando…</strong>
         <span class="muted" id="status-when"></span>
@@ -138,9 +152,14 @@
           <button type="button" data-senal="buenos_dias"><b>☀️</b>Buen día</button>
           <button type="button" data-senal="buenas_noches"><b>🌙</b>Buenas noches</button>
         </div>
-        <button type="button" class="ghost animo-mio" id="btn-animo">¿Cómo te sientes hoy?</button>
-        <label class="boton-archivo" for="momento-input">📸 Compartir un momento</label>
+        <div class="senales acciones" aria-label="Compartir algo">
+          <label for="momento-input" class="accion"><b>📸</b>Momento</label>
+          <button type="button" id="btn-dibujo"><b>✏️</b>Dibujo</button>
+          <button type="button" id="btn-notita"><b>📝</b>Notita</button>
+          <button type="button" id="btn-cancion"><b>🎶</b>Canción</button>
+        </div>
         <input type="file" id="momento-input" accept="image/*" class="sr">
+        <button type="button" class="ghost animo-mio" id="btn-animo">¿Cómo te sientes hoy?</button>
         <button type="button" class="ghost" id="push-hint" hidden>Activar notificaciones en este teléfono</button>
       </div>
       <div class="log">
@@ -179,6 +198,16 @@
       <div class="log">
         <h2>Nuestros momentos</h2>
         <div class="album" id="album"></div>
+      </div>
+      <div class="log">
+        <h2>Nuestro amor en números</h2>
+        <div class="numeros" id="numeros"></div>
+        <p class="quien-extrana" id="quien-extrana"></p>
+        <p class="small-note" id="racha-noches"></p>
+      </div>
+      <div class="log">
+        <h2>Nuestra playlist</h2>
+        <ul class="playlist" id="playlist"></ul>
       </div>
      </div>
      <div class="col">
@@ -464,6 +493,59 @@
     <p class="eyebrow" id="razon-de"></p>
     <p class="papelito" id="razon-leida"></p>
     <button type="button" id="razon-cerrar">Guardar en el corazón 💗</button>
+  </div>
+</dialog>
+
+<!-- Dejar una notita -->
+<dialog id="dlg-notita" class="dlg">
+  <form id="f-notita" class="stack">
+    <h2 id="notita-para">Una notita</h2>
+    <label for="notita-in" class="sr">Tu notita</label>
+    <textarea id="notita-in" class="notita-escribir" maxlength="120" rows="3" required placeholder="Que tengas un lindo día, te pienso 💗"></textarea>
+    <div class="notita-colores" id="notita-colores" role="radiogroup" aria-label="Color del papel">
+      <button type="button" data-color="amarillo" aria-label="Amarillo"></button>
+      <button type="button" data-color="rosa" aria-label="Rosa"></button>
+      <button type="button" data-color="celeste" aria-label="Celeste"></button>
+      <button type="button" data-color="lila" aria-label="Lila"></button>
+    </div>
+    <p class="small-note" id="notita-ayuda"></p>
+    <button type="submit">Pegar en su Inicio 📝</button>
+    <button type="button" class="link" id="notita-cancelar">Cancelar</button>
+  </form>
+</dialog>
+
+<!-- Dedicar una canción -->
+<dialog id="dlg-cancion" class="dlg">
+  <form id="f-cancion" class="stack">
+    <h2 id="cancion-para">Una canción para ti</h2>
+    <label for="cancion-titulo-in">Canción</label>
+    <input id="cancion-titulo-in" maxlength="120" required placeholder="Nombre de la canción y artista">
+    <label for="cancion-url-in">Enlace (YouTube, Spotify…), opcional</label>
+    <input id="cancion-url-in" type="url" maxlength="400" inputmode="url" placeholder="https://…">
+    <label for="cancion-nota-in">Dedicatoria (opcional)</label>
+    <input id="cancion-nota-in" maxlength="140" placeholder="Me acordé de ti apenas sonó">
+    <button type="submit">Dedicar 🎶</button>
+    <button type="button" class="link" id="cancion-cancelar">Cancelar</button>
+  </form>
+</dialog>
+
+<!-- Dibujar algo -->
+<dialog id="dlg-dibujo" class="dlg">
+  <div class="stack">
+    <h2 id="dibujo-para">Un dibujo</h2>
+    <div class="lienzo-dibujo"><canvas id="dibujo-canvas" width="720" height="720" aria-label="Lienzo para dibujar con el dedo"></canvas></div>
+    <div class="dibujo-herr">
+      <div class="dibujo-colores" id="dibujo-colores" role="radiogroup" aria-label="Color"></div>
+      <div class="dibujo-grosores" id="dibujo-grosores" role="radiogroup" aria-label="Grosor"></div>
+    </div>
+    <div class="dibujo-botones">
+      <button type="button" class="ghost" id="dibujo-deshacer">↶ Deshacer</button>
+      <button type="button" class="ghost" id="dibujo-borrar">Borrar todo</button>
+    </div>
+    <label for="dibujo-texto" class="sr">Texto (opcional)</label>
+    <input id="dibujo-texto" maxlength="140" placeholder="Un texto para acompañarlo (opcional)">
+    <button type="button" id="dibujo-enviar">Enviar dibujo ✏️</button>
+    <button type="button" class="link" id="dibujo-cancelar">Cancelar</button>
   </div>
 </dialog>
 

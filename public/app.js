@@ -189,9 +189,9 @@
     // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
     clearInterval(relojTimer); renderRelojes();
     relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
-    renderAvatares(); renderDistancia();
+    renderAvatares(); renderDistancia(); conectarVivo();
     await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
-      cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales()]);
+      cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones()]);
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -206,6 +206,8 @@
           if (ev.tipo === "riego") cargarGirasol();
           if (ev.tipo === "vale" || ev.tipo === "canje") cargarVales();
           if (ev.tipo === "razon") cargarFrasco();
+          if (ev.tipo === "notita") cargarNotitas();
+          if (ev.tipo === "cancion") cargarCanciones();
         }
         render();
       }
@@ -246,6 +248,14 @@
         const c = payload.new, antes = cartas.find((x) => x.id === c.id);
         if (c.de_usuario === user.id && c.leida_en && antes && !antes.leida_en) toast(`${otro.nombre} abrió tu carta 💌`);
         cargarCartas();
+      }
+    ).on("postgres_changes",
+      // notitas: me entero cuando mi pareja guarda la que le dejé
+      { event: "UPDATE", schema: "public", table: "notitas", filter: `pareja_id=eq.${pareja.id}` },
+      (payload) => {
+        const n = payload.new;
+        if (n.de_usuario === user.id && n.despegada_en) toast(`${otro.nombre} guardó tu notita en su corazón 💛`);
+        cargarNotitas();
       }
     ).on("postgres_changes",
       // lista compartida (sin filtro para recibir también lo que se quita)
@@ -300,6 +310,9 @@
     vale: (n) => `${n} te regaló un vale 🎟️`,
     canje: (n) => `${n} canjeó tu vale 🎟️`,
     razon: (n) => `${n} echó una razón al frasco 🫙`,
+    latido: (n) => `${n} te mandó su latido 💓`,
+    notita: (n) => `${n} te dejó una notita 📝`,
+    cancion: (n) => `${n} te dedicó una canción 🎶`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -318,6 +331,9 @@
     vale: (n) => `${n} regaló un vale 🎟️`,
     canje: (n) => `${n} canjeó un vale 🎟️`,
     razon: (n) => `${n} echó una razón al frasco 🫙`,
+    latido: (n) => `${n} mandó su latido 💓`,
+    notita: (n) => `${n} dejó una notita 📝`,
+    cancion: (n) => `${n} dedicó una canción 🎶`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -330,6 +346,9 @@
     carta: { emoji: "💌", vibra: [100, 50, 100, 50, 300] },
     vale: { emoji: "🎟️", vibra: [80, 60, 80, 60, 200] },
     razon: { emoji: "💗", vibra: [60, 40, 60] },
+    latido: { emoji: "💓", vibra: [90, 120, 90, 600, 90, 120, 90, 600] },
+    notita: { emoji: "📝", vibra: [60, 60, 60] },
+    cancion: { emoji: "🎶", vibra: [80, 80, 80] },
   };
   function lluvia(emoji, n = 16) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -933,6 +952,7 @@
     $("reloj-dif").textContent = dif === 0 ? "misma hora" : dif > 0 ? `+${dif} h` : `−${-dif} h`;
     $("reloj-nota").hidden = hs >= 7;
     $("reloj-nota").textContent = `Shh… para ${otro.nombre} es de madrugada 😴. Tus señales le esperan al despertar.`;
+    renderLuna();
   }
 
   // Años, meses y días entre dos claves "YYYY-MM-DD"
@@ -1057,11 +1077,8 @@
   const respHoy = { mia: null, suya: null, suyaRespondio: false };
   let editandoResp = false;
   // La pregunta cambia a medianoche de quien vive más al oeste: así a nadie le cambia antes de dormir
-  function diaPregunta() {
-    const ahora = new Date();
-    const tz = offsetMin(miTz(), ahora) <= offsetMin(suTz(), ahora) ? miTz() : suTz();
-    return claveDia(ahora.toISOString(), tz);
-  }
+  const tzPareja = () => { const a = new Date(); return offsetMin(miTz(), a) <= offsetMin(suTz(), a) ? miTz() : suTz(); };
+  const diaPregunta = () => claveDia(new Date().toISOString(), tzPareja());
   const preguntaDe = (dia) => {
     const n = PREGUNTAS.length;
     return PREGUNTAS[((diasEntre("2026-01-01", dia) % n) + n) % n];
@@ -1146,7 +1163,7 @@
   }
   AL_ABRIR.juntos = () => {
     cargarPregunta(); cargarHistorial(); cargarCartas(); cargarDeseos();
-    cargarGirasol(); cargarFrasco(); cargarVales(); cargarMomentos();
+    cargarGirasol(); cargarFrasco(); cargarVales(); cargarMomentos(); cargarCanciones(); cargarNumeros();
   };
 
   // ---------- lista "Cuando nos veamos" ----------
@@ -1720,6 +1737,345 @@
       perfil = { ...perfil, lat, lon }; renderDistancia(); toast("Listo 📍");
     }, () => toast("Sin permiso para la ubicación"), { maximumAge: 3600000, timeout: 15000 });
   });
+
+  // ---------- corazón vivo: besitos, latido y presencia ----------
+  // Canal en tiempo real que no guarda nada: quién está en la app, quién toca su corazón y los besitos al vuelo.
+  const PATRON_LATIDO = [90, 120, 90, 600];
+  const vibrar = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
+  let canalVivo = null, otroAqui = false, otroTocando = false, yoTocando = false, vibraLatido = null;
+  function conectarVivo() {
+    if (canalVivo) sb.removeChannel(canalVivo);
+    canalVivo = sb.channel(`vivo-${pareja.id}`, { config: { presence: { key: user.id }, broadcast: { self: false } } });
+    canalVivo
+      .on("presence", { event: "sync" }, () => {
+        const estado = canalVivo.presenceState()[otro.id] || [];
+        otroAqui = estado.length > 0;
+        otroTocando = estado.some((p) => p.tocando);
+        renderVivo();
+      })
+      .on("broadcast", { event: "beso" }, ({ payload }) => {
+        const n = (payload && payload.n) || 1;
+        if (!$("tab-inicio").hidden) besosVoladores(n, false); else lluvia("💋", Math.min(10, 3 + n));
+        toast(n > 1 ? `${otro.nombre} te mandó ${n} besitos 😘` : `${otro.nombre} te mandó un besito 😘`);
+        vibrar([40, 40, 40]);
+      })
+      .subscribe((s) => { if (s === "SUBSCRIBED" && !document.hidden) canalVivo.track({ tocando: false }); });
+  }
+  // Si la app pasa a segundo plano, deja de figurar como "en la app"
+  document.addEventListener("visibilitychange", () => {
+    if (!canalVivo) return;
+    if (document.hidden) { yoTocando = false; canalVivo.untrack(); } else canalVivo.track({ tocando: false });
+  });
+  function renderVivo() {
+    $("presente").hidden = !otroAqui;
+    $("presente").textContent = otroTocando ? `${otro.nombre} está tocando su corazón 💓` : `${otro.nombre} está en la app ahora`;
+    document.querySelectorAll('[data-av="suyo"]').forEach((el) => el.classList.toggle("aqui", otroAqui));
+    const h = $("heart");
+    h.classList.toggle("suyo", otroTocando);
+    h.classList.toggle("latiendo", otroTocando || yoTocando);
+    const juntos = otroTocando && yoTocando;
+    if (juntos && $("latido-juntos").hidden) { lluvia("💞", 18); vibrar([200, 100, 200, 100, 600]); }
+    $("latido-juntos").hidden = !juntos;
+    // mientras tu pareja toca su corazón, el tuyo late y vibra con el suyo
+    clearInterval(vibraLatido);
+    if (otroTocando) { vibrar(PATRON_LATIDO); vibraLatido = setInterval(() => vibrar(PATRON_LATIDO), 1200); }
+  }
+  function besosVoladores(n = 1, mio = false) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = $("heart").getBoundingClientRect(); if (!r.width) return;
+    for (let i = 0; i < Math.min(n, 12); i++) {
+      const s = document.createElement("span"); s.className = "beso-volador";
+      s.textContent = mio ? "💗" : ["💋", "😘", "💗", "💕"][i % 4];
+      s.style.left = r.left + r.width / 2 + "px"; s.style.top = r.top + r.height / 2 + "px";
+      s.style.setProperty("--x", Math.round(Math.random() * 140 - 70) + "px");
+      s.style.setProperty("--r", Math.round(Math.random() * 40 - 20) + "deg");
+      s.style.animationDelay = i * 0.12 + "s";
+      document.body.append(s); setTimeout(() => s.remove(), 2000 + i * 120);
+    }
+  }
+  // Tocar el corazón = besito. Los toques seguidos se juntan en un solo envío.
+  let besosPend = 0, besosTimer = null;
+  function mandarBeso() {
+    besosVoladores(1, true); vibrar(15); besosPend++;
+    clearTimeout(besosTimer);
+    besosTimer = setTimeout(async () => {
+      const n = besosPend; besosPend = 0;
+      if (otroAqui && canalVivo) { canalVivo.send({ type: "broadcast", event: "beso", payload: { n } }); return; }
+      // si no está en la app, le llega un "te manda un beso" (como mucho uno cada 10 minutos)
+      if (pocoDesde("ultimo-beso", 10)) { toast(`Besitos enviados 😘`); return; }
+      await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "beso" });
+      toast(`${otro.nombre} no está en la app: le llegó tu beso como aviso 😘`); render();
+    }, 700);
+  }
+  // ¿Pasaron menos de `min` minutos desde la última vez? (y anota la vez de ahora si no)
+  function pocoDesde(clave, min) {
+    let antes = 0; try { antes = +localStorage.getItem(clave) || 0; } catch (e) {}
+    if (Date.now() - antes < min * 60000) return true;
+    try { localStorage.setItem(clave, String(Date.now())); } catch (e) {}
+    return false;
+  }
+  // Mantener el corazón = tu latido
+  let toque = null;
+  const corazon = $("heart");
+  corazon.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    toque = { t: Date.now(), largo: false, timer: setTimeout(empezarLatido, 450) };
+  });
+  function empezarLatido() {
+    if (!toque) return;
+    toque.largo = true; yoTocando = true; vibrar(60); renderVivo();
+    if (canalVivo) canalVivo.track({ tocando: true });
+    $("heart-tip").textContent = otroAqui ? `${otro.nombre} siente tu latido ahora mismo 💓` : "Mandando tu latido… 💓";
+  }
+  async function soltarCorazon(cancelado) {
+    if (!toque) return;
+    const t = toque; toque = null; clearTimeout(t.timer);
+    if (!t.largo) { if (!cancelado) mandarBeso(); return; }
+    yoTocando = false; renderVivo();
+    $("heart-tip").textContent = "Toca el corazón para mandarle besitos · mantenlo para mandar tu latido";
+    if (canalVivo) canalVivo.track({ tocando: false });
+    // si no estaba en la app, el latido le llega como notificación (como mucho uno cada 10 minutos)
+    if (!cancelado && !otroAqui && Date.now() - t.t >= 1500) {
+      if (pocoDesde("ultimo-latido", 10)) { toast("Tu latido ya va en camino 💓"); return; }
+      const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "latido" });
+      toast(error ? "No se pudo mandar" : `Le mandaste tu latido a ${otro.nombre} 💓`); render();
+    }
+  }
+  corazon.addEventListener("pointerup", () => soltarCorazon(false));
+  corazon.addEventListener("pointerleave", () => soltarCorazon(false));
+  corazon.addEventListener("pointercancel", () => soltarCorazon(true));
+  corazon.addEventListener("contextmenu", (e) => e.preventDefault());
+  corazon.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); mandarBeso(); } });
+
+  // ---------- notita en la nevera ----------
+  let notitaColor = "amarillo", notitaSuya = null, misNotitas = 0;
+  async function cargarNotitas() {
+    const { data } = await sb.from("notitas").select("*").eq("pareja_id", pareja.id).is("despegada_en", null).order("creado_en", { ascending: false });
+    const suyas = (data || []).filter((n) => n.de_usuario === otro.id);
+    misNotitas = (data || []).filter((n) => n.de_usuario === user.id).length;
+    notitaSuya = suyas[0] || null;
+    const box = $("notita-suya"); box.hidden = !notitaSuya;
+    if (notitaSuya) {
+      box.className = "notita " + notitaSuya.color;
+      $("notita-de").textContent = `De ${otro.nombre} · ${ago(notitaSuya.creado_en)}` + (suyas.length > 1 ? ` · ${suyas.length - 1} más debajo` : "");
+      $("notita-texto").textContent = notitaSuya.texto;
+    }
+  }
+  $("notita-guardar").addEventListener("click", async () => {
+    if (!notitaSuya) return;
+    const { error } = await sb.rpc("despegar_notita", { p_id: notitaSuya.id });
+    if (error) { toast("No se pudo guardar"); return; }
+    lluvia("💛", 12); toast("Guardada en tu corazón 💗"); cargarNotitas();
+  });
+  function pintarColoresNotita() {
+    $("notita-colores").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.color === notitaColor)));
+    $("notita-in").style.background = getComputedStyle($("notita-colores").querySelector(`[data-color="${notitaColor}"]`)).backgroundColor;
+  }
+  $("notita-colores").querySelectorAll("button").forEach((b) => {
+    b.setAttribute("role", "radio");
+    b.addEventListener("click", () => { notitaColor = b.dataset.color; pintarColoresNotita(); });
+  });
+  $("btn-notita").addEventListener("click", () => {
+    $("notita-para").textContent = `Una notita para ${otro.nombre}`;
+    $("notita-in").value = "";
+    $("notita-ayuda").textContent = misNotitas
+      ? `Ya tiene ${plural(misNotitas, "notita tuya pegada", "notitas tuyas pegadas")} sin despegar 💛`
+      : "Le quedará pegada en su Inicio hasta que la guarde.";
+    pintarColoresNotita(); $("dlg-notita").showModal();
+  });
+  $("notita-cancelar").addEventListener("click", () => $("dlg-notita").close());
+  $("f-notita").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const texto = $("notita-in").value.trim(); if (!texto) return;
+    const { error } = await sb.from("notitas").insert({ pareja_id: pareja.id, de_usuario: user.id, texto, color: notitaColor });
+    if (error) { toast("No se pudo pegar"); return; }
+    $("dlg-notita").close(); lluvia("📝", 8); toast(`Notita pegada en el Inicio de ${otro.nombre} 📝`); cargarNotitas();
+  });
+
+  // ---------- una canción para ti ----------
+  let canciones = [];
+  const enlaceSeguro = (url) => { try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.href : null; } catch (e) { return null; } };
+  async function cargarCanciones() {
+    const { data } = await sb.from("canciones").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(60);
+    canciones = data || []; renderCanciones();
+  }
+  function renderCanciones() {
+    // en Inicio, la última que te dedicó tu pareja (durante una semana)
+    const suya = canciones.find((c) => c.de_usuario === otro.id);
+    const mostrar = suya && Date.now() - new Date(suya.creado_en).getTime() < 7 * 86400000;
+    $("cancion-suya").hidden = !mostrar;
+    if (mostrar) {
+      $("cancion-de").textContent = `${otro.nombre} te dedicó · ${ago(suya.creado_en)}`;
+      $("cancion-titulo").textContent = suya.titulo;
+      $("cancion-nota").textContent = suya.nota ? `“${suya.nota}”` : "";
+      const url = enlaceSeguro(suya.url);
+      $("cancion-play").hidden = !url; if (url) $("cancion-play").href = url;
+    }
+    // en Juntos, la playlist de los dos
+    const ul = $("playlist"); ul.innerHTML = "";
+    if (!canciones.length) {
+      const li = document.createElement("li"); li.className = "muted";
+      li.textContent = "Dedíquense canciones desde Inicio (🎶) y aquí se arma su playlist."; ul.append(li); return;
+    }
+    canciones.forEach((c) => {
+      const li = document.createElement("li");
+      const i = document.createElement("span"); i.textContent = "🎶"; i.setAttribute("aria-hidden", "true");
+      const t = document.createElement("span"); t.className = "p-info";
+      const a = document.createElement("strong"), b = document.createElement("small");
+      a.textContent = c.titulo;
+      b.textContent = `${c.de_usuario === user.id ? "Tú" : otro.nombre} · ${fechaCorta(c.creado_en, miTz())}${c.nota ? " · " + c.nota : ""}`;
+      t.append(a, b); li.append(i, t);
+      const url = enlaceSeguro(c.url);
+      if (url) { const l = document.createElement("a"); l.href = url; l.target = "_blank"; l.rel = "noopener noreferrer"; l.textContent = "▶"; l.setAttribute("aria-label", `Escuchar ${c.titulo}`); li.append(l); }
+      ul.append(li);
+    });
+  }
+  $("btn-cancion").addEventListener("click", () => {
+    $("cancion-para").textContent = `Una canción para ${otro.nombre}`;
+    ["cancion-titulo-in", "cancion-url-in", "cancion-nota-in"].forEach((id) => ($(id).value = ""));
+    $("dlg-cancion").showModal();
+  });
+  $("cancion-cancelar").addEventListener("click", () => $("dlg-cancion").close());
+  $("f-cancion").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const titulo = $("cancion-titulo-in").value.trim(); if (!titulo) return;
+    const crudo = $("cancion-url-in").value.trim(), url = crudo ? enlaceSeguro(crudo) : null;
+    if (crudo && !url) { toast("Ese enlace no parece válido (debe empezar con https://)"); return; }
+    const nota = $("cancion-nota-in").value.trim() || null;
+    const { error } = await sb.from("canciones").insert({ pareja_id: pareja.id, de_usuario: user.id, titulo, url, nota });
+    if (error) { toast("No se pudo dedicar"); return; }
+    $("dlg-cancion").close(); lluvia("🎶", 10); toast(`Canción dedicada a ${otro.nombre} 🎶`); cargarCanciones();
+  });
+
+  // ---------- dibujos con el dedo ----------
+  // Los trazos terminados se guardan en un lienzo aparte; así dibujar no se pone lento.
+  const COLORES_DIBUJO = ["#e0457b", "#c9325c", "#ff9ab8", "#f7b500", "#3f9b4a", "#3b82f6", "#7c3aed", "#3a2230", "#ffffff"];
+  const GROSORES = [4, 9, 16, 28];
+  const lienzoD = $("dibujo-canvas"), ctxD = lienzoD.getContext("2d");
+  const baseD = document.createElement("canvas"); baseD.width = lienzoD.width; baseD.height = lienzoD.height;
+  const ctxB = baseD.getContext("2d");
+  const dib = { color: COLORES_DIBUJO[0], grosor: 9, trazos: [], actual: null };
+  function trazar(ctx, t) {
+    const p = t.puntos;
+    ctx.strokeStyle = t.color; ctx.lineWidth = t.grosor; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
+    if (p.length === 1) ctx.lineTo(p[0].x + 0.1, p[0].y);
+    for (let i = 1; i < p.length - 1; i++) ctx.quadraticCurveTo(p[i].x, p[i].y, (p[i].x + p[i + 1].x) / 2, (p[i].y + p[i + 1].y) / 2);
+    if (p.length > 1) ctx.lineTo(p[p.length - 1].x, p[p.length - 1].y);
+    ctx.stroke();
+  }
+  function rehacerBase() {
+    ctxB.fillStyle = "#fffafc"; ctxB.fillRect(0, 0, baseD.width, baseD.height);
+    dib.trazos.forEach((t) => trazar(ctxB, t));
+  }
+  function pintarDibujo() { ctxD.drawImage(baseD, 0, 0); if (dib.actual) trazar(ctxD, dib.actual); }
+  const puntoD = (e) => { const r = lienzoD.getBoundingClientRect(), k = lienzoD.width / r.width; return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k, k }; };
+  lienzoD.addEventListener("pointerdown", (e) => {
+    lienzoD.setPointerCapture(e.pointerId);
+    const p = puntoD(e);
+    dib.actual = { color: dib.color, grosor: dib.grosor * p.k, puntos: [{ x: p.x, y: p.y }] }; pintarDibujo();
+  });
+  lienzoD.addEventListener("pointermove", (e) => {
+    if (!dib.actual) return;
+    const p = puntoD(e); dib.actual.puntos.push({ x: p.x, y: p.y }); pintarDibujo();
+  });
+  ["pointerup", "pointercancel"].forEach((tipo) => lienzoD.addEventListener(tipo, () => {
+    if (!dib.actual) return;
+    dib.trazos.push(dib.actual); trazar(ctxB, dib.actual); dib.actual = null; pintarDibujo();
+  }));
+  function pintarHerramientas() {
+    const c = $("dibujo-colores"), g = $("dibujo-grosores"); c.innerHTML = ""; g.innerHTML = "";
+    COLORES_DIBUJO.forEach((col) => {
+      const b = document.createElement("button"); b.type = "button"; b.style.background = col;
+      b.setAttribute("role", "radio"); b.setAttribute("aria-label", `Color ${col}`); b.setAttribute("aria-checked", String(col === dib.color));
+      b.addEventListener("click", () => { dib.color = col; pintarHerramientas(); }); c.append(b);
+    });
+    GROSORES.forEach((gr) => {
+      const b = document.createElement("button"); b.type = "button";
+      b.setAttribute("role", "radio"); b.setAttribute("aria-label", `Grosor ${gr}`); b.setAttribute("aria-checked", String(gr === dib.grosor));
+      const i = document.createElement("i"); i.style.width = i.style.height = Math.min(24, gr) + "px"; b.append(i);
+      b.addEventListener("click", () => { dib.grosor = gr; pintarHerramientas(); }); g.append(b);
+    });
+  }
+  $("btn-dibujo").addEventListener("click", () => {
+    $("dibujo-para").textContent = `Un dibujo para ${otro.nombre}`;
+    $("dibujo-texto").value = ""; dib.trazos = []; dib.actual = null; rehacerBase(); pintarDibujo();
+    pintarHerramientas(); $("dlg-dibujo").showModal();
+  });
+  $("dibujo-deshacer").addEventListener("click", () => { dib.trazos.pop(); rehacerBase(); pintarDibujo(); });
+  $("dibujo-borrar").addEventListener("click", () => {
+    if (dib.trazos.length && !confirm("¿Borrar todo el dibujo?")) return;
+    dib.trazos = []; rehacerBase(); pintarDibujo();
+  });
+  $("dibujo-cancelar").addEventListener("click", () => $("dlg-dibujo").close());
+  $("dibujo-enviar").addEventListener("click", async () => {
+    if (!dib.trazos.length) { toast("Dibuja algo primero 😊"); return; }
+    const b = $("dibujo-enviar"); b.disabled = true; b.textContent = "Enviando…";
+    const ruta = await subirFoto(await aJpeg(baseD, 0.9), "dibujo");
+    const texto = $("dibujo-texto").value.trim() || "✏️ Te hice un dibujo";
+    const { error } = ruta ? await sb.from("momentos").insert({ pareja_id: pareja.id, de_usuario: user.id, ruta, texto }) : { error: true };
+    b.disabled = false; b.textContent = "Enviar dibujo ✏️";
+    if (error) { toast("No se pudo enviar"); return; }
+    $("dlg-dibujo").close(); lluvia("✏️", 8); toast(`Dibujo enviado a ${otro.nombre} ✏️`); cargarMomentos();
+  });
+
+  // ---------- la misma luna ----------
+  // Fase de la luna (es la misma en Ecuador y en Chile): días desde una luna nueva conocida
+  function faseLuna(d = new Date()) {
+    const ciclo = 29.530588853, ref = Date.UTC(2000, 0, 6, 18, 14);
+    const edad = ((((d.getTime() - ref) / 86400000) % ciclo) + ciclo) % ciclo;
+    const ilum = Math.round(((1 - Math.cos((2 * Math.PI * edad) / ciclo)) / 2) * 100);
+    const i = Math.floor((edad / ciclo) * 8 + 0.5) % 8;
+    return {
+      ilum,
+      emoji: ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"][i],
+      nombre: ["luna nueva", "luna creciente", "cuarto creciente", "creciente gibosa", "luna llena", "menguante gibosa", "cuarto menguante", "luna menguante"][i],
+    };
+  }
+  function renderLuna() {
+    const h = partes(new Date().toISOString(), miTz()).h, p = $("luna"), noche = h >= 18 || h < 6;
+    p.hidden = !noche; if (!noche) return;
+    const f = faseLuna(), b = document.createElement("b");
+    b.textContent = f.emoji; p.innerHTML = "";
+    p.append(b, f.ilum >= 97 ? "Esta noche hay luna llena y la miran los dos 💛"
+      : f.ilum <= 3 ? "Esta noche no se ve la luna, pero las estrellas son las mismas ✨"
+      : `Esta noche miran la misma luna · ${f.nombre} (${f.ilum}%)`);
+  }
+
+  // ---------- nuestro amor en números ----------
+  async function cargarNumeros() {
+    const hace7 = new Date(Date.now() - 7 * 86400000).toISOString();
+    const hace60 = new Date(Date.now() - 60 * 86400000).toISOString();
+    const { data } = await sb.from("eventos").select("de_usuario, tipo, creado_en").eq("pareja_id", pareja.id).gte("creado_en", hace60).limit(5000);
+    const evs = data || [], semana = evs.filter((e) => e.creado_en >= hace7);
+    const cuenta = (tipos, quien) => semana.filter((e) => tipos.includes(e.tipo) && (!quien || e.de_usuario === quien)).length;
+    const g = $("numeros"); g.innerHTML = "";
+    [["😘", "besos", ["beso"]], ["🤗", "abrazos", ["abrazo"]], ["❤️", "te extraño", ["te_extrano"]],
+     ["💭", "pienso en ti", ["pensando"]], ["💓", "latidos", ["latido"]], ["💌", "cartas y notitas", ["carta", "notita"]]].forEach(([em, nombre, tipos]) => {
+      const d = document.createElement("div"); d.className = "numero";
+      const b = document.createElement("b"), s = document.createElement("strong"), sm = document.createElement("small");
+      b.textContent = em; b.setAttribute("aria-hidden", "true");
+      s.textContent = cuenta(tipos);
+      sm.textContent = `${nombre} · tú ${cuenta(tipos, user.id)}, ${otro.nombre} ${cuenta(tipos, otro.id)}`;
+      d.append(b, s, sm); g.append(d);
+    });
+    // ¿Quién extraña más? (todas las señales de cariño de la semana)
+    const carino = ["te_extrano", "pensando", "beso", "abrazo", "latido", "notita", "carta"];
+    const yo = cuenta(carino, user.id), ella = cuenta(carino, otro.id);
+    $("quien-extrana").textContent = !yo && !ella ? "Esta semana todavía no hay señales… ¿quién empieza? 😏"
+      : yo === ella ? "Esta semana se extrañan exactamente igual 💞"
+      : yo > ella ? `Esta semana tú extrañas más 😏 (por ${yo - ella})`
+      : `Esta semana ${otro.nombre} extraña más 😏 (por ${ella - yo})`;
+    // Racha de noches seguidas en que los dos se dieron las buenas noches
+    const tz = tzPareja(), porDia = {};
+    evs.filter((e) => e.tipo === "buenas_noches").forEach((e) => { const k = claveDia(e.creado_en, tz); (porDia[k] = porDia[k] || new Set()).add(e.de_usuario); });
+    const ambos = (k) => porDia[k] && porDia[k].size >= 2;
+    let k = claveDia(new Date().toISOString(), tz), racha = 0;
+    if (!ambos(k)) k = claveDia(new Date(utcDe(k) - 86400000 + 43200000).toISOString(), "UTC");
+    while (ambos(k)) { racha++; k = claveDia(new Date(utcDe(k) - 86400000 + 43200000).toISOString(), "UTC"); }
+    $("racha-noches").textContent = racha >= 2 ? `🌙 Llevan ${racha} noches seguidas dándose las buenas noches`
+      : "🌙 Dense las buenas noches los dos cada día para empezar una racha.";
+  }
 
   // ---------- notificaciones push ----------
   function b64ToU8(s) {

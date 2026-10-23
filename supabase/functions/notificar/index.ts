@@ -158,6 +158,16 @@ async function porEvento(ev: Evento) {
     mensaje = { title: `🎟️ ${nombre} canjeó tu vale`, body: v ? `${v.emoji} ${v.texto} 💗` : "¡Cumple lo prometido! 💗", tag: "vale", url: "/#juntos" };
   } else if (ev.tipo === "razon") {
     mensaje = { title: `🫙 ${nombre} echó una razón nueva al frasco`, body: "Sácala cuando quieras 💌", tag: "frasco", url: "/#juntos" };
+  } else if (ev.tipo === "latido") {
+    mensaje = { title: `💓 ${nombre} te mandó su latido`, body: "Entra y mantén el corazón presionado para mandarle el tuyo.", tag: "latido", vibrate: [120, 120, 120, 500, 120, 120, 120, 500] };
+  } else if (ev.tipo === "notita") {
+    const { data: n } = await sb.from("notitas").select("texto").eq("de_usuario", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    mensaje = { title: `📝 ${nombre} te dejó una notita`, body: n?.texto ?? "Está pegada en tu Inicio 💗", tag: "notita", url: "/" };
+  } else if (ev.tipo === "cancion") {
+    const { data: c } = await sb.from("canciones").select("titulo").eq("de_usuario", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    mensaje = { title: `🎶 ${nombre} te dedicó una canción`, body: c?.titulo ?? "Entra a escucharla 💗", tag: "cancion", url: "/" };
   } else {
     mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
   }

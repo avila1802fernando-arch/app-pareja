@@ -257,6 +257,78 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 .vale-emojis{display:flex;flex-wrap:wrap;gap:6px}
 .vale-emojis button{background:var(--blush);border:1.5px solid var(--line);box-shadow:none;width:44px;height:44px;padding:0;font-size:1.3rem;border-radius:12px}
 .vale-emojis button[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft)}
+/* corazón vivo: tocar = besitos, mantener = latido */
+.heart{cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-touch-callout:none}
+.heart:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:24px}
+.heart.latiendo svg{animation:latido .8s ease-in-out infinite}
+.heart.latiendo .ring{animation:ring .8s ease-out infinite}
+.heart.suyo svg{filter:drop-shadow(0 0 22px var(--glow)) drop-shadow(0 12px 22px var(--glow))}
+@keyframes latido{0%,100%{transform:scale(1)}15%{transform:scale(1.2)}30%{transform:scale(1.04)}45%{transform:scale(1.17)}}
+.heart-tip{text-align:center;margin-top:-14px;font-size:.74rem}
+.latido-juntos{text-align:center;font-family:var(--hand);font-size:1.7rem;color:var(--accent);margin-top:-12px;animation:aparece .4s ease-out}
+.presente{margin:6px 0 0;font-size:.8rem;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
+.presente::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulso 1.6s ease-out infinite}
+.avatar.aqui{box-shadow:0 0 0 3px var(--ok),0 6px 14px -8px var(--glow)}
+.beso-volador{position:fixed;z-index:20;pointer-events:none;font-size:30px;animation:vuela 1.6s ease-out forwards}
+@keyframes vuela{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}15%{opacity:1}100%{transform:translate(calc(-50% + var(--x)),calc(-50% - 220px)) scale(1.3) rotate(var(--r));opacity:0}}
+@media (prefers-reduced-motion:reduce){.heart.latiendo svg,.heart.latiendo .ring,.presente::before{animation:none}}
+/* la misma luna */
+.luna{text-align:center;font-size:.85rem;color:var(--muted);margin-top:-12px}
+.luna b{font-size:1.1rem;margin-right:4px}
+/* acciones (momento, dibujo, notita, canción) */
+.acciones{grid-template-columns:repeat(4,1fr)}
+.acciones .accion{background:var(--blush);color:var(--fg);border:1.5px solid var(--line);border-radius:18px;padding:10px 2px 8px;font-size:.66rem;font-weight:700;line-height:1.15;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:64px;cursor:pointer;text-align:center}
+.acciones .accion b{font-size:1.45rem;line-height:1}
+.acciones .accion:active{background:var(--accent-soft);border-color:var(--accent)}
+#momento-input:focus-visible~.acciones .accion{outline:3px solid var(--accent)}
+/* notita en la nevera */
+.notita{--papel:#fff3b0;position:relative;padding:22px 20px 16px;background:var(--papel);color:#4a3320;border-radius:4px 4px 18px 4px;box-shadow:0 18px 30px -20px rgba(80,40,10,.6);transform:rotate(-1.2deg);display:flex;flex-direction:column;gap:8px}
+.notita::before{content:"";position:absolute;top:-10px;left:50%;width:70px;height:22px;transform:translateX(-50%) rotate(2deg);background:rgba(255,255,255,.55);border:1px solid rgba(0,0,0,.05)}
+.notita.rosa{--papel:#ffd6e3}.notita.celeste{--papel:#d4ecff}.notita.lila{--papel:#e8dcff}
+.notita-de{margin:0;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;opacity:.7}
+.notita-texto{margin:0;font-family:var(--hand);font-size:1.6rem;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}
+.notita button{align-self:flex-start;background:rgba(255,255,255,.7);color:#8a2d4f;box-shadow:none;font-size:.85rem;padding:8px 14px;min-height:40px}
+.notita-escribir{font-family:var(--hand);font-size:1.5rem!important;background:#fff3b0;color:#4a3320;border-color:#f0dc7a}
+.notita-colores{display:flex;gap:10px}
+.notita-colores button{width:44px;height:44px;padding:0;border-radius:12px;border:2px solid transparent;box-shadow:none}
+.notita-colores [data-color=amarillo]{background:#fff3b0}.notita-colores [data-color=rosa]{background:#ffd6e3}
+.notita-colores [data-color=celeste]{background:#d4ecff}.notita-colores [data-color=lila]{background:#e8dcff}
+.notita-colores button[aria-checked=true]{border-color:var(--accent)}
+/* una canción para ti */
+.cancion{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:20px;background:linear-gradient(135deg,#2a1530,#5a1f45);color:#fff}
+.cancion-disco{width:46px;height:46px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:1.3rem;background:radial-gradient(circle,#ff9ab8 0 18%,#1a0d1f 19% 62%,#3a2140 63%);animation:gira 6s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.cancion-disco{animation:none}}
+.cancion-info{flex:1;display:flex;flex-direction:column;min-width:0}
+.cancion-info small{font-size:.72rem;opacity:.8}
+.cancion-info strong{font-family:var(--display);font-weight:500;font-size:1.05rem;overflow-wrap:anywhere}
+.cancion-info em{font-family:var(--hand);font-style:normal;font-size:1.15rem;color:#ffb8cc}
+.cancion-play{flex:none;color:#2a1530;background:#ffb8cc;border-radius:999px;padding:10px 14px;font-weight:700;font-size:.8rem;text-decoration:none;min-height:40px;display:inline-flex;align-items:center}
+.playlist{gap:0!important}
+.playlist li{display:flex;align-items:center;justify-content:flex-start;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.playlist li:last-child{border-bottom:0}
+.playlist .p-info{flex:1;display:flex;flex-direction:column;min-width:0;white-space:normal!important;color:var(--fg)!important}
+.playlist .p-info small{color:var(--muted);font-size:.75rem}
+.playlist a{color:var(--accent);font-weight:700;font-size:.85rem;text-decoration:none;flex:none;padding:8px}
+/* dibujos */
+.lienzo-dibujo{border-radius:18px;overflow:hidden;border:1.5px solid var(--line);background:#fffafc;touch-action:none}
+.lienzo-dibujo canvas{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair}
+.dibujo-herr{display:flex;flex-direction:column;gap:8px}
+.dibujo-colores,.dibujo-grosores{display:flex;gap:8px;flex-wrap:wrap}
+.dibujo-colores button{width:36px;height:36px;border-radius:50%;padding:0;border:3px solid var(--card);box-shadow:0 0 0 1.5px var(--line)}
+.dibujo-colores button[aria-checked=true]{box-shadow:0 0 0 3px var(--accent)}
+.dibujo-grosores button{width:44px;height:36px;padding:0;background:var(--blush);border:1.5px solid var(--line);box-shadow:none;border-radius:10px;display:grid;place-items:center}
+.dibujo-grosores button i{display:block;border-radius:50%;background:var(--fg)}
+.dibujo-grosores button[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft)}
+.dibujo-botones{display:flex;gap:8px}
+.dibujo-botones button{flex:1}
+/* amor en números */
+.numeros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.numero{background:var(--blush);border:1px solid var(--line);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;gap:2px}
+.numero b{font-size:1.4rem;line-height:1}
+.numero strong{font-family:var(--display);font-weight:500;font-size:1.3rem;font-variant-numeric:tabular-nums}
+.numero small{font-size:.68rem;color:var(--muted);line-height:1.2}
+.quien-extrana{font-family:var(--hand);font-size:1.35rem;color:var(--accent);text-align:center;margin:4px 0 0}
 .tabs button.punto::after{content:"";position:absolute;top:5px;left:calc(50% + 7px);width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--card)}
 /* horarios habituales: cuadrícula 7 días x 24 horas */
 .leyenda{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}

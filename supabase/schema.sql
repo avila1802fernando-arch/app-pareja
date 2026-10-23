@@ -43,7 +43,8 @@ alter table public.eventos add constraint eventos_tipo_check
     'entrada', 'te_extrano', 'libre',
     'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches',
     'animo', 'respuesta', 'carta',
-    'momento', 'riego', 'vale', 'canje', 'razon'
+    'momento', 'riego', 'vale', 'canje', 'razon',
+    'latido', 'notita', 'cancion'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -630,6 +631,66 @@ drop trigger if exists vales_canje on public.vales;
 create trigger vales_canje after update on public.vales
   for each row execute function public.registrar_canje();
 
+-- ========== NOTITAS Y CANCIONES ==========
+-- Notita en la nevera: un post-it corto que queda en el Inicio del otro hasta que lo "despega"
+create table if not exists public.notitas (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 120),
+  color text not null default 'amarillo' check (color in ('amarillo', 'rosa', 'celeste', 'lila')),
+  despegada_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+create index if not exists notitas_pareja_idx on public.notitas (pareja_id, creado_en desc);
+
+-- Una canción para ti: un enlace (YouTube, Spotify…) con una dedicatoria
+create table if not exists public.canciones (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  titulo text not null check (char_length(titulo) between 1 and 120),
+  url text check (url is null or (char_length(url) <= 400 and url ~* '^https?://')),
+  nota text check (nota is null or char_length(nota) <= 140),
+  creado_en timestamptz not null default now()
+);
+create index if not exists canciones_pareja_idx on public.canciones (pareja_id, creado_en desc);
+
+alter table public.notitas   enable row level security;
+alter table public.canciones enable row level security;
+
+drop policy if exists "notitas: leer" on public.notitas;
+create policy "notitas: leer" on public.notitas for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "notitas: dejar" on public.notitas;
+create policy "notitas: dejar" on public.notitas
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id) and despegada_en is null);
+drop policy if exists "notitas: borrar las mías" on public.notitas;
+create policy "notitas: borrar las mías" on public.notitas for delete using (de_usuario = auth.uid());
+
+drop policy if exists "canciones: leer" on public.canciones;
+create policy "canciones: leer" on public.canciones for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "canciones: dedicar" on public.canciones;
+create policy "canciones: dedicar" on public.canciones
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id));
+drop policy if exists "canciones: borrar las mías" on public.canciones;
+create policy "canciones: borrar las mías" on public.canciones for delete using (de_usuario = auth.uid());
+
+-- Despegar (guardar) una notita que me dejaron
+create or replace function public.despegar_notita(p_id uuid) returns public.notitas
+language sql security definer set search_path = public as $$
+  update public.notitas set despegada_en = now()
+   where id = p_id and despegada_en is null and de_usuario <> auth.uid() and public.es_mi_pareja(pareja_id)
+  returning *;
+$$;
+grant execute on function public.despegar_notita(uuid) to authenticated;
+
+drop trigger if exists notitas_aviso on public.notitas;
+create trigger notitas_aviso after insert on public.notitas
+  for each row execute function public.evento_desde_tabla('notita');
+drop trigger if exists canciones_aviso on public.canciones;
+create trigger canciones_aviso after insert on public.canciones
+  for each row execute function public.evento_desde_tabla('cancion');
+
 -- ========== FOTOS (Supabase Storage) ==========
 -- Bucket PRIVADO. Rutas: <pareja_id>/<usuario_id>/<archivo>. Solo la pareja las ve; cada uno sube y borra las suyas.
 create or replace function public.es_mi_pareja_txt(p text) returns boolean
@@ -657,7 +718,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
-                                'momentos', 'riegos', 'vales'] loop
+                                'momentos', 'riegos', 'vales', 'notitas', 'canciones'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

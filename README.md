@@ -96,6 +96,17 @@ Haz commit y push de `config.js` ya rellenado.
 
 Desde ahora cada `git push` vuelve a publicar solo.
 
+**Si el repo no aparece al importar** (tu Vercel está conectado a otra cuenta de GitHub), publica con la CLI, desde la carpeta del proyecto:
+
+```bash
+cd public
+npx vercel login
+npx vercel link --yes --project nosotros
+npx vercel deploy --prod
+```
+
+Con esta forma, cada vez que haya cambios se publica repitiendo `npx vercel deploy --prod` dentro de `public`. `public/.vercelignore` evita que se suban archivos locales como `.env.local`.
+
 ## Paso 5 · Funciones que envían las push (10 min)
 
 La CLI de Supabase se usa con `npx` (no hace falta instalarla; Supabase no permite `npm install -g`).

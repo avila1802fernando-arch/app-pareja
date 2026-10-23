@@ -1,0 +1,4 @@
+# No publicar: configuración local y secretos
+.env*
+.gitignore
+.vercelignore

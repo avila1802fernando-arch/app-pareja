@@ -386,6 +386,58 @@
     try { if (navigator.vibrate) navigator.vibrate(s.vibra); } catch (e) {}
   }
 
+  // ---------- utilidades de animación ----------
+  const pocoMovimiento = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Vuelve a disparar una animación CSS aunque ya se haya usado
+  function animar(el, clase) {
+    if (!el) return;
+    el.classList.remove(clase); void el.offsetWidth; el.classList.add(clase);
+    el.addEventListener("animationend", () => el.classList.remove(clase), { once: true });
+  }
+  // Corazoncitos que salen disparados desde un botón
+  function estallido(el, emoji = "💗", n = 7) {
+    if (!el || pocoMovimiento()) return;
+    const r = el.getBoundingClientRect();
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 * i) / n - Math.PI / 2, d = 34 + Math.random() * 18;
+      const s = document.createElement("span"); s.className = "chispa"; s.textContent = emoji;
+      s.style.left = r.left + r.width / 2 + "px"; s.style.top = r.top + r.height / 2 + "px";
+      s.style.setProperty("--dx", Math.round(Math.cos(a) * d) + "px");
+      s.style.setProperty("--dy", Math.round(Math.sin(a) * d) + "px");
+      document.body.append(s); setTimeout(() => s.remove(), 600);
+    }
+  }
+  // Un número que cuenta hasta su valor (≤ 450 ms, suave al final)
+  function contar(el, hasta, desde = 0) {
+    if (!el) return;
+    if (pocoMovimiento() || hasta === desde) { el.textContent = hasta; return; }
+    const t0 = performance.now(), dur = 450;
+    const paso = (t) => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(desde + (hasta - desde) * e);
+      if (k < 1) requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
+  }
+  // Al abrir una pestaña, sus bloques entran uno tras otro
+  function entrarEscalonado(tab) {
+    if (pocoMovimiento()) return;
+    const bloques = [...document.querySelectorAll(`#tab-${tab} > .col > *`)].filter((e) => !e.hidden).slice(0, 12);
+    bloques.forEach((e, i) => { e.style.setProperty("--i", i); animar(e, "entra"); });
+  }
+  // La "luz" de la barra se desliza hasta la pestaña activa
+  function moverLuz() {
+    const nav = $("tabs"), luz = nav.querySelector(".luz"), b = nav.querySelector("button.on");
+    if (!luz || !b || nav.hidden) return;
+    const primera = !nav.classList.contains("con-luz");
+    if (primera) luz.style.transition = "none"; // la primera vez aparece directo en su lugar
+    luz.style.width = b.offsetWidth + "px"; luz.style.height = b.offsetHeight + "px";
+    luz.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop - 6}px)`;
+    nav.classList.add("con-luz");
+    if (primera) { void luz.offsetWidth; luz.style.transition = ""; }
+  }
+  window.addEventListener("resize", moverLuz);
+
   async function render() {
     const { data: evs } = await sb.from("eventos").select("*").eq("pareja_id", pareja.id)
       .order("creado_en", { ascending: false }).limit(12);
@@ -417,7 +469,7 @@
   }
 
   $("btn-extrano").addEventListener("click", async () => {
-    const b = $("btn-extrano"); b.disabled = true;
+    const b = $("btn-extrano"); b.disabled = true; estallido(b, "❤️", 9);
     const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "te_extrano" });
     toast(error ? "No se pudo enviar" : "Enviado ❤️");
     b.disabled = false; render();
@@ -426,10 +478,11 @@
   // Señales rápidas: abrazo, beso, pienso en ti, buenos días, buenas noches
   document.querySelectorAll("#senales button").forEach((b) => b.addEventListener("click", async () => {
     const tipo = b.dataset.senal;
+    animar(b, "pop"); estallido(b, SENTIR[tipo].emoji, 6);
     document.querySelectorAll("#senales button").forEach((x) => (x.disabled = true));
     const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo });
     if (error) toast("No se pudo enviar");
-    else { lluvia(SENTIR[tipo].emoji, 6); toast(`Enviado a ${otro.nombre} ${SENTIR[tipo].emoji}`); }
+    else toast(`Enviado a ${otro.nombre} ${SENTIR[tipo].emoji}`);
     // una pausa corta para no mandar diez seguidas sin querer
     setTimeout(() => document.querySelectorAll("#senales button").forEach((x) => (x.disabled = false)), 1500);
     render();
@@ -453,8 +506,11 @@
     document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
     history.replaceState(null, "", tab === "inicio" ? location.pathname : "#" + tab);
     window.scrollTo(0, 0);
+    moverLuz(); entrarEscalonado(tab);
     if (AL_ABRIR[tab]) AL_ABRIR[tab]();
   }
+  // Las acciones (momento, dibujo, notita, canción) también rebotan al tocarlas
+  document.querySelectorAll(".acciones > *").forEach((b) => b.addEventListener("click", () => animar(b, "pop")));
   const tabDeUrl = (u) => (new URL(u, location.origin).hash || "#inicio").slice(1);
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => irA(b.dataset.tab)));
   // Al tocar una notificación con la app ya abierta, el service worker nos dice a qué pestaña ir
@@ -967,7 +1023,7 @@
   });
 
   // ---------- relojes, juntos desde y cuenta regresiva para vernos ----------
-  let relojTimer = null, proximo = null;
+  let relojTimer = null, proximo = null, ultimoNum = null;
   const diaHoy = () => claveDia(new Date().toISOString(), miTz());
   const utcDe = (k) => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
   const diasEntre = (k1, k2) => Math.round((utcDe(k2) - utcDe(k1)) / 86400000);
@@ -1141,7 +1197,14 @@
     else if (dias <= 0) { n = "¡Hoy!"; txt = "hoy se ven, por fin"; granDia(); }
     else if (dias === 1) { n = "1"; txt = "día para vernos · ¡es mañana! 😭💞"; celebrarUnaVez("hito-1-" + proximo.inicio, "💞"); }
     else { n = String(dias); txt = HITOS[dias] || "días para vernos"; if (HITOS[dias]) celebrarUnaVez(`hito-${dias}-${proximo.inicio}`, "💞"); }
-    num.textContent = n; num.classList.toggle("chico", n.length > 3);
+    // el número cuenta hasta su valor la primera vez y da un saltito cuando cambia
+    if (n !== ultimoNum) {
+      const antes = Number(ultimoNum), ahoraN = Number(n);
+      if (/^\d+$/.test(n)) contar(num, ahoraN, Number.isFinite(antes) && ultimoNum !== null ? antes : 0); else num.textContent = n;
+      if (ultimoNum !== null) animar(num, "salta");
+      ultimoNum = n;
+    }
+    num.classList.toggle("chico", n.length > 3);
     $("cuenta-txt").textContent = txt;
     $("cuenta-ev").textContent = `${EMOJI[proximo.tipo] || EMOJI.otro} ${proximo.titulo} · ${fechaCorta(proximo.inicio, miTz())}`;
     // cuánto de la espera ya pasó: desde que se agendó hasta que empieza
@@ -1647,15 +1710,32 @@
     $("btn-regar").disabled = yo;
     $("btn-regar").textContent = yo ? "Regado hoy ✓" : "Regar 💧";
     pendientes.girasol = suyo && !yo; actualizarPuntos();
+    // ¿Subió de etapa desde la última vez que lo viste en este teléfono? Entonces crece con rebote
+    const nivel = etapa + extra;
+    let antes = null; try { antes = localStorage.getItem("girasol-nivel"); localStorage.setItem("girasol-nivel", String(nivel)); } catch (e) {}
+    if (antes !== null && nivel > Number(antes)) {
+      animar($("girasol"), "crece"); setTimeout(() => estallido($("girasol"), "✨", 9), 200);
+      toast(extra ? "¡Nació otro girasol en el ramo! 🌻" : `¡El girasol creció! Ahora está: ${ETAPAS[etapa][1].toLowerCase()} 🌱`);
+    }
+  }
+  // Gotas que caen sobre la planta al regar
+  function gotas() {
+    if (pocoMovimiento()) return;
+    const card = document.querySelector(".girasol-card");
+    for (let i = 0; i < 6; i++) {
+      const g = document.createElement("span"); g.className = "gota"; g.textContent = "💧";
+      g.style.left = `calc(50% + ${Math.round((i - 2.5) * 16)}px)`; g.style.top = "40px";
+      g.style.animationDelay = i * 45 + "ms";
+      card.append(g); setTimeout(() => g.remove(), 800);
+    }
   }
   $("btn-regar").addEventListener("click", async () => {
     const dia = diaPregunta();
     $("btn-regar").disabled = true;
     const { error } = await sb.from("riegos").insert({ pareja_id: pareja.id, usuario_id: user.id, dia });
     if (error) { toast("No se pudo regar"); $("btn-regar").disabled = false; return; }
-    riegos.push({ usuario_id: user.id, dia }); lluvia("💧", 12);
-    renderGirasol();
-    const g = $("girasol"); g.classList.remove("regado"); void g.offsetWidth; g.classList.add("regado");
+    riegos.push({ usuario_id: user.id, dia }); gotas();
+    setTimeout(() => { renderGirasol(); animar($("girasol"), "regado"); }, 420);
   });
 
   // ---------- frasco de razones ----------
@@ -1691,7 +1771,8 @@
     pendientes.frasco = enFrasco > 0; actualizarPuntos();
   }
   $("btn-sacar").addEventListener("click", async () => {
-    const { data, error } = await sb.rpc("sacar_razon");
+    animar($("frasco"), "sacude"); // el frasco se sacude mientras sale la razón
+    const [{ data, error }] = await Promise.all([sb.rpc("sacar_razon"), new Promise((r) => setTimeout(r, pocoMovimiento() ? 0 : 420))]);
     if (error || !data || !data.texto) { toast("El frasco está vacío"); cargarFrasco(); return; }
     $("razon-de").textContent = `De ${otro.nombre}`;
     $("razon-leida").textContent = data.texto;
@@ -1714,7 +1795,7 @@
     ["💃", "Bailar nuestra canción"], ["🍦", "Un helado a mi cuenta"], ["🌻", "Un ramo de girasoles"],
   ];
   const EMOJIS_VALES = ["🎟️", "🤗", "😘", "💆", "🍳", "🎬", "🌅", "💃", "🍦", "🌻", "🍷", "🎁"];
-  let vales = [], valeEmoji = "🎟️";
+  let vales = [], valeEmoji = "🎟️", valeRecien = null;
   async function cargarVales() {
     const { data } = await sb.from("vales").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false });
     vales = data || []; renderVales();
@@ -1724,6 +1805,7 @@
     const paraMi = vales.filter((v) => v.de_usuario !== user.id), mios = vales.filter((v) => v.de_usuario === user.id);
     const fila = (v, mio) => {
       const li = document.createElement("li"); li.classList.toggle("usado", !!v.canjeado_en);
+      if (v.id === valeRecien) { li.classList.add("recien"); valeRecien = null; } // el sello CANJEADO cae con rebote
       const e = document.createElement("span"); e.className = "v-emoji"; e.textContent = v.emoji; e.setAttribute("aria-hidden", "true");
       const t = document.createElement("span"); t.className = "v-texto";
       const a = document.createElement("strong"), b = document.createElement("small");
@@ -1738,7 +1820,7 @@
           if (!confirm(`¿Canjear “${v.texto}”? ${otro.nombre} recibirá un aviso.`)) return;
           const { data, error } = await sb.rpc("canjear_vale", { p_id: v.id });
           if (error || !data) { toast("No se pudo canjear"); return; }
-          lluvia(v.emoji, 14); toast("¡Canjeado! 💗"); cargarVales();
+          estallido(c, v.emoji, 8); valeRecien = v.id; toast("¡Canjeado! 💗"); cargarVales();
         });
         li.append(c);
       }
@@ -1852,6 +1934,8 @@
     $("presente").hidden = !otroAqui;
     $("presente").textContent = otroTocando ? `${otro.nombre} está tocando su corazón 💓` : `${otro.nombre} está en la app ahora`;
     document.querySelectorAll('[data-av="suyo"]').forEach((el) => el.classList.toggle("aqui", otroAqui));
+    // cuando los dos están en la app, sus fotos se acercan un poquito
+    document.querySelectorAll(".avatares").forEach((el) => el.classList.toggle("cerca", otroAqui));
     const h = $("heart");
     h.classList.toggle("suyo", otroTocando);
     h.classList.toggle("latiendo", otroTocando || yoTocando);
@@ -1935,10 +2019,12 @@
     const { data } = await sb.from("notitas").select("*").eq("pareja_id", pareja.id).is("despegada_en", null).order("creado_en", { ascending: false });
     const suyas = (data || []).filter((n) => n.de_usuario === otro.id);
     misNotitas = (data || []).filter((n) => n.de_usuario === user.id).length;
+    const anterior = notitaSuya && notitaSuya.id;
     notitaSuya = suyas[0] || null;
     const box = $("notita-suya"); box.hidden = !notitaSuya;
     if (notitaSuya) {
       box.className = "notita " + notitaSuya.color;
+      if (notitaSuya.id !== anterior) animar(box, "pega"); // una notita nueva se pega con un tambaleo
       $("notita-de").textContent = `De ${otro.nombre} · ${ago(notitaSuya.creado_en)}` + (suyas.length > 1 ? ` · ${suyas.length - 1} más debajo` : "");
       $("notita-texto").textContent = notitaSuya.texto;
     }
@@ -1947,7 +2033,10 @@
     if (!notitaSuya) return;
     const { error } = await sb.rpc("despegar_notita", { p_id: notitaSuya.id });
     if (error) { toast("No se pudo guardar"); return; }
-    lluvia("💛", 12); toast("Guardada en tu corazón 💗"); cargarNotitas();
+    // se despega volando y después se carga la siguiente (si hay)
+    $("notita-suya").classList.add("despega");
+    setTimeout(() => { $("notita-suya").classList.remove("despega"); lluvia("💛", 10); cargarNotitas(); }, pocoMovimiento() ? 0 : 240);
+    toast("Guardada en tu corazón 💗");
   });
   function pintarColoresNotita() {
     $("notita-colores").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.color === notitaColor)));
@@ -2137,7 +2226,7 @@
       const d = document.createElement("div"); d.className = "numero";
       const b = document.createElement("b"), s = document.createElement("strong"), sm = document.createElement("small");
       b.textContent = em; b.setAttribute("aria-hidden", "true");
-      s.textContent = cuenta(tipos);
+      contar(s, cuenta(tipos)); // los números cuentan desde 0
       sm.textContent = `${nombre} · tú ${cuenta(tipos, user.id)}, ${otro.nombre} ${cuenta(tipos, otro.id)}`;
       d.append(b, s, sm); g.append(d);
     });

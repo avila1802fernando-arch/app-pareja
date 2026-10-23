@@ -5,6 +5,11 @@
   --glow:rgba(201,50,92,.45);--hi:rgba(255,255,255,.7);--heart-a:#f0628f;--heart-b:#b8285a;--on-heart:#fff;
   --ok:#2e9e6b;--ok-soft:#dcf3e6;
   --display:"Fraunces",Georgia,serif;--body:"Nunito","Segoe UI",system-ui,sans-serif;--hand:"Caveat","Segoe Print",cursive;
+  /* movimiento: mismos tiempos y curvas en toda la app */
+  --t-rapido:160ms;--t-medio:260ms;--t-largo:380ms;
+  --salida:cubic-bezier(.2,.8,.2,1);   /* entrar: rápido al principio, suave al final */
+  --entrada:cubic-bezier(.4,0,1,1);    /* salir: acelera y se va */
+  --resorte:cubic-bezier(.34,1.56,.64,1); /* un poquito de rebote, como un resorte */
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -232,7 +237,7 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 .girasol-top .etapa{font-family:var(--hand);font-size:1.3rem;color:#a35f00}
 .girasol{height:210px;display:grid;place-items:end center}
 .girasol svg{height:100%;width:auto;overflow:visible}
-.girasol .planta{transform-origin:100px 176px;animation:mece 4.5s ease-in-out infinite}
+.girasol .planta{transform-origin:100px 176px;animation:mece 3.6s ease-in-out 2}
 .girasol .planta.sed{animation:none;transform:rotate(9deg);filter:saturate(.55)}
 @keyframes mece{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
 .girasol.regado .planta{animation:salta .6s ease-out}
@@ -324,8 +329,9 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 .notita-colores button[aria-checked=true]{border-color:var(--accent)}
 /* una canción para ti */
 .cancion{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:20px;background:linear-gradient(135deg,#2a1530,#5a1f45);color:#fff}
-.cancion-disco{width:46px;height:46px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:1.3rem;background:radial-gradient(circle,#ff9ab8 0 18%,#1a0d1f 19% 62%,#3a2140 63%);animation:gira 6s linear infinite}
-@keyframes gira{to{transform:rotate(360deg)}}
+.cancion-disco{width:46px;height:46px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:1.3rem;background:radial-gradient(circle,#ff9ab8 0 18%,#1a0d1f 19% 62%,#3a2140 63%);animation:gira 2.4s var(--salida) 1}
+@keyframes gira{from{transform:rotate(-360deg)}to{transform:rotate(0)}}
+.cancion{animation:entra var(--t-largo) var(--salida)}
 @media (prefers-reduced-motion:reduce){.cancion-disco{animation:none}}
 .cancion-info{flex:1;display:flex;flex-direction:column;min-width:0}
 .cancion-info small{font-size:.72rem;opacity:.8}
@@ -402,6 +408,58 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 body.con-tabs .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
 .toast.show{opacity:1}
 .tabs .marca{display:none}
+
+/* ================= ANIMACIONES ================= */
+/* Entrada escalonada al abrir una pestaña (40 ms entre bloques) */
+.entra{animation:entra var(--t-largo) var(--salida) both;animation-delay:calc(var(--i,0) * 40ms)}
+@keyframes entra{from{opacity:0;transform:translateY(14px)}}
+/* Indicador que se desliza bajo la pestaña activa */
+.tabs .luz{position:absolute;top:6px;left:0;border-radius:999px;background:var(--accent-soft);transition:transform var(--t-largo) var(--resorte);pointer-events:none;z-index:0}
+.tabs button{z-index:1}
+.tabs.con-luz button.on{background:transparent}
+/* Rebote al tocar señales y acciones, con un estallido de corazoncitos */
+.pop b{animation:pop var(--t-medio) var(--resorte)}
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.38)}100%{transform:scale(1)}}
+.chispa{position:fixed;z-index:25;pointer-events:none;font-size:15px;animation:chispa 520ms var(--salida) forwards}
+@keyframes chispa{from{transform:translate(-50%,-50%) scale(.4);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1);opacity:0}}
+/* Los avatares se acercan cuando los dos están en la app */
+.avatares .avatar,.avatares .av-corazon{transition:transform var(--t-largo) var(--resorte)}
+.avatares.cerca .avatar[data-av=suyo]{transform:translateX(5px)}
+.avatares.cerca .avatar[data-av=mio]{transform:translateX(-5px)}
+.avatares.cerca .av-corazon{transform:scale(1.18)}
+/* El número del corazón da un saltito cuando cambia */
+.heart-num.salta{animation:numsalta var(--t-largo) var(--resorte)}
+@keyframes numsalta{0%{transform:translate(-50%,-62%) scale(.7)}100%{transform:translate(-50%,-62%) scale(1)}}
+/* Notita: se pega con un pequeño tambaleo y se despega volando */
+.notita.pega{animation:pega var(--t-largo) var(--resorte)}
+@keyframes pega{from{opacity:0;transform:translateY(-18px) rotate(-7deg) scale(1.05)}to{opacity:1;transform:rotate(-1.2deg)}}
+.notita.despega{animation:despega 240ms var(--entrada) forwards}
+@keyframes despega{to{opacity:0;transform:translate(46px,-34px) rotate(10deg) scale(.92)}}
+/* Girasol: crece con rebote cuando sube de etapa; gotas al regar */
+.girasol.crece svg{animation:crece 460ms var(--resorte);transform-origin:50% 100%}
+@keyframes crece{0%{transform:scale(.86)}100%{transform:scale(1)}}
+.gota{position:absolute;z-index:3;pointer-events:none;font-size:18px;animation:gota 480ms var(--entrada) forwards}
+@keyframes gota{from{transform:translateY(0);opacity:0}20%{opacity:1}to{transform:translateY(118px);opacity:0}}
+.girasol-card{position:relative;overflow:hidden}
+/* Vales: sello de CANJEADO */
+.vales li.usado::after{content:"CANJEADO";position:absolute;right:56px;top:50%;transform:translateY(-50%) rotate(-12deg);font-size:.7rem;font-weight:800;letter-spacing:.14em;color:var(--accent);border:2px solid var(--accent);border-radius:6px;padding:2px 6px;opacity:.85;pointer-events:none}
+.vales li.recien::after{animation:sello var(--t-largo) var(--resorte)}
+@keyframes sello{from{opacity:0;transform:translateY(-50%) rotate(-12deg) scale(2.2)}to{opacity:.85;transform:translateY(-50%) rotate(-12deg) scale(1)}}
+/* Frasco: se sacude antes de soltar una razón */
+.frasco.sacude svg{animation:sacude 420ms var(--salida)}
+@keyframes sacude{0%,100%{transform:rotate(0)}20%{transform:rotate(-7deg)}45%{transform:rotate(6deg)}70%{transform:rotate(-4deg)}}
+/* Toast que sube con resorte y baja rápido */
+.toast{transform:translate(-50%,16px) scale(.96);transition:opacity var(--t-rapido) var(--entrada),transform var(--t-rapido) var(--entrada)}
+.toast.show{transform:translate(-50%,0) scale(1);transition:opacity var(--t-medio) var(--salida),transform var(--t-medio) var(--resorte)}
+/* Tarjetas que se levantan un poquito al pasar el mouse (computador) */
+@media (hover:hover){
+  .momento,.cartas li[role=button],.album-foto,.notita,.cancion{transition:transform var(--t-medio) var(--salida),box-shadow var(--t-medio) var(--salida)}
+  .momento:hover,.cartas li[role=button]:hover,.album-foto:hover,.cancion:hover{transform:translateY(-3px)}
+}
+/* Menos movimiento: todo instantáneo (y sin lluvias, que ya se apagan desde el código) */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
 
 /* ================= COMPUTADOR ================= */
 /* Desde 900 px: menú a la izquierda y tarjeta ancha */

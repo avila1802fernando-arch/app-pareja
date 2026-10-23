@@ -33,7 +33,7 @@ supabase/functions/
   _shared/push.ts       ← código común para enviar push
   notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día y calendario
   recordatorios/index.ts← recordatorios 30 min antes, cartas que ya se pueden abrir y apaga "estoy libre" vencidos
-vercel.json
+public/vercel.json     ← encabezados para Vercel (va dentro de public: ahí lo lee)
 ```
 
 ---

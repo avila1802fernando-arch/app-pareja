@@ -16,6 +16,7 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
   - **Fotos de perfil** de los dos y **momentos 📸**: una foto del día con un texto, que le aparece al otro en el Inicio. Las fotos van a un bucket **privado** de Supabase Storage: solo las ve la pareja (no están en el código ni en GitHub).
   - **Distancia 📍**: "N km nos separan", con la ubicación de cada uno redondeada a ~10 km (se activa en Ajustes).
   - **Días especiales**: el día del mes en que se conocieron y en que se hicieron novios se celebran en el Inicio, se marcan en el calendario y les llega un aviso a los dos a las 9:00.
+  - **Dormir juntos 🌙**: "Me voy a dormir" le avisa al otro; si los dos están acostados se ve su nochecita (los dos tapaditos, cuánto llevan y la hora de cada uno). "Buenos días ☀️" cierra la noche y se puede contar qué se soñó. Cuenta las noches que durmieron juntos y la racha (`public/noche.js`).
 - **Juntos**
   - **Pregunta del día**: la misma para los dos. La respuesta del otro solo se puede leer después de responder. Racha 🔥 de días seguidos e historial.
   - **Cartas**: para leer con calma, en papel y con letra manuscrita. Se pueden **sellar hasta una fecha** (el aniversario, el día del viaje…): hasta entonces solo se ve de quién es y cuándo se abre, y llega un aviso cuando ya se puede abrir.

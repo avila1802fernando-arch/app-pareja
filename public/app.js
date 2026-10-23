@@ -241,6 +241,12 @@
     await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
       cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones()]);
     await quitarCarga(); ritualDelDia();
+    // Funciones en archivos aparte (noche.js) arrancan con lo que necesitan de aquí
+    window.nosotros = {
+      sb, toast, estallido, pocoMovimiento, hora, partes, claveDia, miTz, suTz, tzPareja, renderAvatares,
+      get user() { return user; }, get perfil() { return perfil; }, get pareja() { return pareja; }, get otro() { return otro; },
+    };
+    window.dispatchEvent(new Event("nosotros:dentro"));
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -362,6 +368,8 @@
     latido: (n) => `${n} te mandó su latido 💓`,
     notita: (n) => `${n} te dejó una notita 📝`,
     cancion: (n) => `${n} te dedicó una canción 🎶`,
+    a_dormir: (n) => `${n} se fue a la camita 🌙`,
+    despierto: (n) => `${n} despertó y te da los buenos días ☀️`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -383,6 +391,8 @@
     latido: (n) => `${n} mandó su latido 💓`,
     notita: (n) => `${n} dejó una notita 📝`,
     cancion: (n) => `${n} dedicó una canción 🎶`,
+    a_dormir: (n) => `${n} se fue a dormir 🌙`,
+    despierto: (n) => `${n} despertó ☀️`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -398,6 +408,8 @@
     latido: { emoji: "💓", vibra: [90, 120, 90, 600, 90, 120, 90, 600] },
     notita: { emoji: "📝", vibra: [60, 60, 60] },
     cancion: { emoji: "🎶", vibra: [80, 80, 80] },
+    a_dormir: { emoji: "💤", vibra: [60, 80, 60] },
+    despierto: { emoji: "☀️", vibra: [100, 80, 100, 80, 100] },
   };
   function lluvia(emoji, n = 16) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;

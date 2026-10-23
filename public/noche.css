@@ -1,0 +1,75 @@
+/* ===== Dormir juntos 🌙 (ver noche.js) =====
+   Un pedacito de noche en el Inicio y, a pantalla completa, su nochecita: siempre oscura, también en modo claro. */
+:root{
+  --noche-a:#211842;--noche-b:#3a2460;--noche-c:#6b3363;
+  --noche-tx:#f6eefe;--noche-suave:#d8c8f2;--noche-luna:#ffe9b8;--noche-rosa:#ffd6e6;
+}
+
+/* --- tarjeta del Inicio --- */
+.noche-card{position:relative;overflow:hidden;border-radius:20px;padding:16px 18px 18px;color:var(--noche-tx);
+  background:linear-gradient(160deg,var(--noche-a) 0%,var(--noche-b) 58%,var(--noche-c) 100%);
+  box-shadow:0 18px 36px -26px rgba(33,24,66,.9);display:flex;flex-direction:column;gap:4px}
+.noche-card>*:not(.noche-cielo){position:relative}
+.noche-card .eyebrow{color:var(--noche-suave);margin-bottom:2px}
+.noche-card .small-note{color:var(--noche-suave);margin:0}
+.noche-titulo{font-family:var(--display);font-size:1.25rem;font-weight:500;line-height:1.25;margin:0}
+.noche-sueno{margin:6px 0 0;font-family:var(--hand);font-size:1.3rem;line-height:1.25;color:var(--noche-luna)}
+.noche-cuenta{margin:6px 0 0;font-size:.8rem;font-weight:700;color:var(--noche-rosa)}
+.noche-cuenta:empty{display:none}
+.noche-botones{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.noche-botones button{flex:1 1 auto}
+.noche-card button.ghost{color:var(--noche-rosa);border-color:rgba(255,255,255,.3)}
+.noche-cielo{position:absolute;inset:0;pointer-events:none}
+.noche-cielo i{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;opacity:.75;animation:nv-titila 3.4s ease-in-out infinite}
+.noche-luna{position:absolute;top:14px;right:18px;width:24px;height:24px;border-radius:50%;box-shadow:inset -7px 3px 0 0 var(--noche-luna);transform:rotate(-15deg)}
+/* de noche (o si alguien ya se acostó) la tarjeta brilla un poquito más */
+.noche-card.activa{box-shadow:0 0 0 1.5px rgba(255,214,230,.35),0 22px 44px -24px rgba(107,51,99,.95)}
+
+/* --- la nochecita a pantalla completa --- */
+.noche-vista{position:fixed;inset:0;z-index:19;display:flex;align-items:center;justify-content:center;overflow:hidden auto;
+  color:var(--noche-tx);background:radial-gradient(130% 85% at 50% 0%,#3a2a6a 0%,#1a1236 55%,#0c0a1d 100%);
+  padding:max(64px,env(safe-area-inset-top)) 20px max(32px,env(safe-area-inset-bottom));
+  animation:nv-aparece var(--t-largo) var(--salida)}
+.noche-vista.sale{animation:nv-desaparece var(--t-medio) var(--entrada) forwards}
+body.con-noche{overflow:hidden}
+body.con-noche .tabs{visibility:hidden}
+.nv-estrellas{position:absolute;inset:0;pointer-events:none}
+.nv-estrellas i{position:absolute;border-radius:50%;background:#fff;animation:nv-titila 3s ease-in-out infinite}
+.nv-luna{position:absolute;top:max(36px,calc(env(safe-area-inset-top) + 20px));right:28px;width:62px;height:62px;border-radius:50%;
+  box-shadow:inset -15px 6px 0 0 var(--noche-luna);filter:drop-shadow(0 0 16px rgba(255,233,184,.4));transform:rotate(-18deg)}
+.nv-cerrar{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;width:44px;height:44px;padding:0;border-radius:50%;
+  background:rgba(255,255,255,.12);color:var(--noche-tx);box-shadow:none;font-size:1.05rem}
+.nv-cont{position:relative;width:100%;max-width:380px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.nv-cama{position:relative;width:240px;height:150px;margin-bottom:12px}
+.nv-cama .avatar{position:absolute;top:8px;width:84px;height:84px;font-size:2rem;border-color:#2a1d4d;
+  box-shadow:0 12px 30px -12px rgba(0,0,0,.7);transition:opacity var(--t-largo) var(--salida)}
+.nv-cama [data-av="suyo"]{left:38px;transform:rotate(9deg)}
+.nv-cama [data-av="mio"]{right:38px;transform:rotate(-9deg)}
+.nv-cama .avatar.vacio{opacity:.25}
+.nv-cama .avatar.llega{animation:nv-llega var(--t-largo) var(--resorte)}
+.nv-manta{position:absolute;left:0;right:0;bottom:0;height:68px;border-radius:42px 42px 22px 22px;transform-origin:50% 100%;
+  background:radial-gradient(rgba(255,255,255,.22) 1.6px,transparent 2px) 0 0/16px 16px,linear-gradient(180deg,#f0628f,#a8245a);
+  box-shadow:inset 0 7px 0 rgba(255,255,255,.18),0 18px 40px -20px rgba(240,98,143,.6)}
+.noche-vista.ambos .nv-manta{animation:nv-respira 4.8s ease-in-out infinite}
+.nv-z{position:absolute;font-family:var(--hand);font-weight:700;color:var(--noche-suave);opacity:0;display:none}
+.noche-vista.ambos .nv-z{display:block;animation:nv-zeta 3.6s ease-out infinite}
+.nv-z.z1{right:18px;top:4px;font-size:1.1rem}
+.nv-z.z2{right:4px;top:-12px;font-size:1.4rem;animation-delay:1.2s!important}
+.nv-z.z3{right:-10px;top:-30px;font-size:1.8rem;animation-delay:2.4s!important}
+.nv-titulo{font-size:2.3rem;line-height:1.1;margin:0;color:#fff}
+.nv-tiempo{margin:0;font-family:var(--display);font-size:1.05rem;color:#e9defb}
+.nv-horas{margin:0;font-size:.85rem;color:#bba9df}
+.nv-frase{margin:12px 0 10px;font-family:var(--hand);font-size:1.5rem;line-height:1.25;color:var(--noche-luna)}
+.nv-cont>button{min-width:230px}
+
+@keyframes nv-aparece{from{opacity:0}}
+@keyframes nv-desaparece{to{opacity:0}}
+@keyframes nv-titila{50%{opacity:.2;transform:scale(.7)}}
+@keyframes nv-respira{50%{transform:scaleY(1.035)}}
+@keyframes nv-zeta{0%{opacity:0;transform:translate(0,8px) scale(.8)}30%{opacity:.9}100%{opacity:0;transform:translate(10px,-18px) scale(1.1)}}
+@keyframes nv-llega{from{opacity:0;transform:translateY(-26px) scale(.6)}}
+
+@media (prefers-reduced-motion:reduce){
+  .noche-vista,.noche-vista *,.noche-cielo i{animation:none!important}
+  .noche-vista.ambos .nv-z{opacity:.7}
+}

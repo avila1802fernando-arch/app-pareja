@@ -29,9 +29,15 @@
       <label for="usuario">Usuario</label>
       <input id="usuario" required maxlength="24" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="fernando">
       <label for="clave">Contraseña</label>
-      <input id="clave" type="password" required minlength="8" maxlength="72" autocomplete="current-password">
+      <div class="campo-clave">
+        <input id="clave" type="password" required minlength="8" maxlength="72" autocomplete="current-password">
+        <button type="button" class="ver-clave" aria-label="Mostrar contraseña" aria-pressed="false"></button>
+      </div>
       <label for="clave2" id="clave2-lab" hidden>Repite la contraseña</label>
-      <input id="clave2" type="password" minlength="8" maxlength="72" autocomplete="new-password" hidden>
+      <div class="campo-clave" id="clave2-caja" hidden>
+        <input id="clave2" type="password" minlength="8" maxlength="72" autocomplete="new-password">
+        <button type="button" class="ver-clave" aria-label="Mostrar contraseña" aria-pressed="false"></button>
+      </div>
       <button type="submit" id="btn-login">Entrar</button>
       <button type="button" class="ghost" id="btn-modo">Crear una cuenta nueva</button>
     </form>
@@ -367,7 +373,10 @@
         <h2>Tu cuenta</h2>
         <p class="muted" id="aj-usuario"></p>
         <label for="aj-clave">Nueva contraseña</label>
-        <input id="aj-clave" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+        <div class="campo-clave">
+          <input id="aj-clave" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+          <button type="button" class="ver-clave" aria-label="Mostrar contraseña" aria-pressed="false"></button>
+        </div>
         <button type="submit" class="ghost">Cambiar contraseña</button>
       </form>
       <button type="button" class="link" id="btn-logout">Cerrar sesión</button>

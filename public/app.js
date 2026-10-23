@@ -53,7 +53,7 @@
   function ponerModo(m) {
     modoLogin = m;
     const crear = m === "crear";
-    $("clave2").hidden = $("clave2-lab").hidden = !crear;
+    $("clave2-caja").hidden = $("clave2-lab").hidden = !crear;
     $("clave2").required = crear;
     $("clave").autocomplete = crear ? "new-password" : "current-password";
     $("btn-login").textContent = crear ? "Crear cuenta" : "Entrar";
@@ -61,6 +61,21 @@
     $("login-msg").textContent = crear ? "Sin correo: solo un usuario y una contraseña de al menos 8 caracteres. Guárdala bien 💗" : "";
   }
   $("btn-modo").addEventListener("click", () => ponerModo(modoLogin === "crear" ? "entrar" : "crear"));
+  // Botón de ojo: ver u ocultar la contraseña mientras se escribe
+  const OJO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const OJO_TACHADO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/></svg>';
+  document.querySelectorAll(".ver-clave").forEach((b) => {
+    const campo = b.previousElementSibling;
+    b.innerHTML = OJO;
+    b.addEventListener("click", () => {
+      const ver = campo.type === "password";
+      campo.type = ver ? "text" : "password";
+      b.innerHTML = ver ? OJO_TACHADO : OJO;
+      b.setAttribute("aria-pressed", String(ver));
+      b.setAttribute("aria-label", ver ? "Ocultar contraseña" : "Mostrar contraseña");
+      campo.focus();
+    });
+  });
   // El cuerpo del error de una Edge Function viene en la respuesta HTTP
   async function errorDeFuncion(error, data) {
     try { const j = await error.context.json(); if (j && j.error) return j.error; } catch (e) {}

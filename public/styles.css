@@ -55,6 +55,13 @@ input[type=date]::-webkit-date-and-time-value,input[type=datetime-local]::-webki
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 input[type=checkbox]{width:22px;height:22px;padding:0;accent-color:var(--accent);flex:none}
 textarea{resize:vertical;min-height:70px}
+/* contraseña con botón de ojo para verla */
+.campo-clave{position:relative}
+.campo-clave input{padding-right:54px}
+.ver-clave{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;padding:0;border-radius:12px;background:none;box-shadow:none;color:var(--muted);display:grid;place-items:center}
+.ver-clave:active{transform:translateY(-50%) scale(.92)}
+.ver-clave svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ver-clave[aria-pressed=true]{color:var(--accent)}
 button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:14px 20px;cursor:pointer;background:var(--grad);color:var(--on-accent);font-size:1rem;box-shadow:0 12px 24px -14px var(--glow);transition:transform .15s ease,box-shadow .2s}
 button:active{transform:scale(.96)}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}

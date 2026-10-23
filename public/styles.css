@@ -30,12 +30,91 @@ body{
   padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
   display:flex;align-items:center;justify-content:center;
 }
-/* rubor suave detrás de la tarjeta (capa fija: iPhone no soporta background-attachment:fixed) */
-body::before{
-  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:
-    radial-gradient(60vmax 50vmax at 10% -5%,var(--accent-soft),transparent 60%),
-    radial-gradient(50vmax 40vmax at 105% 100%,var(--accent-soft),transparent 60%);
+/* ===== Fondo decorativo (capa fija detrás de todo; iPhone no soporta background-attachment:fixed) ===== */
+:root{
+  --f1:#ffc4d6;--f2:#ffd8c4;--f3:#e5cdfa;--f4:#ffe3ec;
+  --fc-a:#f0628f;--fc-b:#ff9ab8;--fc-c:#c79bf2;
+  --destello:#f6b545;--polvo:rgba(201,50,92,.35);--deco:#d9668a;--deco-soft:rgba(217,102,138,.45);
+  --hoja:#8fc79a;--petalo:#ffcc4d;--petalo2:#ff9ab8;--centro:#9a5b2c;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --f1:#5c1d3c;--f2:#3f1f4d;--f3:#2a2152;--f4:#4a1e33;
+    --fc-a:#ff6b93;--fc-b:#ff9ab8;--fc-c:#b48cff;
+    --destello:#ffe39a;--polvo:rgba(255,226,240,.7);--deco:#ff8fb0;--deco-soft:rgba(255,143,176,.4);
+    --hoja:#5e9a6b;--petalo:#ffc94d;--petalo2:#ff8fb0;--centro:#6b3b1c;
+  }
+}
+.fondo{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+  background:linear-gradient(170deg,var(--f4) 0%,var(--bg) 45%,var(--bg) 70%,var(--f4) 100%)}
+.fondo>*{position:absolute}
+/* aurora: manchas de color difuminadas que se mueven despacito */
+.aurora{inset:0;filter:blur(60px);opacity:.85}
+.aurora span{position:absolute;border-radius:50%;width:70vmax;height:70vmax;will-change:transform}
+.aurora .b1{background:var(--f1);left:-30vmax;top:-35vmax;animation:deriva1 26s ease-in-out infinite alternate}
+.aurora .b2{background:var(--f2);right:-35vmax;top:10vh;width:60vmax;height:60vmax;animation:deriva2 32s ease-in-out infinite alternate}
+.aurora .b3{background:var(--f3);left:-15vmax;bottom:-40vmax;animation:deriva3 29s ease-in-out infinite alternate}
+.aurora .b4{background:var(--f1);right:-25vmax;bottom:-30vmax;width:50vmax;height:50vmax;opacity:.7;animation:deriva1 35s ease-in-out infinite alternate-reverse}
+@keyframes deriva1{to{transform:translate(18vmax,14vmax) scale(1.15)}}
+@keyframes deriva2{to{transform:translate(-16vmax,18vmax) scale(.9)}}
+@keyframes deriva3{to{transform:translate(20vmax,-14vmax) scale(1.1)}}
+/* patrón de corazoncitos casi invisible, como papel de carta */
+.patron{inset:0;opacity:.06;background:var(--accent);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cpath d='M16 26c-5-3.5-8-6.5-8-10 0-2.4 1.9-4.2 4.2-4.2 1.6 0 2.9.9 3.8 2.3.9-1.4 2.2-2.3 3.8-2.3 2.3 0 4.2 1.8 4.2 4.2 0 3.5-3 6.5-8 10Z'/%3E%3Cpath d='M48 58c-4-2.8-6.4-5.2-6.4-8 0-1.9 1.5-3.4 3.4-3.4 1.3 0 2.3.7 3 1.8.7-1.1 1.7-1.8 3-1.8 1.9 0 3.4 1.5 3.4 3.4 0 2.8-2.4 5.2-6.4 8Z'/%3E%3Ccircle cx='50' cy='18' r='1.6'/%3E%3Ccircle cx='14' cy='50' r='1.2'/%3E%3C/svg%3E") 0 0/64px 64px;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cpath d='M16 26c-5-3.5-8-6.5-8-10 0-2.4 1.9-4.2 4.2-4.2 1.6 0 2.9.9 3.8 2.3.9-1.4 2.2-2.3 3.8-2.3 2.3 0 4.2 1.8 4.2 4.2 0 3.5-3 6.5-8 10Z'/%3E%3Cpath d='M48 58c-4-2.8-6.4-5.2-6.4-8 0-1.9 1.5-3.4 3.4-3.4 1.3 0 2.3.7 3 1.8.7-1.1 1.7-1.8 3-1.8 1.9 0 3.4 1.5 3.4 3.4 0 2.8-2.4 5.2-6.4 8Z'/%3E%3Ccircle cx='50' cy='18' r='1.6'/%3E%3Ccircle cx='14' cy='50' r='1.2'/%3E%3C/svg%3E") 0 0/64px 64px}
+/* polvo brillante y destellos de cuatro puntas que titilan */
+.polvo,.destellos,.flota{inset:0}
+.polvo i,.destellos i{position:absolute;left:var(--l);top:var(--t);width:var(--s);height:var(--s)}
+.polvo i{border-radius:50%;background:var(--polvo);animation:titila 6s ease-in-out var(--dl) infinite}
+.destellos i{background:var(--destello);clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);
+  filter:drop-shadow(0 0 4px var(--destello));animation:destella var(--d) ease-in-out var(--dl) infinite}
+@keyframes titila{0%,100%{opacity:.2}50%{opacity:1}}
+@keyframes destella{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:.95;transform:scale(1) rotate(45deg)}}
+/* corazones que suben flotando y se mecen */
+.fc{position:absolute;bottom:-40px;left:var(--l);width:var(--s);height:var(--s);opacity:0;background:var(--fc-a);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 90'%3E%3Cpath d='M50 84C22 64 4 48 4 29 4 15 15 4 28 4c10 0 18 6 22 14 4-8 12-14 22-14 13 0 24 11 24 25 0 19-18 35-46 55Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 90'%3E%3Cpath d='M50 84C22 64 4 48 4 29 4 15 15 4 28 4c10 0 18 6 22 14 4-8 12-14 22-14 13 0 24 11 24 25 0 19-18 35-46 55Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  animation:flota var(--d) linear var(--dl) infinite}
+.fc.b{background:var(--fc-b)}.fc.c{background:var(--fc-c)}
+@keyframes flota{
+  0%{transform:translate(0,0) rotate(0);opacity:0}
+  10%{opacity:var(--o)}
+  30%{transform:translate(var(--x),-32vh) rotate(var(--r))}
+  60%{transform:translate(calc(var(--x) * -1),-66vh) rotate(calc(var(--r) * -1))}
+  90%{opacity:var(--o)}
+  100%{transform:translate(var(--x),-110vh) rotate(var(--r));opacity:0}
+}
+/* guirnaldas colgando de las esquinas de arriba */
+.guirnalda{top:-6px;width:min(300px,52vw);height:auto;overflow:visible}
+.guirnalda.izq{left:-10px}
+.guirnalda.der{right:-10px;transform:scaleX(-1)}
+.guirnalda .hilo{fill:none;stroke:var(--deco-soft);stroke-width:1.5;stroke-dasharray:2 4;stroke-linecap:round}
+.guirnalda line{stroke:var(--deco-soft);stroke-width:1.2}
+.guirnalda .cuelga{transform-box:fill-box;transform-origin:50% 0;animation:mece 3.6s ease-in-out var(--dl) infinite}
+.guirnalda .h1,.ramo .h2{fill:var(--fc-a)}
+.guirnalda .h2{fill:var(--fc-b)}
+.guirnalda .h3{fill:var(--destello)}
+/* ramitos de flores (con un girasol) en las esquinas de abajo */
+.ramo{bottom:-8px;width:min(190px,34vw);height:auto;opacity:.9}
+.ramo.izq{left:-6px;transform-origin:0 100%;animation:brisa 7s ease-in-out infinite}
+.ramo.der{right:-6px;transform:scaleX(-1);transform-origin:50% 100%;animation:brisa-der 8s ease-in-out infinite}
+.ramo .tallo{fill:none;stroke:var(--hoja);stroke-width:3;stroke-linecap:round}
+.ramo .hoja{fill:var(--hoja)}
+.ramo .girasolito ellipse{fill:var(--petalo)}
+.ramo .florcita ellipse{fill:var(--petalo2)}
+.ramo .florcita.b ellipse{fill:var(--fc-c)}
+.ramo .centro{fill:var(--centro)}
+.ramo .florcita .centro{fill:var(--destello)}
+@keyframes brisa{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(2deg)}}
+@keyframes brisa-der{0%,100%{transform:scaleX(-1) rotate(-1.5deg)}50%{transform:scaleX(-1) rotate(2deg)}}
+/* garabatos a mano, como trazos de lápiz */
+.garabato{width:110px;height:auto;fill:none;stroke:var(--deco-soft);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.garabato.g1{left:6vw;top:42vh;transform:rotate(-14deg)}
+.garabato.g2{right:5vw;top:24vh;transform:rotate(10deg)}
+@media (max-width:899px){.garabato{display:none}}
+/* la tarjeta deja ver un poquito el fondo, como vidrio esmerilado */
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  body .card{background:color-mix(in srgb,var(--card) 86%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2)}
 }
 /* con la barra inferior: tarjeta arriba y espacio para la barra */
 body.con-tabs{align-items:flex-start;padding-bottom:calc(96px + env(safe-area-inset-bottom))}

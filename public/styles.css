@@ -17,22 +17,26 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html,body{min-height:100%;margin:0}
 body{
-  color:var(--fg);font-family:var(--body);font-size:15px;
-  /* rubor suave detrás de la tarjeta */
-  background:
-    radial-gradient(60vmax 50vmax at 10% -5%,var(--accent-soft),transparent 60%),
-    radial-gradient(50vmax 40vmax at 105% 100%,var(--accent-soft),transparent 60%),
-    var(--bg);
-  background-attachment:fixed;
+  color:var(--fg);font-family:var(--body);font-size:15px;background:var(--bg);
+  -webkit-tap-highlight-color:transparent;
   padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
   display:flex;align-items:center;justify-content:center;
+}
+/* rubor suave detrás de la tarjeta (capa fija: iPhone no soporta background-attachment:fixed) */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(60vmax 50vmax at 10% -5%,var(--accent-soft),transparent 60%),
+    radial-gradient(50vmax 40vmax at 105% 100%,var(--accent-soft),transparent 60%);
 }
 /* con la barra inferior: tarjeta arriba y espacio para la barra */
 body.con-tabs{align-items:flex-start;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:28px;padding:28px 22px;box-shadow:0 30px 70px -40px var(--glow),0 2px 0 var(--hi) inset}
-section,.tab{display:flex;flex-direction:column;gap:22px}
+section,.tab,.col{display:flex;flex-direction:column;gap:22px}
+.col{min-width:0}
 h1{font-family:var(--display);font-weight:400;font-size:2rem;line-height:1.05;margin:0;letter-spacing:-.01em;text-wrap:balance}
 h1 em{font-style:italic;color:var(--accent)}
 h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0}
@@ -44,7 +48,10 @@ p{margin:0;line-height:1.5}
 .small-note{font-size:.8rem;color:var(--muted);line-height:1.45}
 .stack{display:flex;flex-direction:column;gap:10px}
 label{font-size:.8rem;color:var(--muted)}
-input,select,textarea{font:inherit;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--blush);color:var(--fg);transition:border-color .2s}
+/* 16px: con menos, el iPhone hace zoom al tocar el campo */
+input,select,textarea{font:inherit;font-size:16px;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--blush);color:var(--fg);transition:border-color .2s}
+input[type=date],input[type=datetime-local]{-webkit-appearance:none;appearance:none;display:block;min-height:48px;text-align:left}
+input[type=date]::-webkit-date-and-time-value,input[type=datetime-local]::-webkit-date-and-time-value{text-align:left}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 input[type=checkbox]{width:22px;height:22px;padding:0;accent-color:var(--accent);flex:none}
 textarea{resize:vertical;min-height:70px}
@@ -52,7 +59,7 @@ button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:14px 20
 button:active{transform:scale(.96)}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 button.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--line);font-weight:600;font-size:.9rem;padding:10px 16px;box-shadow:none}
-button.link{background:none;color:var(--muted);font-weight:600;font-size:.8rem;padding:4px;align-self:center;box-shadow:none}
+button.link{background:none;color:var(--muted);font-weight:600;font-size:.8rem;padding:4px 12px;min-height:44px;align-self:center;box-shadow:none}
 button[disabled]{opacity:.5}
 .heart{display:grid;place-items:center;height:160px;position:relative}
 .heart svg{width:128px;height:128px;filter:drop-shadow(0 12px 22px var(--glow))}
@@ -209,7 +216,7 @@ label.check{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(-
 .prox li span:last-child{white-space:normal;text-align:left}
 .prox li .nota{font-size:.8rem;color:var(--muted);font-style:italic}
 .dlg{border:0;padding:24px 20px;width:calc(100% - 32px);max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;background:var(--card);color:var(--fg);border-radius:28px;box-shadow:0 30px 70px -30px rgba(0,0,0,.6)}
-.dlg::backdrop{background:rgba(60,12,34,.45);backdrop-filter:blur(3px)}
+.dlg::backdrop{background:rgba(60,12,34,.45);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 .dlg[open]{animation:aparece .25s ease-out}
 @keyframes aparece{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.dlg[open]{animation:none}}
@@ -221,3 +228,47 @@ label.check{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(-
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:14px 20px;border-radius:999px;font-weight:700;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);max-width:calc(100% - 32px);text-align:center;opacity:0;transition:opacity .3s;pointer-events:none;z-index:30}
 body.con-tabs .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
 .toast.show{opacity:1}
+.tabs .marca{display:none}
+
+/* ================= COMPUTADOR ================= */
+/* Desde 900 px: menú a la izquierda y tarjeta ancha */
+@media (min-width:900px){
+  :root{--nav:216px;--hueco:max(24px,calc(50vw - 640px))}
+  body{font-size:16px}
+  h1{font-size:2.4rem}
+  body.con-tabs{align-items:flex-start;justify-content:flex-start;padding:32px 32px 48px calc(var(--hueco) + var(--nav) + 28px)}
+  body.con-tabs .card{max-width:1040px;padding:36px 40px;border-radius:32px}
+  .tabs{left:var(--hueco);top:32px;bottom:auto;transform:none;width:var(--nav);flex-direction:column;align-items:stretch;gap:4px;padding:18px 12px;border-radius:28px}
+  .tabs .marca{display:block;margin:0;padding:4px 14px 16px;font-family:var(--display);font-style:italic;font-size:1.55rem;color:var(--fg)}
+  .tabs .marca span{color:var(--accent);font-style:normal}
+  .tabs button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;font-size:.95rem;padding:12px 16px;min-height:48px}
+  .tabs button:hover{color:var(--fg);background:var(--blush)}
+  .tabs button.on:hover{color:var(--accent);background:var(--accent-soft)}
+  .tabs button.punto::after{top:9px;left:30px}
+  body.con-tabs .toast{bottom:32px;left:calc(var(--hueco) + var(--nav) + 28px + min(520px,(100vw - var(--hueco) - var(--nav) - 60px)/2))}
+  button:hover{box-shadow:0 14px 28px -14px var(--glow)}
+  button.ghost:hover,.senales button:hover,.animos button:hover,.celda-mes:hover{border-color:var(--accent)}
+  .cartas li[role=button]:hover{border-color:var(--accent)}
+  .dlg{max-width:480px}
+  #dlg-carta,#dlg-leer{max-width:600px}
+}
+/* Entre 900 y 1100 px: una sola columna, no demasiado ancha */
+@media (min-width:900px) and (max-width:1099px){
+  body.con-tabs .card{max-width:640px}
+}
+/* Desde 1100 px: cada pestaña en dos columnas */
+@media (min-width:1100px){
+  .tab.dos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px 44px;align-items:start}
+  .tab.dos.ancha{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+  .col .log.primero{border-top:0;padding-top:0}
+  #tab-inicio .col:first-child{position:sticky;top:32px}
+  .heart{height:210px}
+  .heart svg{width:170px;height:170px}
+  .heart .ring{width:200px;height:200px}
+  .heart-num{font-size:3rem}
+  .heart-num.chico{font-size:1.7rem}
+  .cuenta-txt{font-size:2rem}
+  .horario .celda{height:26px}
+  .celda-mes{min-height:62px;font-size:.95rem}
+  .preg-texto{font-size:1.6rem}
+}

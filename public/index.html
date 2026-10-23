@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Nosotros</title>
-  <meta name="theme-color" content="#c9325c">
+  <meta name="theme-color" content="#fbf0f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1118" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Nosotros">
@@ -23,17 +25,15 @@
   <section id="s-login" hidden>
     <p class="eyebrow">Nuestro rincón</p>
     <h1>Cada vez que entras, <em>yo lo sé</em>.</h1>
-    <p class="muted">Entra con tu correo. Te enviamos un código de 6 dígitos, sin contraseña.</p>
-    <form id="f-email" class="stack">
-      <label for="email">Tu correo</label>
-      <input id="email" type="email" required autocomplete="email" placeholder="tu@correo.com">
-      <button type="submit">Enviarme el código</button>
-    </form>
-    <form id="f-otp" class="stack" hidden>
-      <label for="otp">Código que llegó a tu correo</label>
-      <input id="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="123456">
-      <button type="submit">Entrar</button>
-      <button type="button" class="ghost" id="otp-back">Usar otro correo</button>
+    <form id="f-login" class="stack">
+      <label for="usuario">Usuario</label>
+      <input id="usuario" required maxlength="24" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="fernando">
+      <label for="clave">Contraseña</label>
+      <input id="clave" type="password" required minlength="8" maxlength="72" autocomplete="current-password">
+      <label for="clave2" id="clave2-lab" hidden>Repite la contraseña</label>
+      <input id="clave2" type="password" minlength="8" maxlength="72" autocomplete="new-password" hidden>
+      <button type="submit" id="btn-login">Entrar</button>
+      <button type="button" class="ghost" id="btn-modo">Crear una cuenta nueva</button>
     </form>
     <p class="small-note" id="login-msg"></p>
   </section>
@@ -67,7 +67,8 @@
   <section id="s-home" hidden>
 
     <!-- Pestaña: Inicio -->
-    <div class="tab" id="tab-inicio">
+    <div class="tab dos" id="tab-inicio">
+     <div class="col">
       <div>
         <p class="eyebrow">Nuestro rincón</p>
         <h1 id="home-title">Hola.</h1>
@@ -100,6 +101,8 @@
       </div>
       <p class="juntos" id="juntos" hidden></p>
       <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo están juntos? Agrégalo 💞</button>
+     </div>
+     <div class="col">
       <div class="status">
         <strong id="status-title">Conectando…</strong>
         <span class="muted" id="status-when"></span>
@@ -127,10 +130,12 @@
         <h2>Últimas señales</h2>
         <ul id="log-list"></ul>
       </div>
+     </div>
     </div>
 
     <!-- Pestaña: Juntos -->
-    <div class="tab" id="tab-juntos" hidden>
+    <div class="tab dos" id="tab-juntos" hidden>
+     <div class="col">
       <div>
         <p class="eyebrow">Juntos</p>
         <h1>Más <em>cerquita</em>.</h1>
@@ -150,7 +155,13 @@
           <button type="button" class="link" id="resp-editar">Cambiar mi respuesta</button>
         </div>
       </div>
-      <div class="log">
+      <details class="log" id="preg-hist">
+        <summary><h2>Días anteriores</h2></summary>
+        <ul id="hist-list" class="hist"></ul>
+      </details>
+     </div>
+     <div class="col">
+      <div class="log primero">
         <h2>Cartas</h2>
         <p class="small-note">Para leer con calma. Puedes sellarla hasta una fecha especial.</p>
         <button type="button" id="btn-carta">Escribir una carta 💌</button>
@@ -167,14 +178,12 @@
         <ul id="deseos-list" class="deseos"></ul>
         <p class="small-note" id="deseos-hechos"></p>
       </div>
-      <details class="log" id="preg-hist">
-        <summary><h2>Días anteriores</h2></summary>
-        <ul id="hist-list" class="hist"></ul>
-      </details>
+     </div>
     </div>
 
     <!-- Pestaña: Horarios -->
-    <div class="tab" id="tab-horarios" hidden>
+    <div class="tab dos ancha" id="tab-horarios" hidden>
+     <div class="col">
       <div>
         <p class="eyebrow">Horarios habituales</p>
         <h1>¿Cuándo <em>puedes</em> normalmente?</h1>
@@ -186,14 +195,18 @@
         <span><i class="l-ambos"></i>Los dos</span>
       </div>
       <div class="horario" id="horario"></div>
-      <div class="log">
+     </div>
+     <div class="col">
+      <div class="log primero">
         <h2>Horas en común</h2>
         <ul id="comun-list" class="comun"></ul>
       </div>
+     </div>
     </div>
 
     <!-- Pestaña: Calendario -->
-    <div class="tab" id="tab-calendario" hidden>
+    <div class="tab dos ancha" id="tab-calendario" hidden>
+     <div class="col">
       <div>
         <p class="eyebrow">Calendario compartido</p>
         <h1>Lo que <em>viene</em>.</h1>
@@ -205,14 +218,18 @@
       </div>
       <div class="mes" id="mes"></div>
       <button type="button" id="btn-nuevo">Agendar algo</button>
-      <div class="log">
+     </div>
+     <div class="col">
+      <div class="log primero">
         <h2 id="prox-titulo">Próximos</h2>
         <ul id="prox-list" class="prox"></ul>
       </div>
+     </div>
     </div>
 
     <!-- Pestaña: Ajustes -->
-    <div class="tab" id="tab-ajustes" hidden>
+    <div class="tab dos" id="tab-ajustes" hidden>
+     <div class="col">
       <div>
         <p class="eyebrow">Ajustes</p>
         <h1>Lo nuestro, <em>a tu manera</em>.</h1>
@@ -231,6 +248,8 @@
         <button type="button" class="ghost" id="btn-push" hidden>Activar notificaciones en este teléfono</button>
         <p class="small-note" id="ios-hint" hidden>En iPhone, las notificaciones solo funcionan si abres la app desde el ícono de la pantalla de inicio. Toca <strong>Compartir → Agregar a pantalla de inicio</strong> en Safari y vuelve a entrar desde ahí.</p>
       </div>
+     </div>
+     <div class="col">
       <div class="stack">
         <h2>Pareja</h2>
         <p class="muted" id="aj-pareja"></p>
@@ -240,7 +259,15 @@
           <button type="submit" class="ghost">Guardar fecha</button>
         </form>
       </div>
+      <form id="f-clave" class="stack">
+        <h2>Tu cuenta</h2>
+        <p class="muted" id="aj-usuario"></p>
+        <label for="aj-clave">Nueva contraseña</label>
+        <input id="aj-clave" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+        <button type="submit" class="ghost">Cambiar contraseña</button>
+      </form>
       <button type="button" class="link" id="btn-logout">Cerrar sesión</button>
+     </div>
     </div>
 
   </section>
@@ -249,6 +276,7 @@
 
 <!-- Barra inferior (solo con sesión y pareja) -->
 <nav class="tabs" id="tabs" hidden aria-label="Secciones">
+  <p class="marca" aria-hidden="true">Nosotros <span>♥</span></p>
   <button type="button" data-tab="inicio" class="on">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5c-5-3.6-8.5-7-8.5-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5c0 4-3.5 7.4-8.5 11Z"/></svg>
     <span>Inicio</span>

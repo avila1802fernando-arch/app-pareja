@@ -63,15 +63,9 @@ git push -u origin main
 3. Menú **Project Settings → API**. Copia:
    - **Project URL** → en `public/config.js`, campo `SUPABASE_URL`
    - **anon public** key → campo `SUPABASE_ANON_KEY`
-4. Menú **Authentication → Providers → Email**: deja activo *Enable Email provider* y **desactiva** *Confirm email* (así el código de 6 dígitos entra directo).
-5. Menú **Authentication → Email Templates → Magic Link**: reemplaza el cuerpo por esto, para que el correo traiga el código en lugar de un enlace:
-   ```html
-   <h2>Tu código para entrar a Nosotros</h2>
-   <p style="font-size:32px;letter-spacing:6px"><b>{{ .Token }}</b></p>
-   <p>Vence en 1 hora.</p>
-   ```
+4. Menú **Authentication → Sign In / Providers**: deja activo **Email** (por dentro las cuentas usan un correo interno). *Confirm email* da igual: la función `cuenta` crea las cuentas ya confirmadas. Recomendado: **desactiva "Allow new users to sign up"**, así nadie puede registrarse por fuera de la app (la función `cuenta` sí puede, y tiene un tope de 6 cuentas).
 
-> El correo gratuito de Supabase permite pocos envíos por hora (unos 3-4). Para dos personas que entran de vez en cuando alcanza, y la sesión queda guardada en el teléfono, así que casi nunca volverán a pedir código.
+> **Usuario y contraseña, sin correo.** Supabase exige un email, así que cada cuenta usa uno interno `usuario@nosotros.invalid`. El dominio `.invalid` no existe: nunca se envía ni se recibe nada, y nadie puede pedir "recuperar contraseña" por ustedes. Si alguien olvida su contraseña, se cambia desde **Ajustes** (con la sesión abierta) o se borra el usuario en **Authentication → Users** y se crea de nuevo (sus datos de pareja se pierden).
 
 ## Paso 3 · Claves de notificación (2 min)
 
@@ -126,9 +120,12 @@ Luego, dentro de la carpeta del proyecto:
 npx supabase login
 npx supabase link --project-ref TU_PROJECT_REF     # el "ref" está en Project Settings → General
 npx supabase secrets set --env-file .env
+npx supabase functions deploy cuenta --no-verify-jwt
 npx supabase functions deploy notificar --no-verify-jwt
 npx supabase functions deploy recordatorios --no-verify-jwt
 ```
+
+`cuenta` es la que crea las cuentas desde la app: sin ella, "Crear una cuenta nueva" no funciona.
 
 Al terminar te muestra las URLs de las funciones, parecidas a
 `https://TU_REF.supabase.co/functions/v1/notificar` y `.../recordatorios`.
@@ -163,14 +160,16 @@ Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo 
 
 **Android (Chrome)**
 1. Abre la URL de Vercel. Chrome ofrece "Agregar a pantalla de inicio" (o menú ⋮ → *Instalar app*).
-2. Abre la app desde el ícono, entra con tu correo, escribe tu nombre y **Crear nuestra pareja**. Te da un código de 6 letras.
+2. Abre la app desde el ícono, toca **Crear una cuenta nueva** (usuario y contraseña), escribe tu nombre y **Crear nuestra pareja**. Te da un código de 6 letras.
 3. En **Ajustes**, toca **Activar notificaciones** y acepta. Revisa ahí que la zona horaria sea la tuya (la app toma la del teléfono).
 
 **iPhone (Safari, iOS 16.4+)**
 1. Abre la URL en **Safari** (no en Chrome ni desde WhatsApp).
 2. Botón Compartir → **Agregar a pantalla de inicio** → Agregar.
 3. Abre la app **desde el ícono** (es obligatorio: fuera de ahí iOS no permite notificaciones).
-4. Entra con su correo, escribe su nombre, pone el código que le pasaste y **Unirme**.
+4. Crea su cuenta (o entra con el usuario y la contraseña que le pasaste), escribe su nombre, pone el código de la pareja y **Unirme**.
+
+**Desde el computador** también funciona: abre la misma URL en Chrome, Edge o Safari y entra con el mismo usuario. Se ve con menú a la izquierda y en dos columnas. (Las notificaciones en el computador llegan solo si el navegador está abierto.)
 5. En **Ajustes**, toca **Activar notificaciones** y acepta. iPhone también pide tener activas las notificaciones en Ajustes → Notificaciones → Nosotros.
 
 ## Si ya tenías una versión anterior funcionando
@@ -181,6 +180,7 @@ Cada vez que llega una versión nueva:
 2. Supabase → SQL Editor: vuelve a correr **todo** `supabase/schema.sql` (no borra nada).
 3. Vuelve a publicar las funciones:
    ```bash
+   npx supabase functions deploy cuenta --no-verify-jwt
    npx supabase functions deploy notificar --no-verify-jwt
    npx supabase functions deploy recordatorios --no-verify-jwt
    ```
@@ -205,7 +205,8 @@ Ajustes que ya trae (constantes al inicio de cada archivo):
 
 | Síntoma | Revisar |
 |---|---|
-| No llega el correo con el código | Carpeta spam; límite de envíos por hora de Supabase; que *Confirm email* esté desactivado |
+| "No se pudo crear la cuenta" | Que la función `cuenta` esté publicada (paso 5). Si dice que ya están todas las cuentas, borra las de prueba en **Authentication → Users** |
+| "Usuario o contraseña incorrectos" | El usuario va en minúsculas y sin espacios; la contraseña distingue mayúsculas |
 | "Código no válido" al unirse | Que el primero haya tocado "Crear nuestra pareja" y que el código esté bien escrito (sin O ni I ni 0 ni 1, no se usan) |
 | No aparece el botón de notificaciones en iPhone | La app se abrió desde Safari y no desde el ícono de la pantalla de inicio |
 | La push no llega | Supabase → **Edge Functions → notificar → Logs**. Si dice "no autorizado", el header `x-webhook-secret` no coincide. Si dice `enviadas: 0`, la otra persona no activó notificaciones |

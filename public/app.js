@@ -42,24 +42,49 @@
   // ---------- service worker ----------
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 
-  // ---------- login con código por correo ----------
-  $("f-email").addEventListener("submit", async (e) => {
+  // ---------- login con usuario y contraseña ----------
+  // Supabase pide un correo: se usa uno interno que no recibe mensajes (el dominio .invalid no existe).
+  // La cuenta la crea la función `cuenta`, ya confirmada (mismo dominio que allá).
+  const DOMINIO_CUENTAS = "nosotros.invalid";
+  const limpiarUsuario = (u) => u.trim().toLowerCase();
+  const correoDe = (u) => `${limpiarUsuario(u)}@${DOMINIO_CUENTAS}`;
+  const usuarioDe = (email) => (email || "").split("@")[0];
+  let modoLogin = "entrar";
+  function ponerModo(m) {
+    modoLogin = m;
+    const crear = m === "crear";
+    $("clave2").hidden = $("clave2-lab").hidden = !crear;
+    $("clave2").required = crear;
+    $("clave").autocomplete = crear ? "new-password" : "current-password";
+    $("btn-login").textContent = crear ? "Crear cuenta" : "Entrar";
+    $("btn-modo").textContent = crear ? "Ya tengo cuenta" : "Crear una cuenta nueva";
+    $("login-msg").textContent = crear ? "Sin correo: solo un usuario y una contraseña de al menos 8 caracteres. Guárdala bien 💗" : "";
+  }
+  $("btn-modo").addEventListener("click", () => ponerModo(modoLogin === "crear" ? "entrar" : "crear"));
+  // El cuerpo del error de una Edge Function viene en la respuesta HTTP
+  async function errorDeFuncion(error, data) {
+    try { const j = await error.context.json(); if (j && j.error) return j.error; } catch (e) {}
+    return (data && data.error) || "No se pudo crear la cuenta. Revisa tu conexión e intenta de nuevo.";
+  }
+  $("f-login").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const email = $("email").value.trim();
-    $("login-msg").textContent = "Enviando…";
-    const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-    if (error) { $("login-msg").textContent = "No se pudo enviar: " + error.message; return; }
-    $("login-msg").textContent = "Revisa tu correo (también la carpeta de spam).";
-    $("f-email").hidden = true; $("f-otp").hidden = false; $("otp").focus();
+    const usuario = limpiarUsuario($("usuario").value), clave = $("clave").value;
+    const msg = $("login-msg"), btn = $("btn-login");
+    if (!/^[a-z0-9._-]{3,24}$/.test(usuario)) {
+      msg.textContent = "El usuario lleva de 3 a 24 letras o números (también punto o guion), sin espacios ni tildes."; return;
+    }
+    btn.disabled = true;
+    if (modoLogin === "crear") {
+      if (clave !== $("clave2").value) { msg.textContent = "Las contraseñas no coinciden."; btn.disabled = false; return; }
+      msg.textContent = "Creando tu cuenta…";
+      const { data, error } = await sb.functions.invoke("cuenta", { body: { usuario, clave } });
+      if (error || !data || !data.ok) { msg.textContent = await errorDeFuncion(error, data); btn.disabled = false; return; }
+    }
+    msg.textContent = "Entrando…";
+    const { error } = await sb.auth.signInWithPassword({ email: correoDe(usuario), password: clave });
+    btn.disabled = false;
+    msg.textContent = error ? "Usuario o contraseña incorrectos." : "";
   });
-  $("f-otp").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = $("email").value.trim(), token = $("otp").value.trim();
-    const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
-    if (error) { $("login-msg").textContent = "Código incorrecto o vencido."; return; }
-    $("login-msg").textContent = "";
-  });
-  $("otp-back").addEventListener("click", () => { $("f-email").hidden = false; $("f-otp").hidden = true; });
   $("btn-logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
 
   sb.auth.onAuthStateChange((_ev, session) => {
@@ -82,7 +107,9 @@
     pareja = pj;
     if (!pareja || !pareja.usuario_b) {
       show("pair");
-      $("nombre").value = (perfil && perfil.nombre) || "";
+      // nombre sugerido a partir del usuario: "martina" → "Martina"
+      const sugerido = usuarioDe(user.email).replace(/^./, (c) => c.toUpperCase());
+      $("nombre").value = (perfil && perfil.nombre) || sugerido;
       if (pareja) { mostrarCodigo(pareja.codigo); esperarPareja(); }
       return;
     }
@@ -369,7 +396,16 @@
     $("aj-pareja").textContent = `Tu pareja: ${otro.nombre} · ${nombreTz(suTz())} (allá son las ${hora(new Date(), suTz())})`;
     $("aj-desde").value = pareja.desde || "";
     $("aj-desde").max = diaHoy();
+    $("aj-usuario").textContent = `Tu usuario: ${usuarioDe(user.email)}`;
   }
+  $("f-clave").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nueva = $("aj-clave").value;
+    if (nueva.length < 8) { toast("La contraseña necesita al menos 8 caracteres"); return; }
+    const { error } = await sb.auth.updateUser({ password: nueva });
+    if (error) { toast("No se pudo cambiar: " + error.message); return; }
+    $("aj-clave").value = ""; toast("Contraseña cambiada 🔐");
+  });
   $("f-desde").addEventListener("submit", async (e) => {
     e.preventDefault();
     const { data, error } = await sb.rpc("fijar_desde", { p_fecha: $("aj-desde").value || null });

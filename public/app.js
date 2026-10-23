@@ -189,7 +189,9 @@
     // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
     clearInterval(relojTimer); renderRelojes();
     relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
-    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas()]);
+    renderAvatares(); renderDistancia();
+    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
+      cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales()]);
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -200,6 +202,10 @@
           sentir(ev.tipo); sessionStorage.setItem("sentido", ev.id);
           if (ev.tipo === "respuesta") cargarPregunta();
           if (ev.tipo === "carta") cargarCartas();
+          if (ev.tipo === "momento") cargarMomentos();
+          if (ev.tipo === "riego") cargarGirasol();
+          if (ev.tipo === "vale" || ev.tipo === "canje") cargarVales();
+          if (ev.tipo === "razon") cargarFrasco();
         }
         render();
       }
@@ -224,7 +230,7 @@
     ).on("postgres_changes",
       // si mi pareja cambia su nombre o su zona horaria, lo vemos al instante
       { event: "UPDATE", schema: "public", table: "perfiles", filter: `id=eq.${otro.id}` },
-      (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); renderRelojes(); }
+      (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); renderRelojes(); renderAvatares(); renderDistancia(); }
     ).on("postgres_changes",
       // "juntos desde" cambiado por cualquiera de los dos
       { event: "UPDATE", schema: "public", table: "parejas", filter: `id=eq.${pareja.id}` },
@@ -289,6 +295,11 @@
     animo: (n) => `${n} compartió cómo se siente 💗`,
     respuesta: (n) => `${n} respondió la pregunta del día 💭`,
     carta: (n) => `${n} te escribió una carta 💌`,
+    momento: (n) => `${n} compartió un momento 📸`,
+    riego: (n) => `${n} regó nuestro girasol 💧`,
+    vale: (n) => `${n} te regaló un vale 🎟️`,
+    canje: (n) => `${n} canjeó tu vale 🎟️`,
+    razon: (n) => `${n} echó una razón al frasco 🫙`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -302,6 +313,11 @@
     animo: (n) => `${n} compartió su ánimo 💗`,
     respuesta: (n) => `${n} respondió la pregunta del día 💭`,
     carta: (n) => `${n} escribió una carta 💌`,
+    momento: (n) => `${n} compartió un momento 📸`,
+    riego: (n) => `${n} regó el girasol 💧`,
+    vale: (n) => `${n} regaló un vale 🎟️`,
+    canje: (n) => `${n} canjeó un vale 🎟️`,
+    razon: (n) => `${n} echó una razón al frasco 🫙`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -312,6 +328,8 @@
     buenos_dias: { emoji: "☀️", vibra: [100, 80, 100, 80, 100] },
     buenas_noches: { emoji: "🌙", vibra: [100, 80, 100, 80, 100] },
     carta: { emoji: "💌", vibra: [100, 50, 100, 50, 300] },
+    vale: { emoji: "🎟️", vibra: [80, 60, 80, 60, 200] },
+    razon: { emoji: "💗", vibra: [60, 40, 60] },
   };
   function lluvia(emoji, n = 16) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -415,7 +433,7 @@
     $("aj-conocidos").value = pareja.conocidos || "";
     $("aj-desde").max = $("aj-conocidos").max = diaHoy();
     $("aj-usuario").textContent = `Tu usuario: ${usuarioDe(user.email)}`;
-    renderInstalar();
+    renderInstalar(); renderAvatares(); renderDistancia();
   }
   $("f-clave").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1126,7 +1144,10 @@
       list.append(li);
     });
   }
-  AL_ABRIR.juntos = () => { cargarPregunta(); cargarHistorial(); cargarCartas(); cargarDeseos(); };
+  AL_ABRIR.juntos = () => {
+    cargarPregunta(); cargarHistorial(); cargarCartas(); cargarDeseos();
+    cargarGirasol(); cargarFrasco(); cargarVales(); cargarMomentos();
+  };
 
   // ---------- lista "Cuando nos veamos" ----------
   let deseos = [];
@@ -1289,7 +1310,7 @@
   });
 
   // Puntito en la pestaña Juntos cuando algo te espera ahí
-  const pendientes = { pregunta: false, cartas: false };
+  const pendientes = { pregunta: false, cartas: false, girasol: false, frasco: false };
   function actualizarPuntos() {
     pendientes.pregunta = respHoy.suyaRespondio && !respHoy.mia;
     const hay = Object.values(pendientes).some(Boolean);
@@ -1297,6 +1318,408 @@
     b.classList.toggle("punto", hay);
     b.setAttribute("aria-label", hay ? "Juntos: hay algo nuevo para ti" : "Juntos");
   }
+
+  // ---------- fotos (bucket privado de Storage) ----------
+  // Rutas: <pareja_id>/<usuario_id>/<archivo>. Se muestran con URLs firmadas que vencen en 1 hora.
+  const urlsFotos = {};
+  async function urlDeFoto(ruta) {
+    if (!ruta) return null;
+    const c = urlsFotos[ruta];
+    if (c && c.vence > Date.now()) return c.url;
+    const { data } = await sb.storage.from("fotos").createSignedUrl(ruta, 3600);
+    if (!data) return null;
+    urlsFotos[ruta] = { url: data.signedUrl, vence: Date.now() + 50 * 60000 };
+    return data.signedUrl;
+  }
+  const cargarImagen = (file) => new Promise((ok, mal) => {
+    const img = new Image(); img.onload = () => ok(img); img.onerror = mal; img.src = URL.createObjectURL(file);
+  });
+  const aJpeg = (canvas, calidad) => new Promise((ok) => canvas.toBlob(ok, "image/jpeg", calidad));
+  // Achica la foto antes de subirla (así carga rápido y ocupa poco)
+  async function reducir(file, max = 1280) {
+    const img = await cargarImagen(file);
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return aJpeg(c, 0.82);
+  }
+  async function subirFoto(blob, nombre) {
+    const ruta = `${pareja.id}/${user.id}/${nombre}-${Date.now()}.jpg`;
+    const { error } = await sb.storage.from("fotos").upload(ruta, blob, { contentType: "image/jpeg" });
+    return error ? null : ruta;
+  }
+
+  // ---------- fotos de perfil ----------
+  async function pintarAvatar(el, persona) {
+    const url = persona && persona.foto ? await urlDeFoto(persona.foto) : null;
+    el.style.backgroundImage = url ? `url("${url}")` : "";
+    el.textContent = url ? "" : ((persona && persona.nombre) || "?").charAt(0).toUpperCase();
+  }
+  function renderAvatares() {
+    document.querySelectorAll('[data-av="mio"]').forEach((el) => pintarAvatar(el, perfil));
+    document.querySelectorAll('[data-av="suyo"]').forEach((el) => pintarAvatar(el, otro));
+    $("foto-quitar").hidden = !(perfil && perfil.foto);
+  }
+  // Recorte cuadrado: arrastrar para mover, deslizador para acercar
+  const rec = { img: null, zoom: 1, x: 0, y: 0 }, lienzo = $("recorte-canvas"), ctxRec = lienzo.getContext("2d");
+  function dibujarRecorte() {
+    const { img, zoom } = rec; if (!img) return;
+    const L = lienzo.width, s = Math.max(L / img.naturalWidth, L / img.naturalHeight) * zoom;
+    const w = img.naturalWidth * s, h = img.naturalHeight * s;
+    rec.x = Math.min((w - L) / 2, Math.max(-(w - L) / 2, rec.x)); // que la foto siempre cubra el cuadro
+    rec.y = Math.min((h - L) / 2, Math.max(-(h - L) / 2, rec.y));
+    ctxRec.fillStyle = "#fff"; ctxRec.fillRect(0, 0, L, L);
+    ctxRec.drawImage(img, (L - w) / 2 + rec.x, (L - h) / 2 + rec.y, w, h);
+  }
+  $("foto-input").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try { rec.img = await cargarImagen(f); } catch (err) { toast("No se pudo abrir esa imagen"); return; }
+    rec.zoom = 1; rec.x = 0; rec.y = 0;
+    // en fotos verticales se empieza mirando la parte de arriba, donde suele estar la cara
+    const L = lienzo.width, h = rec.img.naturalHeight * Math.max(L / rec.img.naturalWidth, L / rec.img.naturalHeight);
+    if (h > L) rec.y = ((h - L) / 2) * 0.6;
+    $("recorte-zoom").value = 1; dibujarRecorte(); $("dlg-recorte").showModal();
+  });
+  let arrastre = null;
+  lienzo.addEventListener("pointerdown", (e) => { lienzo.setPointerCapture(e.pointerId); arrastre = { x: e.clientX, y: e.clientY }; });
+  lienzo.addEventListener("pointermove", (e) => {
+    if (!arrastre) return;
+    const k = lienzo.width / lienzo.getBoundingClientRect().width;
+    rec.x += (e.clientX - arrastre.x) * k; rec.y += (e.clientY - arrastre.y) * k;
+    arrastre = { x: e.clientX, y: e.clientY }; dibujarRecorte();
+  });
+  ["pointerup", "pointercancel"].forEach((t) => lienzo.addEventListener(t, () => (arrastre = null)));
+  $("recorte-zoom").addEventListener("input", (e) => { rec.zoom = +e.target.value; dibujarRecorte(); });
+  $("recorte-cancelar").addEventListener("click", () => $("dlg-recorte").close());
+  $("recorte-ok").addEventListener("click", async () => {
+    const b = $("recorte-ok"); b.disabled = true;
+    const out = document.createElement("canvas"); out.width = out.height = 400;
+    out.getContext("2d").drawImage(lienzo, 0, 0, 400, 400);
+    const ruta = await subirFoto(await aJpeg(out, 0.88), "perfil");
+    if (!ruta) { b.disabled = false; toast("No se pudo subir la foto"); return; }
+    const vieja = perfil.foto;
+    const { error } = await sb.from("perfiles").update({ foto: ruta }).eq("id", user.id);
+    b.disabled = false;
+    if (error) { toast("No se pudo guardar la foto"); return; }
+    perfil.foto = ruta;
+    if (vieja) sb.storage.from("fotos").remove([vieja]);
+    $("dlg-recorte").close(); renderAvatares(); toast("¡Qué linda foto! 💗");
+  });
+  $("foto-quitar").addEventListener("click", async () => {
+    if (!perfil.foto || !confirm("¿Quitar tu foto?")) return;
+    const vieja = perfil.foto;
+    const { error } = await sb.from("perfiles").update({ foto: null }).eq("id", user.id);
+    if (error) { toast("No se pudo quitar"); return; }
+    perfil.foto = null; sb.storage.from("fotos").remove([vieja]); renderAvatares();
+  });
+
+  // ---------- momentos: la foto del día ----------
+  let momentos = [], momentoArchivo = null;
+  async function cargarMomentos() {
+    const { data } = await sb.from("momentos").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(30);
+    momentos = data || []; renderMomentos();
+  }
+  async function renderMomentos() {
+    // en Inicio, el último momento de tu pareja
+    const suyo = momentos.find((m) => m.de_usuario === otro.id), box = $("momento-suyo");
+    box.hidden = !suyo;
+    if (suyo) {
+      $("momento-quien").textContent = `Un momento de ${otro.nombre}`;
+      $("momento-texto").textContent = suyo.texto || "";
+      $("momento-cuando").textContent = ago(suyo.creado_en);
+      $("momento-img").alt = suyo.texto ? `Foto de ${otro.nombre}: ${suyo.texto}` : `Foto de ${otro.nombre}`;
+      box.onclick = () => verMomento(suyo);
+      urlDeFoto(suyo.ruta).then((u) => { if (u) $("momento-img").src = u; });
+    }
+    // en Juntos, el álbum
+    const g = $("album"); g.innerHTML = "";
+    if (!momentos.length) {
+      const p = document.createElement("p"); p.className = "small-note"; p.style.gridColumn = "1 / -1";
+      p.textContent = "Aquí se irán guardando sus momentos 📸 Compártelos desde Inicio."; g.append(p); return;
+    }
+    momentos.forEach((m) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "album-foto";
+      b.setAttribute("aria-label", `${m.de_usuario === user.id ? "Tu momento" : "Momento de " + otro.nombre}${m.texto ? ": " + m.texto : ""}, ${ago(m.creado_en)}`);
+      b.addEventListener("click", () => verMomento(m));
+      urlDeFoto(m.ruta).then((u) => { if (u) b.style.backgroundImage = `url("${u}")`; });
+      g.append(b);
+    });
+  }
+  $("momento-input").addEventListener("change", (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    momentoArchivo = f; $("momento-prev").src = URL.createObjectURL(f); $("momento-texto-in").value = "";
+    $("dlg-momento").showModal();
+  });
+  $("momento-cancelar").addEventListener("click", () => $("dlg-momento").close());
+  $("f-momento").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!momentoArchivo) return;
+    const b = $("momento-enviar"); b.disabled = true; b.textContent = "Subiendo…";
+    let ruta = null;
+    try { ruta = await subirFoto(await reducir(momentoArchivo), "momento"); } catch (err) {}
+    const texto = $("momento-texto-in").value.trim() || null;
+    const { error } = ruta
+      ? await sb.from("momentos").insert({ pareja_id: pareja.id, de_usuario: user.id, ruta, texto })
+      : { error: true };
+    b.disabled = false; b.textContent = "Compartir 📸";
+    if (error) { toast("No se pudo compartir"); return; }
+    $("dlg-momento").close(); lluvia("📸", 8); toast(`Compartido con ${otro.nombre} 📸`); cargarMomentos();
+  });
+  let momentoViendo = null;
+  async function verMomento(m) {
+    momentoViendo = m;
+    $("ver-img").removeAttribute("src");
+    $("ver-img").alt = m.texto || "Momento";
+    $("ver-texto").textContent = m.texto || "";
+    $("ver-meta").textContent = `${m.de_usuario === user.id ? "Tú" : otro.nombre} · ${fechaCorta(m.creado_en, miTz())}, ${hora(m.creado_en, miTz())}`;
+    $("ver-borrar").hidden = m.de_usuario !== user.id;
+    $("dlg-ver").showModal();
+    const u = await urlDeFoto(m.ruta); if (u) $("ver-img").src = u;
+  }
+  $("ver-cerrar").addEventListener("click", () => $("dlg-ver").close());
+  $("ver-borrar").addEventListener("click", async () => {
+    const m = momentoViendo; if (!m || !confirm("¿Borrar este momento?")) return;
+    const { error } = await sb.from("momentos").delete().eq("id", m.id);
+    if (error) { toast("No se pudo borrar"); return; }
+    sb.storage.from("fotos").remove([m.ruta]);
+    $("dlg-ver").close(); cargarMomentos();
+  });
+
+  // ---------- nuestro girasol ----------
+  // Cada uno lo riega una vez por día. Un día con los dos riegos suma 1 punto; con uno solo, medio.
+  const ETAPAS = [[0, "Semillita"], [1, "Brotecito"], [3, "Tallito"], [6, "Con hojitas"], [10, "Creciendo fuerte"], [16, "Con botón"], [23, "¡Abriéndose!"], [30, "En flor 🌻"]];
+  let riegos = [];
+  async function cargarGirasol() {
+    const { data } = await sb.from("riegos").select("usuario_id, dia").eq("pareja_id", pareja.id);
+    riegos = data || []; renderGirasol();
+  }
+  function puntosGirasol() {
+    const porDia = {};
+    riegos.forEach((r) => (porDia[r.dia] = (porDia[r.dia] || 0) + 1));
+    return Object.values(porDia).reduce((s, n) => s + (n >= 2 ? 1 : 0.5), 0);
+  }
+  // Dibujo del girasol según la etapa (y más girasoles alrededor si siguen regando después de florecer)
+  function svgGirasol(etapa, pts, sed) {
+    const verde = sed ? "#8aa36b" : "#3f9b4a", verdeOsc = sed ? "#6f8656" : "#2f7d3a";
+    const alto = [0, 16, 42, 70, 100, 118, 128, 132][etapa], y0 = 176, tope = y0 - alto;
+    const flor = (cx, cy, r, a = 1) => {
+      let p = "";
+      for (let i = 0; i < 16; i++) p += `<ellipse cx="${cx}" cy="${cy - r * 0.92 * a}" rx="${r * 0.27}" ry="${r * 0.6 * a}" fill="#f7b500" transform="rotate(${i * 22.5} ${cx} ${cy})"/>`;
+      return p + `<circle cx="${cx}" cy="${cy}" r="${r * 0.55}" fill="#6b3a1e"/><circle cx="${cx}" cy="${cy}" r="${r * 0.36}" fill="#8a4f27"/>`;
+    };
+    const hoja = (y, lado, t) => `<path d="M100 ${y} q ${20 * lado * t} ${-16 * t} ${38 * lado * t} ${-6 * t} q ${-16 * lado * t} ${14 * t} ${-38 * lado * t} ${6 * t}Z" fill="${verde}"/>`;
+    let planta = "";
+    if (etapa === 0) planta = `<ellipse cx="100" cy="${y0 - 3}" rx="7" ry="4.5" fill="#7a4a2a"/><path d="M100 ${y0 - 7} q 2 -6 6 -7" stroke="${verde}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    else {
+      planta = `<path d="M100 ${y0} C 98 ${y0 - alto * 0.5}, 102 ${y0 - alto * 0.7}, 100 ${tope}" stroke="${verdeOsc}" stroke-width="${2.5 + etapa * 0.7}" fill="none" stroke-linecap="round"/>`;
+      const hojas = [0, 2, 2, 4, 4, 6, 6, 6][etapa];
+      for (let i = 0; i < hojas; i++) planta += hoja(y0 - 12 - i * (alto / (hojas + 1)), i % 2 ? 1 : -1, Math.min(1, 0.55 + etapa * 0.08));
+      if (etapa === 5) planta += `<circle cx="100" cy="${tope}" r="9" fill="${verde}"/><path d="M93 ${tope - 4} q 7 -9 14 0" fill="#f7b500" opacity=".8"/>`;
+      if (etapa === 6) planta += flor(100, tope, 17, 0.6);
+      if (etapa === 7) planta += flor(100, tope, 26);
+    }
+    // girasoles extra: uno nuevo cada 15 puntos después de florecer (hasta 4)
+    const extra = pts >= 45 ? Math.min(4, Math.floor((pts - 30) / 15)) : 0;
+    // salen de la misma maceta y se abren hacia los lados, como un ramo
+    const otros = [[76, 92, -22], [124, 100, 22], [86, 64, -40], [114, 70, 40]].slice(0, extra).map(([x, h, dx]) =>
+      `<path d="M${x} ${y0} q ${dx * 0.2} ${-h * 0.6} ${dx} ${-h}" stroke="${verdeOsc}" stroke-width="4" fill="none" stroke-linecap="round"/>${flor(x + dx, y0 - h, 15)}`).join("");
+    return `<svg viewBox="0 0 200 218" role="img"><g class="planta${sed ? " sed" : ""}">${otros}${planta}</g>
+      <path d="M62 176 h76 l-9 38 h-58 z" fill="#c8694a"/><rect x="58" y="170" width="84" height="12" rx="4" fill="#d9805f"/>
+      <ellipse cx="100" cy="176" rx="38" ry="4" fill="#6b3f2a"/></svg>`;
+  }
+  function renderGirasol() {
+    const hoy = diaPregunta(), pts = puntosGirasol();
+    const yo = riegos.some((r) => r.usuario_id === user.id && r.dia === hoy);
+    const suyo = riegos.some((r) => r.usuario_id === otro.id && r.dia === hoy);
+    let etapa = 0; ETAPAS.forEach(([min], i) => { if (pts >= min) etapa = i; });
+    const ultimo = riegos.reduce((m, r) => (r.dia > m ? r.dia : m), "");
+    const sed = !!ultimo && diasEntre(ultimo, hoy) >= 3;
+    $("girasol").innerHTML = svgGirasol(etapa, pts, sed);
+    const extra = pts >= 45 ? Math.min(4, Math.floor((pts - 30) / 15)) : 0;
+    $("girasol-etapa").textContent = extra ? `¡Un jardín de ${extra + 1} girasoles!` : ETAPAS[etapa][1];
+    const lugar = (C.FECHAS && C.FECHAS.lugar) ? `antes de ${C.FECHAS.lugar}` : "antes de verse";
+    $("girasol-nota").textContent =
+      yo && suyo ? "Los dos lo regaron hoy 💛 Mañana crecerá otro poquito."
+      : yo ? `Ya lo regaste. Falta ${otro.nombre} 💧`
+      : suyo ? `${otro.nombre} ya lo regó. ¡Te toca!`
+      : sed ? "Tiene sed… ¿lo riegan hoy? 🥺"
+      : `Riéguenlo los dos cada día para que florezca ${lugar}.`;
+    $("btn-regar").disabled = yo;
+    $("btn-regar").textContent = yo ? "Regado hoy ✓" : "Regar 💧";
+    pendientes.girasol = suyo && !yo; actualizarPuntos();
+  }
+  $("btn-regar").addEventListener("click", async () => {
+    const dia = diaPregunta();
+    $("btn-regar").disabled = true;
+    const { error } = await sb.from("riegos").insert({ pareja_id: pareja.id, usuario_id: user.id, dia });
+    if (error) { toast("No se pudo regar"); $("btn-regar").disabled = false; return; }
+    riegos.push({ usuario_id: user.id, dia }); lluvia("💧", 12);
+    renderGirasol();
+    const g = $("girasol"); g.classList.remove("regado"); void g.offsetWidth; g.classList.add("regado");
+  });
+
+  // ---------- frasco de razones ----------
+  let enFrasco = 0;
+  async function cargarFrasco() {
+    const [{ data: n }, { data: rs }] = await Promise.all([
+      sb.rpc("razones_en_frasco"),
+      sb.from("razones").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(200),
+    ]);
+    enFrasco = n || 0;
+    const leidas = (rs || []).filter((r) => r.de_usuario !== user.id); // las de tu pareja que ya sacaste (RLS esconde el resto)
+    const mias = (rs || []).filter((r) => r.de_usuario === user.id);
+    // el frasco con un papelito por razón esperándote (hasta 12)
+    let papeles = "";
+    for (let i = 0; i < Math.min(12, enFrasco); i++) {
+      const x = 30 + ((i * 37) % 44), y = 112 - Math.floor(i / 3) * 15 - (i % 2) * 4;
+      papeles += `<path d="M${x} ${y} c -6 -7 -14 0 -7 7 l 7 7 l 7 -7 c 7 -7 -1 -14 -7 -7z" fill="${["#ff8fb1", "#f7b500", "#ffb3c7", "#e86a92"][i % 4]}" transform="rotate(${(i * 23) % 40 - 20} ${x} ${y})"/>`;
+    }
+    $("frasco").innerHTML = `<svg viewBox="0 0 104 132"><rect x="30" y="6" width="44" height="14" rx="4" fill="#c99a6b"/>
+      <path d="M26 22 h52 q 10 6 10 22 v62 q 0 20 -20 20 h-32 q -20 0 -20 -20 v-62 q 0 -16 10 -22z" fill="rgba(255,255,255,.55)" stroke="#e7c7d3" stroke-width="2.5"/>
+      ${papeles}<path d="M30 36 q -6 10 -6 26" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".8"/></svg>`;
+    $("frasco-estado").textContent = enFrasco
+      ? `${otro.nombre} te dejó ${plural(enFrasco, "razón", "razones")} en el frasco 💌`
+      : `El frasco está vacío por ahora. Cuando ${otro.nombre} eche una razón, aparecerá aquí.`;
+    $("btn-sacar").disabled = !enFrasco;
+    const sinSacar = mias.filter((r) => !r.sacada_en).length;
+    $("razones-mias").textContent = mias.length
+      ? `Echaste ${plural(mias.length, "razón", "razones")}${sinSacar ? ` · ${sinSacar} esperando que ${otro.nombre} las saque` : ""}.`
+      : `Escribe por qué quieres a ${otro.nombre}: no la podrá leer hasta sacarla del frasco.`;
+    $("razones-det").hidden = !leidas.length;
+    const ul = $("razones-list"); ul.innerHTML = "";
+    leidas.forEach((r) => { const li = document.createElement("li"); li.textContent = r.texto; ul.append(li); });
+    pendientes.frasco = enFrasco > 0; actualizarPuntos();
+  }
+  $("btn-sacar").addEventListener("click", async () => {
+    const { data, error } = await sb.rpc("sacar_razon");
+    if (error || !data || !data.texto) { toast("El frasco está vacío"); cargarFrasco(); return; }
+    $("razon-de").textContent = `De ${otro.nombre}`;
+    $("razon-leida").textContent = data.texto;
+    $("dlg-razon").showModal(); setTimeout(() => lluvia("💗", 14), 150);
+    cargarFrasco();
+  });
+  $("razon-cerrar").addEventListener("click", () => $("dlg-razon").close());
+  $("f-razon").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    let texto = $("razon-texto").value.trim(); if (!texto) return;
+    const { error } = await sb.from("razones").insert({ pareja_id: pareja.id, de_usuario: user.id, texto });
+    if (error) { toast("No se pudo echar al frasco"); return; }
+    $("razon-texto").value = ""; toast(`Al frasco 🫙 ${otro.nombre} la leerá cuando la saque`); cargarFrasco();
+  });
+
+  // ---------- vales de amor ----------
+  const IDEAS_VALES = [
+    ["🤗", "Un abrazo de 10 minutos"], ["😘", "Besos ilimitados por un día"], ["🎬", "Tú eliges la película"],
+    ["💆", "Un masaje"], ["🍳", "Un desayuno hecho por mí"], ["🌅", "Ver el atardecer juntos"],
+    ["💃", "Bailar nuestra canción"], ["🍦", "Un helado a mi cuenta"], ["🌻", "Un ramo de girasoles"],
+  ];
+  const EMOJIS_VALES = ["🎟️", "🤗", "😘", "💆", "🍳", "🎬", "🌅", "💃", "🍦", "🌻", "🍷", "🎁"];
+  let vales = [], valeEmoji = "🎟️";
+  async function cargarVales() {
+    const { data } = await sb.from("vales").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false });
+    vales = data || []; renderVales();
+  }
+  function renderVales() {
+    const ul = $("vales-list"); ul.innerHTML = "";
+    const paraMi = vales.filter((v) => v.de_usuario !== user.id), mios = vales.filter((v) => v.de_usuario === user.id);
+    const fila = (v, mio) => {
+      const li = document.createElement("li"); li.classList.toggle("usado", !!v.canjeado_en);
+      const e = document.createElement("span"); e.className = "v-emoji"; e.textContent = v.emoji; e.setAttribute("aria-hidden", "true");
+      const t = document.createElement("span"); t.className = "v-texto";
+      const a = document.createElement("strong"), b = document.createElement("small");
+      a.textContent = v.texto;
+      b.textContent = mio
+        ? `Para ${otro.nombre} · ${v.canjeado_en ? "canjeado el " + fechaCorta(v.canjeado_en, miTz()) + " 💗" : "sin canjear"}`
+        : v.canjeado_en ? `Canjeado el ${fechaCorta(v.canjeado_en, miTz())} 💗` : `De ${otro.nombre} · vale para cuando quieras`;
+      t.append(a, b); li.append(e, t);
+      if (!mio && !v.canjeado_en) {
+        const c = document.createElement("button"); c.type = "button"; c.textContent = "Canjear";
+        c.addEventListener("click", async () => {
+          if (!confirm(`¿Canjear “${v.texto}”? ${otro.nombre} recibirá un aviso.`)) return;
+          const { data, error } = await sb.rpc("canjear_vale", { p_id: v.id });
+          if (error || !data) { toast("No se pudo canjear"); return; }
+          lluvia(v.emoji, 14); toast("¡Canjeado! 💗"); cargarVales();
+        });
+        li.append(c);
+      }
+      if (mio && !v.canjeado_en) {
+        const x = document.createElement("button"); x.type = "button"; x.className = "quitar"; x.textContent = "×";
+        x.setAttribute("aria-label", `Quitar el vale: ${v.texto}`);
+        x.addEventListener("click", async () => {
+          if (!confirm("¿Quitar este vale?")) return;
+          const { error } = await sb.from("vales").delete().eq("id", v.id);
+          if (!error) cargarVales();
+        });
+        li.append(x);
+      }
+      ul.append(li);
+    };
+    paraMi.forEach((v) => fila(v, false));
+    mios.forEach((v) => fila(v, true));
+    if (!vales.length) {
+      const li = document.createElement("li"); li.className = "muted vacia";
+      li.textContent = `Toca una idea de arriba para regalarle el primero a ${otro.nombre}.`; ul.append(li);
+    }
+  }
+  function abrirVale(emoji, texto) {
+    valeEmoji = emoji || "🎟️";
+    $("vale-para").textContent = `Un vale para ${otro.nombre}`;
+    $("vale-texto").value = texto || "";
+    const g = $("vale-emojis"); g.innerHTML = "";
+    EMOJIS_VALES.forEach((em) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = em;
+      b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(em === valeEmoji)); b.setAttribute("aria-label", em);
+      b.addEventListener("click", () => { valeEmoji = em; g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b))); });
+      g.append(b);
+    });
+    $("dlg-vale").showModal();
+  }
+  (function pintarIdeas() {
+    const g = $("vale-ideas");
+    const nuevo = document.createElement("button"); nuevo.type = "button"; nuevo.textContent = "✍️ Escribir uno";
+    nuevo.addEventListener("click", () => abrirVale("🎟️", "")); g.append(nuevo);
+    IDEAS_VALES.forEach(([em, t]) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = `${em} ${t}`;
+      b.addEventListener("click", () => abrirVale(em, t)); g.append(b);
+    });
+  })();
+  $("vale-cancelar").addEventListener("click", () => $("dlg-vale").close());
+  $("f-vale").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const texto = $("vale-texto").value.trim(); if (!texto) return;
+    const { error } = await sb.from("vales").insert({ pareja_id: pareja.id, de_usuario: user.id, texto, emoji: valeEmoji });
+    if (error) { toast("No se pudo regalar"); return; }
+    $("dlg-vale").close(); lluvia(valeEmoji, 10); toast(`Vale regalado a ${otro.nombre} 🎟️`); cargarVales();
+  });
+
+  // ---------- distancia entre ustedes ----------
+  function km(a, b) {
+    const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(x));
+  }
+  function renderDistancia() {
+    const p = $("distancia"), ok = perfil && otro && perfil.lat != null && otro.lat != null;
+    p.hidden = !ok;
+    if (ok) {
+      const d = Math.round(km(perfil, otro));
+      p.textContent = d < 20 ? "📍 ¡Están en la misma ciudad! 💞" : `📍 ${d.toLocaleString("es")} km nos separan`;
+    }
+    $("ubicacion-nota").textContent = perfil && perfil.lat != null
+      ? (otro && otro.lat != null ? "Distancia activada para los dos ✓" : `Tu ubicación está guardada. Falta que ${otro ? otro.nombre : "tu pareja"} active la suya.`)
+      : "Se guarda aproximada (unos 10 km), solo para calcular cuánto los separa.";
+  }
+  $("btn-ubicacion").addEventListener("click", () => {
+    if (!navigator.geolocation) { toast("Este navegador no da la ubicación"); return; }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      // redondeada a 1 decimal (~10 km): suficiente para la distancia, sin dar la dirección exacta
+      const lat = Math.round(pos.coords.latitude * 10) / 10, lon = Math.round(pos.coords.longitude * 10) / 10;
+      const { error } = await sb.from("perfiles").update({ lat, lon }).eq("id", user.id);
+      if (error) { toast("No se pudo guardar"); return; }
+      perfil = { ...perfil, lat, lon }; renderDistancia(); toast("Listo 📍");
+    }, () => toast("Sin permiso para la ubicación"), { maximumAge: 3600000, timeout: 15000 });
+  });
 
   // ---------- notificaciones push ----------
   function b64ToU8(s) {

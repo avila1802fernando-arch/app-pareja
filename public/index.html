@@ -70,9 +70,14 @@
     <!-- Pestaña: Inicio -->
     <div class="tab dos" id="tab-inicio">
      <div class="col">
-      <div>
-        <p class="eyebrow">Nuestro rincón</p>
-        <h1 id="home-title">Hola.</h1>
+      <div class="cabecera">
+        <div class="avatares" aria-hidden="true">
+          <span class="avatar" data-av="suyo"></span><span class="av-corazon">♥</span><span class="avatar" data-av="mio"></span>
+        </div>
+        <div>
+          <p class="eyebrow">Nuestro rincón</p>
+          <h1 id="home-title">Hola.</h1>
+        </div>
       </div>
       <div class="relojes" aria-label="La hora de cada uno">
         <span><small>Tú</small><b id="reloj-mio">--:--</b><i id="ico-mio" aria-hidden="true"></i></span>
@@ -80,6 +85,7 @@
         <span><small id="reloj-su-nombre">Tu pareja</small><b id="reloj-suyo">--:--</b><i id="ico-suyo" aria-hidden="true"></i></span>
       </div>
       <p class="small-note reloj-nota" id="reloj-nota" hidden></p>
+      <p class="distancia" id="distancia" hidden></p>
       <div class="heart" id="heart">
         <div class="ring"></div>
         <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -113,6 +119,10 @@
         <span class="muted" id="status-when"></span>
         <p class="animo-suyo" id="animo-suyo" hidden></p>
       </div>
+      <button type="button" class="momento" id="momento-suyo" hidden>
+        <img id="momento-img" alt="">
+        <span class="momento-pie"><strong id="momento-quien"></strong><span id="momento-texto"></span><small id="momento-cuando"></small></span>
+      </button>
       <div class="status libre-status" id="libre-status" hidden>
         <strong id="libre-title"></strong>
         <span class="muted" id="libre-when"></span>
@@ -129,6 +139,8 @@
           <button type="button" data-senal="buenas_noches"><b>🌙</b>Buenas noches</button>
         </div>
         <button type="button" class="ghost animo-mio" id="btn-animo">¿Cómo te sientes hoy?</button>
+        <label class="boton-archivo" for="momento-input">📸 Compartir un momento</label>
+        <input type="file" id="momento-input" accept="image/*" class="sr">
         <button type="button" class="ghost" id="push-hint" hidden>Activar notificaciones en este teléfono</button>
       </div>
       <div class="log">
@@ -164,9 +176,45 @@
         <summary><h2>Días anteriores</h2></summary>
         <ul id="hist-list" class="hist"></ul>
       </details>
+      <div class="log">
+        <h2>Nuestros momentos</h2>
+        <div class="album" id="album"></div>
+      </div>
      </div>
      <div class="col">
-      <div class="log primero">
+      <div class="girasol-card">
+        <div class="girasol-top"><h2>Nuestro girasol</h2><span class="etapa" id="girasol-etapa"></span></div>
+        <div class="girasol" id="girasol" aria-hidden="true"></div>
+        <p class="small-note centro" id="girasol-nota"></p>
+        <button type="button" id="btn-regar">Regar 💧</button>
+      </div>
+      <div class="log">
+        <h2>Frasco de razones</h2>
+        <div class="frasco-fila">
+          <div class="frasco" id="frasco" aria-hidden="true"></div>
+          <div class="stack">
+            <p class="muted" id="frasco-estado"></p>
+            <button type="button" id="btn-sacar">Sacar una razón 💌</button>
+          </div>
+        </div>
+        <form id="f-razon" class="fila-deseo">
+          <label for="razon-texto" class="sr">Te quiero porque…</label>
+          <input id="razon-texto" maxlength="200" required placeholder="Te quiero porque…">
+          <button type="submit" aria-label="Echar la razón al frasco">＋</button>
+        </form>
+        <p class="small-note" id="razones-mias"></p>
+        <details id="razones-det" hidden>
+          <summary class="small-note">Razones que ya sacaste</summary>
+          <ul class="razones" id="razones-list"></ul>
+        </details>
+      </div>
+      <div class="log">
+        <h2>Vales de amor</h2>
+        <p class="small-note">Regálale vales para canjear cuando se vean… o cuando quiera.</p>
+        <div class="vale-ideas" id="vale-ideas"></div>
+        <ul class="vales" id="vales-list"></ul>
+      </div>
+      <div class="log">
         <h2>Cartas</h2>
         <p class="small-note">Para leer con calma. Puedes sellarla hasta una fecha especial.</p>
         <button type="button" id="btn-carta">Escribir una carta 💌</button>
@@ -239,6 +287,18 @@
         <p class="eyebrow">Ajustes</p>
         <h1>Lo nuestro, <em>a tu manera</em>.</h1>
       </div>
+      <div class="stack">
+        <h2>Tu foto</h2>
+        <div class="foto-fila">
+          <span class="avatar grande" data-av="mio" aria-hidden="true"></span>
+          <div class="stack">
+            <label class="boton-archivo" for="foto-input">Elegir foto</label>
+            <input type="file" id="foto-input" accept="image/*" class="sr">
+            <button type="button" class="link" id="foto-quitar" hidden>Quitar foto</button>
+          </div>
+        </div>
+        <p class="small-note">Solo la ven ustedes dos.</p>
+      </div>
       <form id="f-ajustes" class="stack">
         <label for="aj-nombre">Tu nombre o apodo</label>
         <input id="aj-nombre" maxlength="24" required>
@@ -271,6 +331,8 @@
           <p class="small-note">Esos días de cada mes son especiales: les llega un aviso a los dos a las 9 de la mañana.</p>
           <button type="submit" class="ghost">Guardar fechas</button>
         </form>
+        <button type="button" class="ghost" id="btn-ubicacion">📍 Usar mi ubicación para ver la distancia</button>
+        <p class="small-note" id="ubicacion-nota">Se guarda aproximada (unos 10 km), solo para calcular cuánto los separa.</p>
       </div>
       <form id="f-clave" class="stack">
         <h2>Tu cuenta</h2>
@@ -348,6 +410,61 @@
     <p class="firma" id="leer-firma"></p>
   </article>
   <button type="button" id="leer-cerrar">Cerrar</button>
+</dialog>
+
+<!-- Recortar la foto de perfil -->
+<dialog id="dlg-recorte" class="dlg">
+  <div class="stack">
+    <h2>Ajusta tu foto</h2>
+    <div class="recorte"><canvas id="recorte-canvas" width="600" height="600" aria-label="Vista previa de la foto"></canvas></div>
+    <label for="recorte-zoom">Acercar</label>
+    <input type="range" id="recorte-zoom" min="1" max="4" step="0.01" value="1">
+    <p class="small-note">Arrastra la foto para que tu cara quede en el círculo.</p>
+    <button type="button" id="recorte-ok">Usar esta foto</button>
+    <button type="button" class="link" id="recorte-cancelar">Cancelar</button>
+  </div>
+</dialog>
+
+<!-- Compartir un momento -->
+<dialog id="dlg-momento" class="dlg">
+  <form id="f-momento" class="stack">
+    <h2>Compartir un momento</h2>
+    <img class="momento-prev" id="momento-prev" alt="Vista previa">
+    <label for="momento-texto-in">Cuéntale algo (opcional)</label>
+    <input id="momento-texto-in" maxlength="140" placeholder="Pensando en ti mientras…">
+    <button type="submit" id="momento-enviar">Compartir 📸</button>
+    <button type="button" class="link" id="momento-cancelar">Cancelar</button>
+  </form>
+</dialog>
+
+<!-- Ver un momento -->
+<dialog id="dlg-ver" class="dlg dlg-ver">
+  <img id="ver-img" alt="">
+  <p class="mano" id="ver-texto"></p>
+  <p class="small-note" id="ver-meta"></p>
+  <button type="button" id="ver-cerrar">Cerrar</button>
+  <button type="button" class="link" id="ver-borrar" hidden>Borrar este momento</button>
+</dialog>
+
+<!-- Regalar un vale -->
+<dialog id="dlg-vale" class="dlg">
+  <form id="f-vale" class="stack">
+    <h2 id="vale-para">Un vale de amor</h2>
+    <label for="vale-texto">Vale por…</label>
+    <input id="vale-texto" maxlength="100" required placeholder="Un abrazo de 10 minutos">
+    <div class="vale-emojis" id="vale-emojis" role="radiogroup" aria-label="Dibujito del vale"></div>
+    <button type="submit">Regalar 🎟️</button>
+    <button type="button" class="link" id="vale-cancelar">Cancelar</button>
+  </form>
+</dialog>
+
+<!-- Razón sacada del frasco -->
+<dialog id="dlg-razon" class="dlg">
+  <div class="stack centro">
+    <p class="eyebrow" id="razon-de"></p>
+    <p class="papelito" id="razon-leida"></p>
+    <button type="button" id="razon-cerrar">Guardar en el corazón 💗</button>
+  </div>
 </dialog>
 
 <!-- Crear / editar un evento del calendario -->

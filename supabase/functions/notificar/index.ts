@@ -133,6 +133,31 @@ async function porEvento(ev: Evento) {
       url: "/#juntos",
       vibrate: [100, 50, 100, 50, 300],
     };
+  } else if (ev.tipo === "momento") {
+    const { data: m } = await sb.from("momentos").select("texto").eq("de_usuario", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    mensaje = { title: `📸 ${nombre} compartió un momento`, body: m?.texto ? `“${m.texto}”` : "Entra a verlo 💗", tag: "momento", url: "/" };
+  } else if (ev.tipo === "riego") {
+    // ¿Quien recibe ya regó ese día? Entonces los dos lo regaron
+    const { data: r } = await sb.from("riegos").select("dia").eq("usuario_id", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    const { count } = r
+      ? await sb.from("riegos").select("dia", { count: "exact", head: true }).eq("usuario_id", otroId).eq("dia", r.dia)
+      : { count: 0 };
+    mensaje = (count ?? 0) > 0
+      ? { title: "🌻 ¡Los dos regaron hoy el girasol!", body: "Creció un poquito más 💛", tag: "girasol", url: "/#juntos" }
+      : { title: `💧 ${nombre} regó nuestro girasol`, body: "¡Te toca a ti!", tag: "girasol", url: "/#juntos" };
+  } else if (ev.tipo === "vale") {
+    const { data: v } = await sb.from("vales").select("emoji, texto").eq("de_usuario", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    mensaje = { title: `🎟️ ${nombre} te regaló un vale`, body: v ? `${v.emoji} ${v.texto}` : "Entra a verlo 💗", tag: "vale", url: "/#juntos", vibrate: [80, 60, 80, 60, 200] };
+  } else if (ev.tipo === "canje") {
+    // El vale canjeado lo había regalado quien recibe este aviso
+    const { data: v } = await sb.from("vales").select("emoji, texto").eq("de_usuario", otroId)
+      .not("canjeado_en", "is", null).order("canjeado_en", { ascending: false }).limit(1).maybeSingle();
+    mensaje = { title: `🎟️ ${nombre} canjeó tu vale`, body: v ? `${v.emoji} ${v.texto} 💗` : "¡Cumple lo prometido! 💗", tag: "vale", url: "/#juntos" };
+  } else if (ev.tipo === "razon") {
+    mensaje = { title: `🫙 ${nombre} echó una razón nueva al frasco`, body: "Sácala cuando quieras 💌", tag: "frasco", url: "/#juntos" };
   } else {
     mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
   }

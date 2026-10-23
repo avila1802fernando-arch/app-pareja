@@ -10,6 +10,11 @@ create table if not exists public.perfiles (
 );
 -- Zona horaria de cada uno (IANA, p. ej. America/Guayaquil). La app la rellena sola.
 alter table public.perfiles add column if not exists tz text;
+-- Foto de perfil: ruta dentro del bucket privado `fotos` (ver más abajo)
+alter table public.perfiles add column if not exists foto text;
+-- Ubicación aproximada (redondeada a ~10 km) solo para mostrar "nos separan N km"
+alter table public.perfiles add column if not exists lat double precision;
+alter table public.perfiles add column if not exists lon double precision;
 
 create table if not exists public.parejas (
   id uuid primary key default gen_random_uuid(),
@@ -37,7 +42,8 @@ alter table public.eventos add constraint eventos_tipo_check
   check (tipo in (
     'entrada', 'te_extrano', 'libre',
     'abrazo', 'beso', 'pensando', 'buenos_dias', 'buenas_noches',
-    'animo', 'respuesta', 'carta'
+    'animo', 'respuesta', 'carta',
+    'momento', 'riego', 'vale', 'canje', 'razon'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -478,12 +484,180 @@ create trigger eventos_cal_touch
   before update on public.eventos_cal
   for each row execute function public.eventos_cal_touch();
 
+-- ========== MOMENTOS, GIRASOL, VALES Y FRASCO ==========
+-- Momentos: una foto del día con un texto corto (la foto vive en el bucket `fotos`)
+create table if not exists public.momentos (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  ruta text not null,
+  texto text check (texto is null or char_length(texto) <= 140),
+  creado_en timestamptz not null default now()
+);
+create index if not exists momentos_pareja_idx on public.momentos (pareja_id, creado_en desc);
+
+-- Nuestro girasol: cada uno lo riega una vez por día; crece con los días que lo riegan los dos
+create table if not exists public.riegos (
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  dia date not null,
+  creado_en timestamptz not null default now(),
+  primary key (usuario_id, dia)
+);
+create index if not exists riegos_pareja_idx on public.riegos (pareja_id, dia);
+
+-- Vales de amor: uno se lo regala al otro, que lo canjea (por ejemplo, en Talca)
+create table if not exists public.vales (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 100),
+  emoji text not null default '🎟️' check (char_length(emoji) <= 8),
+  canjeado_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+create index if not exists vales_pareja_idx on public.vales (pareja_id, creado_en desc);
+
+-- Frasco de razones: "te quiero porque…". Las que todavía no saca el otro, el otro no las puede leer.
+create table if not exists public.razones (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 200),
+  sacada_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+create index if not exists razones_pareja_idx on public.razones (pareja_id, creado_en desc);
+
+alter table public.momentos enable row level security;
+alter table public.riegos   enable row level security;
+alter table public.vales    enable row level security;
+alter table public.razones  enable row level security;
+
+drop policy if exists "momentos: leer" on public.momentos;
+create policy "momentos: leer" on public.momentos for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "momentos: compartir" on public.momentos;
+create policy "momentos: compartir" on public.momentos
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id));
+drop policy if exists "momentos: borrar los míos" on public.momentos;
+create policy "momentos: borrar los míos" on public.momentos for delete using (de_usuario = auth.uid());
+
+drop policy if exists "riegos: leer" on public.riegos;
+create policy "riegos: leer" on public.riegos for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "riegos: regar" on public.riegos;
+create policy "riegos: regar" on public.riegos
+  for insert with check (usuario_id = auth.uid() and public.es_mi_pareja(pareja_id));
+
+drop policy if exists "vales: leer" on public.vales;
+create policy "vales: leer" on public.vales for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "vales: regalar" on public.vales;
+create policy "vales: regalar" on public.vales
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id) and canjeado_en is null);
+drop policy if exists "vales: borrar los míos sin canjear" on public.vales;
+create policy "vales: borrar los míos sin canjear" on public.vales
+  for delete using (de_usuario = auth.uid() and canjeado_en is null);
+
+drop policy if exists "razones: leer" on public.razones;
+create policy "razones: leer" on public.razones
+  for select using (de_usuario = auth.uid() or (public.es_mi_pareja(pareja_id) and sacada_en is not null));
+drop policy if exists "razones: escribir" on public.razones;
+create policy "razones: escribir" on public.razones
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id) and sacada_en is null);
+drop policy if exists "razones: borrar las mías" on public.razones;
+create policy "razones: borrar las mías" on public.razones for delete using (de_usuario = auth.uid());
+
+-- Canjear un vale que me regalaron
+create or replace function public.canjear_vale(p_id uuid) returns public.vales
+language sql security definer set search_path = public as $$
+  update public.vales set canjeado_en = now()
+   where id = p_id and canjeado_en is null and de_usuario <> auth.uid() and public.es_mi_pareja(pareja_id)
+  returning *;
+$$;
+-- Cuántas razones me esperan en el frasco (sin mostrarlas)
+create or replace function public.razones_en_frasco() returns integer
+language sql stable security definer set search_path = public as $$
+  select count(*)::int from public.razones r
+   where public.es_mi_pareja(r.pareja_id) and r.de_usuario <> auth.uid() and r.sacada_en is null;
+$$;
+-- Sacar una razón al azar del frasco
+create or replace function public.sacar_razon() returns public.razones
+language sql security definer set search_path = public as $$
+  update public.razones set sacada_en = now()
+   where id = (select r.id from public.razones r
+                where public.es_mi_pareja(r.pareja_id) and r.de_usuario <> auth.uid() and r.sacada_en is null
+                order by random() limit 1)
+  returning *;
+$$;
+grant execute on function public.canjear_vale(uuid) to authenticated;
+grant execute on function public.razones_en_frasco() to authenticated;
+grant execute on function public.sacar_razon() to authenticated;
+
+-- Avisos: momento, riego y vale dejan un evento (el webhook de `eventos` avisa al otro)
+create or replace function public.evento_desde_tabla() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  fila jsonb := to_jsonb(new);
+begin
+  insert into public.eventos (pareja_id, de_usuario, tipo)
+  values ((fila->>'pareja_id')::uuid, coalesce(fila->>'de_usuario', fila->>'usuario_id')::uuid, tg_argv[0]);
+  return new;
+end;
+$$;
+drop trigger if exists momentos_aviso on public.momentos;
+create trigger momentos_aviso after insert on public.momentos
+  for each row execute function public.evento_desde_tabla('momento');
+drop trigger if exists riegos_aviso on public.riegos;
+create trigger riegos_aviso after insert on public.riegos
+  for each row execute function public.evento_desde_tabla('riego');
+drop trigger if exists vales_aviso on public.vales;
+create trigger vales_aviso after insert on public.vales
+  for each row execute function public.evento_desde_tabla('vale');
+drop trigger if exists razones_aviso on public.razones;
+create trigger razones_aviso after insert on public.razones
+  for each row execute function public.evento_desde_tabla('razon');
+-- Al canjear un vale se avisa a quien lo regaló
+create or replace function public.registrar_canje() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.canjeado_en is null and new.canjeado_en is not null then
+    insert into public.eventos (pareja_id, de_usuario, tipo)
+    values (new.pareja_id, coalesce(auth.uid(), new.de_usuario), 'canje');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists vales_canje on public.vales;
+create trigger vales_canje after update on public.vales
+  for each row execute function public.registrar_canje();
+
+-- ========== FOTOS (Supabase Storage) ==========
+-- Bucket PRIVADO. Rutas: <pareja_id>/<usuario_id>/<archivo>. Solo la pareja las ve; cada uno sube y borra las suyas.
+create or replace function public.es_mi_pareja_txt(p text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.parejas where id::text = p and (usuario_a = auth.uid() or usuario_b = auth.uid()));
+$$;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('fotos', 'fotos', false, 4194304, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+drop policy if exists "fotos: ver las de nuestra pareja" on storage.objects;
+create policy "fotos: ver las de nuestra pareja" on storage.objects for select to authenticated
+  using (bucket_id = 'fotos' and public.es_mi_pareja_txt((storage.foldername(name))[1]));
+drop policy if exists "fotos: subir las mías" on storage.objects;
+create policy "fotos: subir las mías" on storage.objects for insert to authenticated
+  with check (bucket_id = 'fotos' and public.es_mi_pareja_txt((storage.foldername(name))[1])
+              and (storage.foldername(name))[2] = auth.uid()::text);
+drop policy if exists "fotos: borrar las mías" on storage.objects;
+create policy "fotos: borrar las mías" on storage.objects for delete to authenticated
+  using (bucket_id = 'fotos' and (storage.foldername(name))[2] = auth.uid()::text);
+
 -- ========== TIEMPO REAL ==========
 -- Agrega las tablas a la publicación solo si aún no están (para poder re-ejecutar).
 do $$
 declare t text;
 begin
-  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal'] loop
+  foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
+                                'momentos', 'riegos', 'vales'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

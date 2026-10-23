@@ -190,6 +190,73 @@ label.check{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(-
 .deseos li.hecho label{text-decoration:line-through;text-decoration-color:var(--accent);color:var(--muted)}
 .deseos label small{display:inline-block;margin-left:4px;font-size:.75rem;color:var(--accent);font-weight:700}
 .deseos .quitar{flex:none;width:44px;height:44px;padding:0;background:none;color:var(--muted);box-shadow:none;font-size:1.3rem;font-weight:400}
+/* fotos de perfil */
+.cabecera{display:flex;align-items:center;gap:14px}
+.avatares{display:flex;align-items:center;flex:none}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--grad) center/cover no-repeat;color:var(--on-accent);display:grid;place-items:center;font-family:var(--display);font-size:1.3rem;border:3px solid var(--card);box-shadow:0 6px 14px -8px var(--glow);flex:none}
+.av-corazon{position:relative;z-index:1;margin:0 -8px;width:22px;height:22px;border-radius:50%;background:var(--card);color:var(--accent);display:grid;place-items:center;font-size:.8rem;box-shadow:0 2px 6px -2px var(--glow)}
+.avatar.grande{width:84px;height:84px;font-size:2rem}
+.foto-fila{display:flex;align-items:center;gap:16px}
+.boton-archivo{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border-radius:999px;border:1.5px solid var(--line);color:var(--accent);font-weight:600;font-size:.9rem;cursor:pointer;background:transparent}
+.boton-archivo:active{transform:scale(.97)}
+input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-offset:3px}
+.recorte{position:relative;border-radius:20px;overflow:hidden;touch-action:none;background:var(--blush)}
+.recorte canvas{display:block;width:100%;height:auto;touch-action:none;cursor:grab}
+.recorte::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at center,transparent 0 49%,rgba(40,10,25,.5) 49.5%)}
+.distancia{text-align:center;font-size:.85rem;color:var(--muted);margin-top:-12px;font-weight:600}
+/* momentos */
+.momento{display:block;width:100%;padding:0;border-radius:22px;overflow:hidden;background:var(--card);border:1px solid var(--line);color:var(--fg);text-align:left;box-shadow:0 18px 34px -24px var(--glow);font-weight:400;font-size:.9rem}
+.momento img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--blush)}
+.momento-pie{display:flex;flex-direction:column;gap:2px;padding:12px 16px 14px}
+.momento-pie strong{font-family:var(--display);font-weight:500;font-size:1.05rem}
+.momento-pie span{font-family:var(--hand);font-size:1.25rem;color:var(--accent);line-height:1.15}
+.momento-pie small{color:var(--muted);font-size:.75rem}
+.momento-prev{width:100%;max-height:50vh;object-fit:contain;border-radius:16px;background:var(--blush)}
+.album{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.album-foto{aspect-ratio:1;border-radius:14px;padding:0;background:var(--blush) center/cover no-repeat;border:1px solid var(--line);box-shadow:none}
+.dlg-ver img{width:100%;max-height:60vh;object-fit:contain;border-radius:18px;background:var(--blush);margin-bottom:10px}
+.dlg-ver .mano{font-size:1.4rem;color:var(--accent);text-align:center}
+.dlg-ver .small-note{text-align:center;margin-bottom:12px}
+.dlg-ver button{width:100%}
+.centro{text-align:center}
+/* nuestro girasol */
+.girasol-card{border-radius:24px;padding:18px 18px 16px;background:linear-gradient(180deg,#fff7d6 0%,var(--blush) 75%);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.girasol-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.girasol-top .etapa{font-family:var(--hand);font-size:1.3rem;color:#a35f00}
+.girasol{height:210px;display:grid;place-items:end center}
+.girasol svg{height:100%;width:auto;overflow:visible}
+.girasol .planta{transform-origin:100px 176px;animation:mece 4.5s ease-in-out infinite}
+.girasol .planta.sed{animation:none;transform:rotate(9deg);filter:saturate(.55)}
+@keyframes mece{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+.girasol.regado .planta{animation:salta .6s ease-out}
+@keyframes salta{0%{transform:scale(1)}40%{transform:scale(1.06,.94)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.girasol .planta,.girasol.regado .planta{animation:none}}
+@media (prefers-color-scheme:dark){.girasol-card{background:linear-gradient(180deg,#3a2d17 0%,var(--blush) 75%)}.girasol-top .etapa{color:#ffc94d}}
+/* frasco de razones */
+.frasco-fila{display:flex;align-items:center;gap:14px}
+.frasco{width:92px;flex:none}
+.frasco svg{width:100%;height:auto;display:block}
+.papelito{font-family:var(--hand);font-size:1.6rem;line-height:1.25;padding:22px 18px;border-radius:6px;background:#fff6e5;color:#5a2a3a;box-shadow:0 14px 30px -18px rgba(90,20,50,.55);transform:rotate(-1.5deg);white-space:pre-wrap;overflow-wrap:anywhere}
+.razones{list-style:none;margin:6px 0 0;padding:0}
+.razones li{display:block;padding:8px 0;border-bottom:1px dashed var(--line);font-family:var(--hand);font-size:1.2rem}
+.razones li:last-child{border-bottom:0}
+/* vales de amor */
+.vale-ideas{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.vale-ideas::-webkit-scrollbar{display:none}
+.vale-ideas button{flex:none;background:var(--blush);color:var(--fg);border:1.5px dashed var(--accent);box-shadow:none;font-size:.8rem;font-weight:600;padding:8px 12px;min-height:40px}
+.vales{gap:10px!important}
+.vales li{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:14px 16px 14px 18px;border-radius:14px;background:var(--card);border:1.5px dashed var(--accent)}
+.vales li.usado{opacity:.6;border-style:solid}
+.vales li.vacia{border:0;padding:4px 0}
+.vales .v-emoji{font-size:1.7rem;line-height:1}
+.vales .v-texto{flex:1;display:flex;flex-direction:column;min-width:0;white-space:normal!important;color:var(--fg)!important}
+.vales .v-texto strong{font-family:var(--display);font-weight:500}
+.vales .v-texto small{color:var(--muted);font-size:.75rem}
+.vales li button{flex:none;padding:8px 14px;font-size:.8rem;min-height:40px}
+.vales li button.quitar{background:none;color:var(--muted);box-shadow:none;width:40px;padding:0;font-size:1.2rem;font-weight:400}
+.vale-emojis{display:flex;flex-wrap:wrap;gap:6px}
+.vale-emojis button{background:var(--blush);border:1.5px solid var(--line);box-shadow:none;width:44px;height:44px;padding:0;font-size:1.3rem;border-radius:12px}
+.vale-emojis button[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft)}
 .tabs button.punto::after{content:"";position:absolute;top:5px;left:calc(50% + 7px);width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--card)}
 /* horarios habituales: cuadrícula 7 días x 24 horas */
 .leyenda{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}

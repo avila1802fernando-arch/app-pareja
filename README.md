@@ -13,10 +13,17 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
   - **Estoy libre para hablar**: el otro lo ve en vivo y recibe una push; si los dos están libres, aparece "¡Los dos están libres!". Se apaga sola a las 2 horas.
   - **Señales**: abrazo 🤗, beso 😘, pienso en ti 💭, buenos días ☀️ y buenas noches 🌙. Llegan como push con vibración y, con la app abierta, llueven emojis por la pantalla.
   - **Ánimo**: cada uno comparte cómo se siente (y una nota corta); si es triste o con estrés, la push le sugiere al otro mandar un abrazo.
+  - **Fotos de perfil** de los dos y **momentos 📸**: una foto del día con un texto, que le aparece al otro en el Inicio. Las fotos van a un bucket **privado** de Supabase Storage: solo las ve la pareja (no están en el código ni en GitHub).
+  - **Distancia 📍**: "N km nos separan", con la ubicación de cada uno redondeada a ~10 km (se activa en Ajustes).
+  - **Días especiales**: el día del mes en que se conocieron y en que se hicieron novios se celebran en el Inicio, se marcan en el calendario y les llega un aviso a los dos a las 9:00.
 - **Juntos**
   - **Pregunta del día**: la misma para los dos. La respuesta del otro solo se puede leer después de responder. Racha 🔥 de días seguidos e historial.
   - **Cartas**: para leer con calma, en papel y con letra manuscrita. Se pueden **sellar hasta una fecha** (el aniversario, el día del viaje…): hasta entonces solo se ve de quién es y cuándo se abre, y llega un aviso cuando ya se puede abrir.
   - **Cuando nos veamos**: lista compartida de cosas para hacer juntos, para ir tachando.
+  - **Nuestro girasol 🌻**: una planta que riegan los dos (una vez por día cada uno) y crece por etapas hasta florecer; si siguen regando, se vuelve un ramo.
+  - **Frasco de razones 🫙**: "te quiero porque…". El otro no puede leerlas hasta sacarlas del frasco (lo asegura la base de datos).
+  - **Vales de amor 🎟️**: "un abrazo de 10 minutos", "tú eliges la película"… para canjear cuando se vean; a quien lo regaló le llega un aviso al canjearlo.
+  - **Nuestros momentos**: el álbum con las fotos del día de los dos.
 - **Horarios** · Cuadrícula semanal donde cada uno marca cuándo normalmente puede. Se ven los dos horarios y las **horas en común**, siempre con las dos horas locales.
 - **Calendario** · Llamadas, citas, viajes, aniversarios. Vista mes y lista de próximos. Al crear o cambiar algo, el otro recibe una push; **30 minutos antes** les llega un recordatorio a los dos.
 - **Ajustes** · Nombre, zona horaria, "juntos desde", notificaciones y cerrar sesión.

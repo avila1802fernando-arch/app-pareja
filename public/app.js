@@ -205,6 +205,9 @@
     clearInterval(relojTimer); renderRelojes();
     relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
     renderAvatares(); renderDistancia(); conectarVivo();
+    // Bienvenida la primera vez que entran
+    let vista = false; try { vista = localStorage.getItem("bienvenida-vista") === "1"; } catch (e) {}
+    $("bienvenida").hidden = vista;
     await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
       cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones()]);
     if (canal) sb.removeChannel(canal);
@@ -397,6 +400,13 @@
     const ultMsg = suyos.find((e) => e.tipo === "te_extrano");
     $("status-title").textContent = ultEntrada ? `${otro.nombre} entró ${ago(ultEntrada.creado_en)}` : `${otro.nombre} todavía no ha entrado`;
     $("status-when").textContent = ultMsg ? `último “te extraño” ${ago(ultMsg.creado_en)}` : "aún sin mensajes";
+    // ¿Cuántas veces pensó en ti hoy? (señales de cariño desde la medianoche de tu zona)
+    const { count: veces } = await sb.from("eventos").select("id", { count: "exact", head: true })
+      .eq("pareja_id", pareja.id).eq("de_usuario", otro.id)
+      .in("tipo", ["te_extrano", "pensando", "beso", "abrazo", "latido", "buenos_dias", "buenas_noches", "notita", "carta", "razon", "cancion"])
+      .gte("creado_en", aIso(diaHoy() + "T00:00", miTz()));
+    $("pensando-hoy").hidden = !veces;
+    if (veces) $("pensando-hoy").textContent = `💭 Hoy ${otro.nombre} pensó en ti ${veces === 1 ? "1 vez" : veces + " veces"}`;
     const list = $("log-list"); list.innerHTML = "";
     (evs || []).forEach((e) => {
       const quien = e.de_usuario === user.id ? perfil.nombre : otro.nombre;
@@ -424,6 +434,15 @@
     setTimeout(() => document.querySelectorAll("#senales button").forEach((x) => (x.disabled = false)), 1500);
     render();
   }));
+
+  // ---------- bienvenida y guía ----------
+  function cerrarBienvenida() { try { localStorage.setItem("bienvenida-vista", "1"); } catch (e) {} $("bienvenida").hidden = true; }
+  $("bienvenida-ok").addEventListener("click", () => { cerrarBienvenida(); lluvia("💗", 10); });
+  $("bienvenida-guia").addEventListener("click", () => {
+    cerrarBienvenida(); irA("ajustes");
+    const primero = $("guia").querySelector("details"); if (primero) primero.open = true;
+    setTimeout(() => $("guia").scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  });
 
   // ---------- navegación por pestañas ----------
   const TABS = ["inicio", "juntos", "horarios", "calendario", "ajustes"];
@@ -967,8 +986,51 @@
     $("reloj-dif").textContent = dif === 0 ? "misma hora" : dif > 0 ? `+${dif} h` : `−${-dif} h`;
     $("reloj-nota").hidden = hs >= 7;
     $("reloj-nota").textContent = `Shh… para ${otro.nombre} es de madrugada 😴. Tus señales le esperan al despertar.`;
-    renderLuna();
+    renderLuna(); renderSaludo(); renderFrase();
   }
+
+  // Saludo según la hora de cada uno
+  function renderSaludo() {
+    const h = partes(new Date().toISOString(), miTz()).h;
+    const [s, e] = h >= 5 && h < 12 ? ["Buenos días", "☀️"] : h >= 12 && h < 19 ? ["Buenas tardes", "🌤️"] : ["Buenas noches", "🌙"];
+    $("saludo").textContent = `${s}, ${perfil.nombre} ${e}`;
+  }
+  // Una frase bonita por día (la misma para los dos)
+  const FRASES = [
+    "Cada día que pasa es un día menos para abrazarte.", "La distancia es solo el tiempo que falta para vernos.",
+    "Te pienso en mi hora y en la tuya.", "Mi lugar favorito es cualquier conversación contigo.",
+    "El corazón no sabe medir kilómetros.", "Contigo hasta las videollamadas con mala señal son lindas.",
+    "Hoy también te elijo.", "Eres mi buenos días y mi buenas noches.",
+    "Nos separa un mapa, nos une todo lo demás.", "Cada mensaje tuyo es un abrazo a distancia.",
+    "Contando los días, pero disfrutando cada uno contigo.", "El mismo cielo, la misma luna, el mismo amor.",
+    "Si pudiera, te mandaría un abrazo por correo.", "Me haces sonreír sin estar aquí.",
+    "Lo mejor de mi día eres tú.", "Pronto, la distancia será solo una historia que contaremos.",
+    "Te quiero en todos los husos horarios.", "Mi canción favorita es tu risa.",
+    "Falta poco, y cada día vale la pena.", "Eres mi casualidad más bonita.",
+    "Querer es estar cerca aunque estemos lejos.", "Gracias por quedarte, aunque el camino sea largo.",
+    "Tu voz es mi lugar tranquilo.", "Hasta Talca, y después a donde sea, contigo.",
+    "Un día más cerca de tu abrazo.", "Te extraño bonito.",
+    "Cada «buenas noches» tuyo me abriga.", "Lo nuestro no entiende de kilómetros.",
+    "Eres mi persona favorita en cualquier país.", "Prometo un abrazo por cada día de espera.",
+  ];
+  function renderFrase() {
+    const n = FRASES.length, i = ((diasEntre("2026-01-01", diaPregunta()) % n) + n) % n;
+    $("frase-dia").textContent = FRASES[i];
+  }
+  // Celebrar algo una sola vez en este teléfono (lluvia de emojis)
+  function celebrarUnaVez(clave, emoji) {
+    let ya = false; try { ya = localStorage.getItem(clave) === "1"; localStorage.setItem(clave, "1"); } catch (e) {}
+    if (!ya) setTimeout(() => lluvia(emoji, 22), 700);
+    return !ya;
+  }
+  // El gran día: cuando por fin se ven, una celebración a pantalla completa (una vez)
+  function granDia() {
+    if (!celebrarUnaVez("gran-dia-" + proximo.inicio.slice(0, 10), "💞")) return;
+    $("gran-texto").textContent = /primera vez/i.test(proximo.titulo)
+      ? "Hoy se ven por primera vez. Abrácense muy fuerte 🤗" : proximo.titulo;
+    setTimeout(() => $("dlg-gran-dia").showModal(), 900);
+  }
+  $("gran-cerrar").addEventListener("click", () => { $("dlg-gran-dia").close(); lluvia("💗", 20); });
 
   // Años, meses y días entre dos claves "YYYY-MM-DD"
   function duracion(desde, hasta) {
@@ -1070,10 +1132,15 @@
     const ahora = Date.now(), ini = new Date(proximo.inicio).getTime();
     const dias = diasEntre(diaHoy(), claveDia(proximo.inicio, miTz()));
     let n, txt;
-    if (ini <= ahora) { n = "💞"; txt = "¡Por fin juntos!"; }
-    else if (dias <= 0) { n = "¡Hoy!"; txt = "hoy se ven, por fin"; }
-    else if (dias === 1) { n = "1"; txt = "día para vernos · ¡es mañana!"; }
-    else { n = String(dias); txt = "días para vernos"; }
+    // Hitos de la espera: mensaje especial y lluvia de corazones (una vez por hito)
+    const HITOS = {
+      100: "¡Faltan solo 100 días! 💯", 50: "¡Faltan 50 días! Ya falta menos 💪", 30: "¡Un mes y se ven! 🗓️",
+      14: "¡Dos semanas! 💓", 7: "¡Una semana! Prepara el abrazo 🤗", 3: "¡Solo 3 días! 😍", 2: "¡Pasado mañana! 😍",
+    };
+    if (ini <= ahora) { n = "💞"; txt = "¡Por fin juntos!"; granDia(); }
+    else if (dias <= 0) { n = "¡Hoy!"; txt = "hoy se ven, por fin"; granDia(); }
+    else if (dias === 1) { n = "1"; txt = "día para vernos · ¡es mañana! 😭💞"; celebrarUnaVez("hito-1-" + proximo.inicio, "💞"); }
+    else { n = String(dias); txt = HITOS[dias] || "días para vernos"; if (HITOS[dias]) celebrarUnaVez(`hito-${dias}-${proximo.inicio}`, "💞"); }
     num.textContent = n; num.classList.toggle("chico", n.length > 3);
     $("cuenta-txt").textContent = txt;
     $("cuenta-ev").textContent = `${EMOJI[proximo.tipo] || EMOJI.otro} ${proximo.titulo} · ${fechaCorta(proximo.inicio, miTz())}`;

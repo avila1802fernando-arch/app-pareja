@@ -264,6 +264,27 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 .vale-emojis{display:flex;flex-wrap:wrap;gap:6px}
 .vale-emojis button{background:var(--blush);border:1.5px solid var(--line);box-shadow:none;width:44px;height:44px;padding:0;font-size:1.3rem;border-radius:12px}
 .vale-emojis button[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft)}
+/* detalles: bienvenida, frase del día, "pensó en ti", guía y el gran día */
+.bienvenida{border-radius:22px;padding:16px 18px;background:linear-gradient(135deg,var(--accent-soft),#fff3d6);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px;animation:aparece .5s ease-out}
+.bienvenida-titulo{margin:0;font-family:var(--display);font-size:1.25rem}
+.bienvenida-botones{display:flex;gap:8px;flex-wrap:wrap}
+.bienvenida-botones button{flex:1;min-width:140px}
+@media (prefers-color-scheme:dark){.bienvenida{background:linear-gradient(135deg,var(--accent-soft),#3a2d17)}}
+.frase-dia{margin:0;text-align:center;font-family:var(--hand);font-size:1.3rem;line-height:1.2;color:var(--muted);padding:0 8px}
+.frase-dia::before{content:"“"}.frase-dia::after{content:"”"}
+.pensando-hoy{margin:6px 0 0;font-size:.9rem;font-weight:700;color:var(--accent)}
+.guia details{border:1px solid var(--line);border-radius:16px;background:var(--blush);padding:0 14px}
+.guia summary{cursor:pointer;list-style:none;min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;font-size:.92rem}
+.guia summary::-webkit-details-marker{display:none}
+.guia summary::after{content:"＋";color:var(--accent)}
+.guia details[open] summary::after{content:"－"}
+.guia details p{font-size:.88rem;line-height:1.5;margin:0 0 10px}
+.guia details p:last-child{margin-bottom:14px}
+.gran-dia{text-align:center;background:linear-gradient(170deg,var(--accent-soft),var(--card) 60%)}
+.gran-corazon{font-size:4.5rem;line-height:1;animation:latido 1s ease-in-out infinite}
+.gran-titulo{font-family:var(--display);font-size:2rem;font-weight:500;line-height:1.1}
+.gran-texto{font-size:1.5rem;color:var(--accent);line-height:1.2}
+@media (prefers-reduced-motion:reduce){.gran-corazon{animation:none}}
 /* corazón vivo: tocar = besitos, mantener = latido */
 .heart{cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-touch-callout:none}
 .heart:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:24px}

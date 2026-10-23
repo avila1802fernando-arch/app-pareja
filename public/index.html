@@ -81,9 +81,17 @@
           <span class="avatar" data-av="suyo"></span><span class="av-corazon">♥</span><span class="avatar" data-av="mio"></span>
         </div>
         <div>
-          <p class="eyebrow">Nuestro rincón</p>
+          <p class="eyebrow" id="saludo">Nuestro rincón</p>
           <h1 id="home-title">Hola.</h1>
           <p class="presente" id="presente" hidden></p>
+        </div>
+      </div>
+      <div class="bienvenida" id="bienvenida" hidden>
+        <p class="bienvenida-titulo">💞 Bienvenidos a su rincón</p>
+        <p class="small-note">Aquí pueden mandarse besitos tocando el corazón, ver cuánto falta para verse, escribirse cartas, regar su girasol y mucho más.</p>
+        <div class="bienvenida-botones">
+          <button type="button" id="bienvenida-guia">Ver cómo funciona</button>
+          <button type="button" class="ghost" id="bienvenida-ok">Entendido 💗</button>
         </div>
       </div>
       <div class="relojes" aria-label="La hora de cada uno">
@@ -121,6 +129,7 @@
         <p class="juntos conocidos" id="conocidos-txt" hidden></p>
         <p class="small-note" id="especial-prox" hidden></p>
       </div>
+      <p class="frase-dia" id="frase-dia"></p>
       <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo son novios? Agrégalo 💞</button>
      </div>
      <div class="col">
@@ -137,6 +146,7 @@
       <div class="status">
         <strong id="status-title">Conectando…</strong>
         <span class="muted" id="status-when"></span>
+        <p class="pensando-hoy" id="pensando-hoy" hidden></p>
         <p class="animo-suyo" id="animo-suyo" hidden></p>
       </div>
       <button type="button" class="momento" id="momento-suyo" hidden>
@@ -379,6 +389,43 @@
         </div>
         <button type="submit" class="ghost">Cambiar contraseña</button>
       </form>
+      <div class="stack guia" id="guia">
+        <h2>Cómo funciona Nosotros 💞</h2>
+        <details>
+          <summary>🏠 Inicio: su rincón de cada día</summary>
+          <p><b>El corazón:</b> tócalo y le mandas besitos que le aparecen volando en su pantalla. <b>Mantenlo presionado</b> y le mandas tu latido: su teléfono vibra como un corazón. Si los dos lo mantienen a la vez, aparece "Sus corazones laten juntos".</p>
+          <p><b>El número dentro del corazón</b> son los días que faltan para su próximo viaje o cita del calendario. La barrita muestra cuánto de la espera ya pasó.</p>
+          <p><b>Relojes:</b> la hora de cada uno y la diferencia. De noche aparece la luna que los dos están viendo.</p>
+          <p><b>Señales:</b> te extraño, abrazo, beso, pienso en ti, buen día y buenas noches. Le llegan como notificación, con vibración.</p>
+          <p><b>Compartir:</b> una foto del momento 📸, un dibujo hecho con el dedo ✏️, una notita que queda pegada en su Inicio 📝 o una canción dedicada 🎶.</p>
+          <p><b>Estoy libre para hablar:</b> avisa que puedes llamar; se apaga sola en 2 horas.</p>
+          <p><b>Tu ánimo:</b> cuéntale cómo te sientes. Si estás triste, le sugerimos mandarte un abrazo.</p>
+        </details>
+        <details>
+          <summary>💞 Juntos: lo que construyen</summary>
+          <p><b>Pregunta del día:</b> la misma para los dos. Solo ves su respuesta después de responder tú. Cuantos más días seguidos respondan, más crece su racha 🔥.</p>
+          <p><b>Nuestro girasol:</b> riéguenlo una vez al día cada uno y crece hasta florecer… y después se vuelve un ramo.</p>
+          <p><b>Frasco de razones:</b> escribe por qué le quieres. No puede leerlas hasta sacarlas del frasco.</p>
+          <p><b>Vales de amor:</b> regálale vales ("un abrazo de 10 minutos") para canjear cuando se vean.</p>
+          <p><b>Cartas:</b> para leer con calma. Puedes sellarlas hasta una fecha: no se pueden abrir antes.</p>
+          <p><b>Cuando nos veamos:</b> la lista de todo lo que harán juntos.</p>
+          <p><b>Momentos, playlist y amor en números:</b> sus fotos, sus canciones y cuántos besos se mandaron esta semana.</p>
+        </details>
+        <details>
+          <summary>🕐 Horarios y 📅 Calendario</summary>
+          <p><b>Horarios:</b> marca las horas en que normalmente puedes hablar; la app muestra las horas en común en la hora de cada uno.</p>
+          <p><b>Calendario:</b> llamadas, citas y viajes. A los dos les llega un recordatorio 30 minutos antes. Los días 5 y 8 de cada mes están marcados: son sus días especiales.</p>
+        </details>
+        <details>
+          <summary>🔔 Avisos y días especiales</summary>
+          <p>Para recibir avisos con el teléfono bloqueado, actívalos aquí arriba en <b>Notificaciones</b>. En iPhone, la app debe abrirse desde el ícono de la pantalla de inicio.</p>
+          <p>El <b>5 de cada mes</b> (el día que se conocieron) y el <b>8</b> (el día que se hicieron novios) les llega un aviso a las 9 de la mañana.</p>
+        </details>
+        <details>
+          <summary>🔒 Privacidad</summary>
+          <p>Todo lo que escriben y comparten lo ven solo ustedes dos. Las fotos se guardan en un lugar privado y nadie más puede crear cuentas en esta app.</p>
+        </details>
+      </div>
       <button type="button" class="link" id="btn-logout">Cerrar sesión</button>
      </div>
     </div>
@@ -555,6 +602,16 @@
     <input id="dibujo-texto" maxlength="140" placeholder="Un texto para acompañarlo (opcional)">
     <button type="button" id="dibujo-enviar">Enviar dibujo ✏️</button>
     <button type="button" class="link" id="dibujo-cancelar">Cancelar</button>
+  </div>
+</dialog>
+
+<!-- El gran día: cuando por fin se ven -->
+<dialog id="dlg-gran-dia" class="dlg gran-dia">
+  <div class="stack centro">
+    <div class="gran-corazon" aria-hidden="true">💞</div>
+    <h2 class="gran-titulo" id="gran-titulo">¡Hoy es el día!</h2>
+    <p class="mano gran-texto" id="gran-texto"></p>
+    <button type="button" id="gran-cerrar">Ir a abrazarte 🤗</button>
   </div>
 </dialog>
 

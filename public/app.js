@@ -1,7 +1,13 @@
 /* Nosotros — app principal */
 (function () {
   const C = window.NOSOTROS_CONFIG;
-  const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+  // La sesión queda guardada en el teléfono y se renueva sola: no hay que volver a entrar
+  // hasta tocar "Cerrar sesión".
+  const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+  });
+  // Las funciones de Supabase que devuelven una fila, cuando no encuentran nada devuelven una fila vacía (id null)
+  const filaValida = (d) => !!(d && d.id);
   const $ = (id) => document.getElementById(id);
 
   const HORAS_LIBRE = 2; // "Estoy libre para hablar" se apaga solo después de estas horas
@@ -102,9 +108,15 @@
   });
   $("btn-logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
 
-  sb.auth.onAuthStateChange((_ev, session) => {
+  // Solo se carga todo al entrar o si cambia la persona: al renovarse la sesión (cada hora)
+  // o al volver a la app no se recarga ni salta al inicio de la página.
+  let cargadoPara = null;
+  sb.auth.onAuthStateChange((ev, session) => {
     user = session ? session.user : null;
-    if (!user) { show("login"); return; }
+    if (!user) { cargadoPara = null; show("login"); return; }
+    // (si aún espera a su pareja, al volver se revisa por si ya se unió)
+    if (cargadoPara === user.id && (ev !== "SIGNED_IN" || (pareja && pareja.usuario_b))) return;
+    cargadoPara = user.id;
     cargar();
   });
 
@@ -119,7 +131,7 @@
     }
     const { data: pj } = await sb.from("parejas").select("*")
       .or(`usuario_a.eq.${user.id},usuario_b.eq.${user.id}`).maybeSingle();
-    pareja = pj;
+    pareja = filaValida(pj) ? pj : null;
     if (!pareja || !pareja.usuario_b) {
       show("pair");
       // nombre sugerido a partir del usuario: "martina" → "Martina"
@@ -164,8 +176,10 @@
     $("btn-crear").hidden = true; $("f-unirse").hidden = true;
     $("codigo-box").hidden = false; $("codigo").textContent = codigo;
   }
+  let canalEspera = null;
   function esperarPareja() {
-    sb.channel("espera").on("postgres_changes",
+    if (canalEspera) sb.removeChannel(canalEspera);
+    canalEspera = sb.channel("espera").on("postgres_changes",
       { event: "UPDATE", schema: "public", table: "parejas", filter: `id=eq.${pareja.id}` },
       (payload) => { if (payload.new.usuario_b) { pareja = payload.new; entrar(); } }
     ).subscribe();
@@ -176,12 +190,14 @@
     if (!(await guardarNombre())) return;
     const codigo = $("codigo-in").value.trim().toUpperCase();
     const { data, error } = await sb.rpc("unirse_pareja", { p_codigo: codigo });
-    if (error || !data) { $("pair-msg").textContent = "Código no válido o ya usado."; return; }
+    // si el código no existe, Supabase devuelve una pareja vacía: no se entra
+    if (error || !filaValida(data) || !data.usuario_b) { $("pair-msg").textContent = "Ese código no existe o ya se usó. Revisa las letras y vuelve a intentarlo."; return; }
     pareja = data; await entrar();
   });
 
   // ---------- pantalla principal ----------
   async function entrar() {
+    if (!filaValida(pareja) || !pareja.usuario_b) { show("pair"); return; } // sin pareja completa no hay Inicio
     show("home");
     const otroId = pareja.usuario_a === user.id ? pareja.usuario_b : pareja.usuario_a;
     const { data: o } = await sb.from("perfiles").select("*").eq("id", otroId).maybeSingle();
@@ -557,7 +573,7 @@
     const { data, error } = await sb.rpc("fijar_fechas", {
       p_conocidos: $("aj-conocidos").value || null, p_desde: $("aj-desde").value || null,
     });
-    if (error || !data) { toast("No se pudieron guardar las fechas"); return; }
+    if (error || !filaValida(data)) { toast("No se pudieron guardar las fechas"); return; }
     pareja = { ...pareja, ...data }; renderJuntos();
     toast("Fechas guardadas 💞");
   });
@@ -1819,7 +1835,7 @@
         c.addEventListener("click", async () => {
           if (!confirm(`¿Canjear “${v.texto}”? ${otro.nombre} recibirá un aviso.`)) return;
           const { data, error } = await sb.rpc("canjear_vale", { p_id: v.id });
-          if (error || !data) { toast("No se pudo canjear"); return; }
+          if (error || !filaValida(data)) { toast("No se pudo canjear"); return; }
           estallido(c, v.emoji, 8); valeRecien = v.id; toast("¡Canjeado! 💗"); cargarVales();
         });
         li.append(c);
@@ -2031,8 +2047,8 @@
   }
   $("notita-guardar").addEventListener("click", async () => {
     if (!notitaSuya) return;
-    const { error } = await sb.rpc("despegar_notita", { p_id: notitaSuya.id });
-    if (error) { toast("No se pudo guardar"); return; }
+    const { data, error } = await sb.rpc("despegar_notita", { p_id: notitaSuya.id });
+    if (error || !filaValida(data)) { toast("No se pudo guardar"); return; }
     // se despega volando y después se carga la siguiente (si hay)
     $("notita-suya").classList.add("despega");
     setTimeout(() => { $("notita-suya").classList.remove("despega"); lluvia("💛", 10); cargarNotitas(); }, pocoMovimiento() ? 0 : 240);

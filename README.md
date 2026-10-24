@@ -25,9 +25,18 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
   - **Frasco de razones 🫙**: "te quiero porque…". El otro no puede leerlas hasta sacarlas del frasco (lo asegura la base de datos).
   - **Vales de amor 🎟️**: "un abrazo de 10 minutos", "tú eliges la película"… para canjear cuando se vean; a quien lo regaló le llega un aviso al canjearlo.
   - **Nuestros momentos**: el álbum con las fotos del día de los dos.
+- **Juegos** 🎮 · Cuatro minijuegos para jugar cada uno en su teléfono, con el **récord de cada uno** en cada juego y la corona 👑 para quien va ganando (`public/juegos/`):
+  - **Atrapa los corazones**: 60 segundos y 6 niveles tocando corazones (la postal "edición revancha", ahora para los dos). Cada corazón dice algo bonito con el nombre de quien juega.
+  - **Vuelo hasta ti**: un corazón con alas vuela los km que los separan (los reales si activaron la ubicación) esquivando nubes de tormenta.
+  - **Memoria de nosotros**: tres rondas contra el reloj para encontrar parejas (el girasol, las cartas, la misma luna…).
+  - **Fusión de corazones**: como el 2048, de «me gustas» hasta «el primer abrazo» 🫂.
+  - **Marcador del amor**: cuántos récords tiene cada uno. Si le quitas un récord al otro, le llega un aviso 🏆; al terminar se le puede **retar** 😏.
+  - **Premio secreto** 💌: cada uno esconde un mensaje que el otro solo puede leer cuando le quita un récord.
+- **Agenda** · El calendario y los horarios, en la misma pestaña (arriba se elige cuál ver).
 - **Horarios** · Cuadrícula semanal donde cada uno marca cuándo normalmente puede. Se ven los dos horarios y las **horas en común**, siempre con las dos horas locales.
 - **Calendario** · Llamadas, citas, viajes, aniversarios. Vista mes y lista de próximos. Al crear o cambiar algo, el otro recibe una push; **30 minutos antes** les llega un recordatorio a los dos.
 - **Ajustes** · Nombre, zona horaria, "juntos desde", notificaciones y cerrar sesión.
+- **Campanita 🔔** · Arriba a la derecha, en todas las pestañas. Cada push que manda la app (señales, cartas, calendario, recordatorios…) queda guardada ahí durante 3 meses, aunque se borre del teléfono o ese teléfono no tenga las push activadas. El número son las que todavía no se vieron; tocar una lleva a lo suyo. Las guarda `enviarPush` (`supabase/functions/_shared/push.ts`) en la tabla `notificaciones`, así que hay que volver a publicar `notificar` y `recordatorios`.
 
 ## Estructura
 
@@ -35,6 +44,7 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
 public/                 ← la app (HTML, CSS, JS, íconos, service worker)
   config.js             ← TUS claves públicas (editar)
   preguntas.js          ← las preguntas del día (puedes agregar las tuyas)
+  juegos/               ← la sala de juegos (sala.js) y cada minijuego (corazones, vuelo, memoria, fusion)
 supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede repetir)
 supabase/cron.sql       ← tarea cada 5 min para recordatorios (editar 2 valores y pegar)
 supabase/functions/
@@ -170,14 +180,14 @@ Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo 
 
 **Android (Chrome)**
 1. Abre la URL de Vercel. Chrome ofrece "Agregar a pantalla de inicio" (o menú ⋮ → *Instalar app*).
-2. Abre la app desde el ícono, toca **Crear una cuenta nueva** (usuario y contraseña), escribe tu nombre y **Crear nuestra pareja**. Te da un código de 6 letras.
+2. Abre la app desde el ícono y toca **Crear una cuenta nueva** (usuario y contraseña). Entras directo al Inicio: no hay códigos, la pareja se arma sola (el primero que entra la crea y el otro queda unido apenas crea su cuenta). Los dos usuarios van en `USUARIOS` de `public/config.js`, iguales a `USUARIOS_PERMITIDOS` de la función `cuenta`. Tu nombre sale del usuario y se cambia en **Ajustes**.
 3. En **Ajustes**, toca **Activar notificaciones** y acepta. Revisa ahí que la zona horaria sea la tuya (la app toma la del teléfono).
 
 **iPhone (Safari, iOS 16.4+)**
 1. Abre la URL en **Safari** (no en Chrome ni desde WhatsApp).
 2. Botón Compartir → **Agregar a pantalla de inicio** → Agregar.
 3. Abre la app **desde el ícono** (es obligatorio: fuera de ahí iOS no permite notificaciones).
-4. Crea su cuenta (o entra con el usuario y la contraseña que le pasaste), escribe su nombre, pone el código de la pareja y **Unirme**.
+4. Crea su cuenta con su usuario (o entra con el usuario y la contraseña que le pasaste): queda unida a la pareja sola y entra directo al Inicio.
 
 **Desde el computador** también funciona: abre la misma URL en Chrome, Edge o Safari y entra con el mismo usuario. Se ve con menú a la izquierda y en dos columnas. (Las notificaciones en el computador llegan solo si el navegador está abierto.)
 5. En **Ajustes**, toca **Activar notificaciones** y acepta. iPhone también pide tener activas las notificaciones en Ajustes → Notificaciones → Nosotros.
@@ -217,7 +227,7 @@ Ajustes que ya trae (constantes al inicio de cada archivo):
 |---|---|
 | "No se pudo crear la cuenta" | Que la función `cuenta` esté publicada (paso 5). Si dice que ya están todas las cuentas, borra las de prueba en **Authentication → Users** |
 | "Usuario o contraseña incorrectos" | El usuario va en minúsculas y sin espacios; la contraseña distingue mayúsculas |
-| "Código no válido" al unirse | Que el primero haya tocado "Crear nuestra pareja" y que el código esté bien escrito (sin O ni I ni 0 ni 1, no se usan) |
+| "No pudimos abrir su rincón" | Que `schema.sql` esté corrido completo (trae la función `entrar_pareja`) y que se entre con usuario y contraseña de la app, no con otra cuenta |
 | No aparece el botón de notificaciones en iPhone | La app se abrió desde Safari y no desde el ícono de la pantalla de inicio |
 | La push no llega | Supabase → **Edge Functions → notificar → Logs**. Si dice "no autorizado", el header `x-webhook-secret` no coincide. Si dice `enviadas: 0`, la otra persona no activó notificaciones |
 | Llega "te extraño" pero no lo del calendario | Falta el Webhook 2 (tabla `eventos_cal`, con Insert, Update y Delete) |

@@ -48,13 +48,18 @@ body{
 .fondo{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
   background:linear-gradient(170deg,var(--f4) 0%,var(--bg) 45%,var(--bg) 70%,var(--f4) 100%)}
 .fondo>*{position:absolute}
-/* aurora: manchas de color difuminadas que se mueven despacito */
-.aurora{inset:0;filter:blur(60px);opacity:.85}
-.aurora span{position:absolute;border-radius:50%;width:70vmax;height:70vmax;will-change:transform}
-.aurora .b1{background:var(--f1);left:-30vmax;top:-35vmax;animation:deriva1 26s ease-in-out infinite alternate}
-.aurora .b2{background:var(--f2);right:-35vmax;top:10vh;width:60vmax;height:60vmax;animation:deriva2 32s ease-in-out infinite alternate}
-.aurora .b3{background:var(--f3);left:-15vmax;bottom:-40vmax;animation:deriva3 29s ease-in-out infinite alternate}
-.aurora .b4{background:var(--f1);right:-25vmax;bottom:-30vmax;width:50vmax;height:50vmax;opacity:.7;animation:deriva1 35s ease-in-out infinite alternate-reverse}
+/* aurora: manchas de color difuminadas que se mueven despacito.
+   El difuminado va dibujado en un degradado (y no con filter:blur) para que moverlas no cueste nada:
+   la mancha se agranda 120px por lado, que es lo que se corría el desenfoque de 60px. */
+.aurora{inset:0;opacity:.85}
+.aurora span{--r:35vmax;--c:var(--f1);position:absolute;border-radius:50%;margin:-120px;
+  width:calc(var(--r) * 2 + 240px);height:calc(var(--r) * 2 + 240px);will-change:transform;
+  background:radial-gradient(closest-side,var(--c) calc(var(--r) - 120px),transparent);
+  background:radial-gradient(closest-side,var(--c) calc(var(--r) - 120px),color-mix(in srgb,var(--c) 50%,transparent) var(--r),transparent)}
+.aurora .b1{left:-30vmax;top:-35vmax;animation:deriva1 26s ease-in-out infinite alternate}
+.aurora .b2{--r:30vmax;--c:var(--f2);right:-35vmax;top:10vh;animation:deriva2 32s ease-in-out infinite alternate}
+.aurora .b3{--c:var(--f3);left:-15vmax;bottom:-40vmax;animation:deriva3 29s ease-in-out infinite alternate}
+.aurora .b4{--r:25vmax;right:-25vmax;bottom:-30vmax;opacity:.7;animation:deriva1 35s ease-in-out infinite alternate-reverse}
 @keyframes deriva1{to{transform:translate(18vmax,14vmax) scale(1.15)}}
 @keyframes deriva2{to{transform:translate(-16vmax,18vmax) scale(.9)}}
 @keyframes deriva3{to{transform:translate(20vmax,-14vmax) scale(1.1)}}
@@ -65,10 +70,10 @@ body{
 /* polvo brillante y destellos de cuatro puntas que titilan */
 .polvo,.destellos,.flota{inset:0}
 .polvo i,.destellos i{position:absolute;left:var(--l);top:var(--t);width:var(--s);height:var(--s)}
-.polvo i{border-radius:50%;background:var(--polvo);animation:titila 6s ease-in-out var(--dl) infinite}
+.polvo i{border-radius:50%;background:var(--polvo);animation:polvo-brilla 6s ease-in-out var(--dl) infinite}
 .destellos i{background:var(--destello);clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);
   filter:drop-shadow(0 0 4px var(--destello));animation:destella var(--d) ease-in-out var(--dl) infinite}
-@keyframes titila{0%,100%{opacity:.2}50%{opacity:1}}
+@keyframes polvo-brilla{0%,100%{opacity:.2}50%{opacity:1}}
 @keyframes destella{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:.95;transform:scale(1) rotate(45deg)}}
 /* corazones que suben flotando y se mecen */
 .fc{position:absolute;bottom:-40px;left:var(--l);width:var(--s);height:var(--s);opacity:0;background:var(--fc-a);
@@ -84,13 +89,15 @@ body{
   90%{opacity:var(--o)}
   100%{transform:translate(var(--x),-110vh) rotate(var(--r));opacity:0}
 }
-/* guirnaldas colgando de las esquinas de arriba */
-.guirnalda{top:-6px;width:min(300px,52vw);height:auto;overflow:visible}
+/* guirnaldas colgando de las esquinas de arriba. Cada adorno es su propio <svg>: así el vaivén
+   lo mueve la tarjeta gráfica y no hay que volver a dibujar la guirnalda en cada cuadro. */
+.guirnalda{top:-6px;width:min(300px,52vw);aspect-ratio:2/1}
 .guirnalda.izq{left:-10px}
 .guirnalda.der{right:-10px;transform:scaleX(-1)}
-.guirnalda .hilo{fill:none;stroke:var(--deco-soft);stroke-width:1.5;stroke-dasharray:2 4;stroke-linecap:round}
+.guirnalda svg{position:absolute;overflow:visible}
+.guirnalda .hilo{inset:0;width:100%;height:100%;fill:none;stroke:var(--deco-soft);stroke-width:1.5;stroke-dasharray:2 4;stroke-linecap:round}
 .guirnalda line{stroke:var(--deco-soft);stroke-width:1.2}
-.guirnalda .cuelga{transform-box:fill-box;transform-origin:50% 0;animation:mece 3.6s ease-in-out var(--dl) infinite}
+.guirnalda .cuelga{transform-origin:50% 0;animation:mece 3.6s ease-in-out var(--dl) infinite}
 .guirnalda .h1,.ramo .h2{fill:var(--fc-a)}
 .guirnalda .h2{fill:var(--fc-b)}
 .guirnalda .h3{fill:var(--destello)}
@@ -112,6 +119,11 @@ body{
 .garabato.g1{left:6vw;top:42vh;transform:rotate(-14deg)}
 .garabato.g2{right:5vw;top:24vh;transform:rotate(10deg)}
 @media (max-width:899px){.garabato{display:none}}
+/* Lo que no se ve no se anima: con una pantalla completa encima (la carga, el saludo del día, la nochecita
+   o un juego) el fondo no se dibuja, y con una ventana abierta se queda quieto detrás del velo */
+body.con-noche .fondo,body.con-juego .fondo{visibility:hidden}
+body:has(#carga:not(.fuera)) .fondo,body:has(#ritual:not([hidden]):not(.fuera)) .fondo{visibility:hidden}
+body:has(dialog[open]) .fondo *{animation-play-state:paused}
 /* la tarjeta deja ver un poquito el fondo, como vidrio esmerilado */
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
   body .card{background:color-mix(in srgb,var(--card) 86%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2)}
@@ -197,7 +209,6 @@ button.libre.on::before{background:var(--ok);animation:pulso 1.6s ease-out infin
 .libre-status.ambos strong{font-size:1.7rem}
 .libre-status.ambos .muted{color:inherit;opacity:.85}
 @media (prefers-reduced-motion:reduce){button.libre.on::before{animation:none}}
-.code{font-family:var(--body);font-size:2rem;letter-spacing:.25em;font-weight:700}
 .log{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:16px}
 .log ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .log li{display:flex;justify-content:space-between;gap:12px;font-size:.9rem}
@@ -378,12 +389,15 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 @keyframes latido{0%,100%{transform:scale(1)}15%{transform:scale(1.2)}30%{transform:scale(1.04)}45%{transform:scale(1.17)}}
 .heart-tip{text-align:center;margin-top:-14px;font-size:.74rem}
 .latido-juntos{text-align:center;font-family:var(--hand);font-size:1.7rem;color:var(--accent);margin-top:-12px;animation:aparece .4s ease-out}
-.presente{margin:6px 0 0;font-size:.8rem;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
-.presente::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulso 1.6s ease-out infinite}
+.presente{position:relative;margin:6px 0 0;font-size:.8rem;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:6px}
+.presente::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--ok)}
+/* la onda que sale del punto: un círculo que crece y se apaga (solo transform y opacity: no repinta) */
+.presente::after{content:"";position:absolute;left:0;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--ok);animation:onda 1.6s ease-out infinite}
+@keyframes onda{from{transform:scale(1);opacity:.5}to{transform:scale(3.5);opacity:0}}
 .avatar.aqui{box-shadow:0 0 0 3px var(--ok),0 6px 14px -8px var(--glow)}
 .beso-volador{position:fixed;z-index:20;pointer-events:none;font-size:30px;animation:vuela 1.6s ease-out forwards}
 @keyframes vuela{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}15%{opacity:1}100%{transform:translate(calc(-50% + var(--x)),calc(-50% - 220px)) scale(1.3) rotate(var(--r));opacity:0}}
-@media (prefers-reduced-motion:reduce){.heart.latiendo svg,.heart.latiendo .ring,.presente::before{animation:none}}
+@media (prefers-reduced-motion:reduce){.heart.latiendo svg,.heart.latiendo .ring,.presente::after{animation:none}}
 /* la misma luna */
 .luna{text-align:center;font-size:.85rem;color:var(--muted);margin-top:-12px}
 .luna b{font-size:1.1rem;margin-right:4px}
@@ -459,6 +473,10 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 .horario .celda.mio.suyo{background:var(--accent);border-color:var(--accent)}
 .comun li{flex-direction:column;gap:2px}
 .comun li span:last-child{white-space:normal;text-align:left;font-size:.85rem}
+/* Agenda: selector Calendario / Horarios arriba de las dos vistas */
+.vista-agenda{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:999px;background:var(--blush);border:1px solid var(--line)}
+.vista-agenda button{background:transparent;color:var(--muted);box-shadow:none;padding:10px 12px;min-height:44px;font-size:.9rem;font-weight:700}
+.vista-agenda button[aria-pressed=true]{background:var(--card);color:var(--accent);box-shadow:0 6px 14px -10px var(--glow)}
 /* calendario compartido */
 .mes-nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mes-nav strong{font-family:var(--display);font-weight:500;font-size:1.15rem}
@@ -681,3 +699,28 @@ body.sin-scroll{overflow:hidden}
 .hoy-toca button b{font-size:1.25rem}
 .hoy-toca button span{flex:1}
 .hoy-toca button i{font-style:normal;color:var(--accent);font-size:1.3rem}
+
+/* ================= CAMPANITA ================= */
+/* Arriba a la derecha en todas las pestañas; el número son las que todavía no viste */
+.campana{position:fixed;z-index:6;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));
+  width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center;
+  background:var(--card);color:var(--accent);border:1px solid var(--line);box-shadow:0 10px 24px -12px var(--glow)}
+.campana svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transform-origin:50% 12%}
+/* cuando llega una nueva, la campanita se mece */
+.campana.suena svg{animation:campanea .9s var(--salida)}
+@keyframes campanea{15%{transform:rotate(16deg)}30%{transform:rotate(-14deg)}45%{transform:rotate(9deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}}
+.campana-n{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--on-accent);
+  font-size:.7rem;font-weight:800;line-height:16px;text-align:center;border:2px solid var(--card)}
+.campana-n:not([hidden]){animation:pop .4s var(--resorte)}
+body.con-noche .campana,body.con-juego .campana{visibility:hidden}
+@media (min-width:900px){.campana{top:24px;right:24px}}
+.dlg-campana .campana-dia{margin:8px 0 2px;font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.dlg-campana ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.dlg-campana li button{width:100%;display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;font-weight:400;font-size:.9rem;
+  background:var(--blush);color:var(--fg);border:1px solid var(--line);border-radius:16px;padding:10px 12px;box-shadow:none}
+.dlg-campana li b{font-weight:700}
+.dlg-campana li time{font-size:.72rem;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.dlg-campana li span{grid-column:1/-1;font-size:.84rem;color:var(--muted)}
+.dlg-campana li span:empty{display:none}
+.dlg-campana li.nueva button{background:var(--accent-soft);border-color:var(--accent)}
+.dlg-campana .vacia{text-align:center;padding:16px 4px}

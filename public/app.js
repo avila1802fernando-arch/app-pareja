@@ -14,13 +14,13 @@
 
   const HORAS_LIBRE = 2; // "Estoy libre para hablar" se apaga solo después de estas horas
 
-  const S = { login: $("s-login"), pair: $("s-pair"), home: $("s-home") };
+  const S = { login: $("s-login"), aviso: $("s-aviso"), home: $("s-home") };
   let user = null, perfil = null, pareja = null, otro = null, canal = null, toastTimer = null;
 
   // ---------- utilidades ----------
   function show(name) {
     Object.keys(S).forEach((k) => (S[k].hidden = k !== name));
-    $("tabs").hidden = name !== "home";
+    $("tabs").hidden = $("campana").hidden = name !== "home";
     document.body.classList.toggle("con-tabs", name === "home");
     // el Inicio quita la carga cuando ya tiene todo (ver entrar)
     if (name !== "home") quitarCarga();
@@ -69,6 +69,7 @@
   const limpiarUsuario = (u) => u.trim().toLowerCase();
   const correoDe = (u) => `${limpiarUsuario(u)}@${DOMINIO_CUENTAS}`;
   const usuarioDe = (email) => (email || "").split("@")[0];
+  const nombreDe = (usuario) => usuario.replace(/^./, (c) => c.toUpperCase()); // "martina" → "Martina"
   let modoLogin = "entrar";
   function ponerModo(m) {
     modoLogin = m;
@@ -128,103 +129,166 @@
   sb.auth.onAuthStateChange((ev, session) => {
     user = session ? session.user : null;
     if (!user) { cargadoPara = null; show("login"); return; }
-    // (si aún espera a su pareja, al volver se revisa por si ya se unió)
-    if (cargadoPara === user.id && (ev !== "SIGNED_IN" || (pareja && pareja.usuario_b))) return;
+    if (cargadoPara === user.id) return;
     cargadoPara = user.id;
     cargar();
   });
 
   // ---------- carga de perfil y pareja ----------
+  // Sin pantallas antes del Inicio: el perfil nace con el nombre del usuario (se cambia en Ajustes)
+  // y la pareja se arma sola en la base (entrar_pareja): el primero la crea y el segundo queda unido.
+  const SIN_CONEXION = "Revisa tu conexión a internet e intenta de nuevo.";
   async function cargar() {
-    const { data: p } = await sb.from("perfiles").select("*").eq("id", user.id).maybeSingle();
+    // perfil y pareja a la vez: es la espera más larga al abrir la app
+    const [{ data: p, error: errPerfil }, { data: pj }] = await Promise.all([
+      sb.from("perfiles").select("*").eq("id", user.id).maybeSingle(),
+      sb.from("parejas").select("*").or(`usuario_a.eq.${user.id},usuario_b.eq.${user.id}`).maybeSingle(),
+    ]);
+    if (errPerfil) { aviso(SIN_CONEXION); return; }
     perfil = p;
-    // Perfiles creados antes de tener zona horaria: guardar la del teléfono
-    if (perfil && !perfil.tz) {
+    if (!perfil) {
+      const nuevo = { id: user.id, nombre: nombreDe(usuarioDe(user.email)).slice(0, 24), tz: tzNavegador };
+      const { error } = await sb.from("perfiles").upsert(nuevo);
+      if (error) { aviso(SIN_CONEXION); return; }
+      perfil = nuevo;
+    } else if (!perfil.tz) {
+      // Perfiles creados antes de tener zona horaria: guardar la del teléfono
       await sb.from("perfiles").update({ tz: tzNavegador }).eq("id", user.id);
       perfil.tz = tzNavegador;
     }
-    const { data: pj } = await sb.from("parejas").select("*")
-      .or(`usuario_a.eq.${user.id},usuario_b.eq.${user.id}`).maybeSingle();
     pareja = filaValida(pj) ? pj : null;
-    if (!pareja || !pareja.usuario_b) {
-      show("pair");
-      // nombre sugerido a partir del usuario: "martina" → "Martina"
-      const sugerido = usuarioDe(user.email).replace(/^./, (c) => c.toUpperCase());
-      $("nombre").value = (perfil && perfil.nombre) || sugerido;
-      if (pareja) { mostrarCodigo(pareja.codigo); esperarPareja(); }
-      return;
+    if (!pareja) {
+      // Las fechas de config.js quedan guardadas desde el principio
+      const F = C.FECHAS || {};
+      const { data, error } = await sb.rpc("entrar_pareja", { p_desde: F.novios || null, p_conocidos: F.conocidos || null });
+      if (error) { aviso(SIN_CONEXION); return; }
+      // solo las dos cuentas de usuario y contraseña tienen pareja
+      if (!filaValida(data)) { aviso("Esta cuenta no es una de las dos de Nosotros. Cierra sesión y entra con tu usuario."); return; }
+      pareja = data;
+      if (pareja.usuario_a === user.id) await agendarEncuentro(); // la acabo de crear yo
     }
     await entrar();
   }
+  function aviso(msg) { $("aviso-msg").textContent = msg; show("aviso"); }
+  $("aviso-reintentar").addEventListener("click", () => cargar());
+  $("aviso-salir").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
 
-  async function guardarNombre() {
-    const nombre = $("nombre").value.trim();
-    if (!nombre) { $("pair-msg").textContent = "Escribe tu nombre primero."; return false; }
-    const tz = miTz();
-    const { error } = await sb.from("perfiles").upsert({ id: user.id, nombre, tz });
-    if (error) { $("pair-msg").textContent = error.message; return false; }
-    perfil = { id: user.id, nombre, tz };
-    return true;
-  }
-
-  $("btn-crear").addEventListener("click", async () => {
-    if (!(await guardarNombre())) return;
-    const codigo = Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
-    // Las fechas de config.js quedan guardadas desde el principio
+  // Al crear la pareja, el primer encuentro queda en el calendario como viaje (el corazón del Inicio cuenta los días)
+  async function agendarEncuentro() {
     const F = C.FECHAS || {};
-    const { data, error } = await sb.from("parejas")
-      .insert({ usuario_a: user.id, codigo, desde: F.novios || null, conocidos: F.conocidos || null }).select().single();
-    if (error) { $("pair-msg").textContent = error.message; return; }
-    pareja = data; mostrarCodigo(codigo); esperarPareja();
-    // …y el primer encuentro queda en el calendario como viaje (el corazón del Inicio cuenta los días)
-    if (F.encuentro && F.encuentro >= claveDia(new Date().toISOString(), miTz())) {
-      await sb.from("eventos_cal").insert({
-        pareja_id: data.id, creado_por: user.id, tipo: "viaje",
-        titulo: F.lugar ? `Nos vemos por primera vez en ${F.lugar} 💞` : "Nos vemos por primera vez 💞",
-        inicio: aIso(F.encuentro + "T09:00", miTz()), nota: "Cambien la hora cuando tengan el vuelo ✈️",
-      });
+    if (!F.encuentro || F.encuentro < claveDia(new Date().toISOString(), miTz())) return;
+    await sb.from("eventos_cal").insert({
+      pareja_id: pareja.id, creado_por: user.id, tipo: "viaje",
+      titulo: F.lugar ? `Nos vemos por primera vez en ${F.lugar} 💞` : "Nos vemos por primera vez 💞",
+      inicio: aIso(F.encuentro + "T09:00", miTz()), nota: "Cambien la hora cuando tengan el vuelo ✈️",
+    });
+  }
+
+  // Mientras mi pareja no crea su cuenta se entra igual. Su id es el UUID nulo: las consultas siguen
+  // siendo válidas y simplemente no encuentran nada suyo. Su nombre sale del usuario de config.js.
+  const SIN_CUENTA = "00000000-0000-0000-0000-000000000000";
+  const usuarioPareja = () => (C.USUARIOS || []).find((u) => u !== usuarioDe(user.email)) || null;
+  function renderPendiente() {
+    const falta = !pareja.usuario_b, u = usuarioPareja();
+    $("pendiente").hidden = !falta;
+    if (!falta) return;
+    $("pendiente-titulo").textContent = `💌 ${otro.nombre} todavía no tiene su cuenta`;
+    $("pendiente-texto").textContent = (u
+      ? `Cuando entre a la app y cree su cuenta con el usuario «${u}», quedarán unidos solitos, sin códigos.`
+      : "Cuando tu pareja cree su cuenta en esta app, quedarán unidos solitos, sin códigos.")
+      + " Mientras tanto puedes dejarle cartas, notitas y sorpresas: las encontrará al entrar 💗";
+  }
+  // ¡Llegó! Se vuelve a cargar todo, ya con su perfil de verdad
+  function llegoMiPareja() {
+    lluvia("💞", 24); toast(`¡${otro.nombre} llegó! Ya están unidos 💞`);
+    setTimeout(() => location.reload(), 2800);
+  }
+  // Si llegó mientras la app estaba en segundo plano, se nota al volver
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden || !pareja || pareja.usuario_b) return;
+    const { data } = await sb.from("parejas").select("usuario_b").eq("id", pareja.id).maybeSingle();
+    if (data && data.usuario_b) { pareja.usuario_b = data.usuario_b; llegoMiPareja(); }
+  });
+
+  // ---------- campanita: las notificaciones que me llegaron quedan guardadas ----------
+  // Las guarda enviarPush (funciones notificar y recordatorios) en la tabla notificaciones.
+  let notis = [], canalCampana = null;
+  async function cargarCampana() {
+    const { data } = await sb.from("notificaciones").select("id, titulo, cuerpo, url, creado_en, leida_en")
+      .eq("usuario_id", user.id).order("creado_en", { ascending: false }).limit(60);
+    notis = data || [];
+    renderCampana();
+    // en su propio canal: si la tabla todavía no está en tiempo real, no se cae el resto
+    if (canalCampana) sb.removeChannel(canalCampana);
+    canalCampana = sb.channel("campana").on("postgres_changes",
+      { event: "INSERT", schema: "public", table: "notificaciones", filter: `usuario_id=eq.${user.id}` },
+      (payload) => {
+        notis = [payload.new, ...notis].slice(0, 60);
+        renderCampana(); animar($("campana"), "suena");
+        if ($("dlg-campana").open) pintarCampana();
+      }).subscribe();
+  }
+  function renderCampana() {
+    const n = notis.filter((x) => !x.leida_en).length, num = $("campana-n");
+    num.hidden = !n; num.textContent = n > 9 ? "9+" : String(n);
+    $("campana").setAttribute("aria-label", n ? `Notificaciones: ${n} sin ver` : "Notificaciones");
+  }
+  // La lista, agrupada por día (con la hora de cada una en mi zona)
+  function pintarCampana() {
+    const caja = $("campana-lista"); caja.innerHTML = "";
+    if (!notis.length) {
+      const p = document.createElement("p"); p.className = "small-note vacia";
+      p.textContent = "Todavía no te llega ninguna. Cuando te llegue una, también queda guardada aquí 💌";
+      caja.append(p); return;
     }
-  });
-
-  function mostrarCodigo(codigo) {
-    $("btn-crear").hidden = true; $("f-unirse").hidden = true;
-    $("codigo-box").hidden = false; $("codigo").textContent = codigo;
+    const hoy = diaHoy(), ayer = claveDia(new Date(Date.now() - 86400000).toISOString(), miTz());
+    let dia = null, ul = null;
+    notis.forEach((x) => {
+      const k = claveDia(x.creado_en, miTz());
+      if (k !== dia) {
+        dia = k; ul = document.createElement("ul");
+        const t = document.createElement("p"); t.className = "campana-dia";
+        t.textContent = k === hoy ? "Hoy" : k === ayer ? "Ayer" : fechaCorta(x.creado_en, miTz());
+        caja.append(t, ul);
+      }
+      const li = document.createElement("li"), b = document.createElement("button");
+      const ti = document.createElement("b"), cu = document.createElement("span"), h = document.createElement("time");
+      li.classList.toggle("nueva", !x.leida_en); b.type = "button";
+      ti.textContent = x.titulo; cu.textContent = x.cuerpo || "";
+      h.dateTime = x.creado_en; h.textContent = hora(x.creado_en, miTz());
+      b.append(ti, h, cu);
+      b.addEventListener("click", () => { $("dlg-campana").close(); irA(tabDeUrl(x.url || "/")); });
+      li.append(b); ul.append(li);
+    });
   }
-  let canalEspera = null;
-  function esperarPareja() {
-    if (canalEspera) sb.removeChannel(canalEspera);
-    canalEspera = sb.channel("espera").on("postgres_changes",
-      { event: "UPDATE", schema: "public", table: "parejas", filter: `id=eq.${pareja.id}` },
-      (payload) => { if (payload.new.usuario_b) { pareja = payload.new; entrar(); } }
-    ).subscribe();
-  }
-
-  $("f-unirse").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!(await guardarNombre())) return;
-    const codigo = $("codigo-in").value.trim().toUpperCase();
-    const { data, error } = await sb.rpc("unirse_pareja", { p_codigo: codigo });
-    // si el código no existe, Supabase devuelve una pareja vacía: no se entra
-    if (error || !filaValida(data) || !data.usuario_b) { $("pair-msg").textContent = "Ese código no existe o ya se usó. Revisa las letras y vuelve a intentarlo."; return; }
-    pareja = data; await entrar();
+  $("campana").addEventListener("click", async () => {
+    pintarCampana(); $("dlg-campana").showModal();
+    // al abrirla quedan vistas (siguen resaltadas mientras está abierta)
+    if (!notis.some((x) => !x.leida_en)) return;
+    const { error } = await sb.rpc("leer_notificaciones");
+    if (error) return;
+    const ahora = new Date().toISOString();
+    notis.forEach((x) => { if (!x.leida_en) x.leida_en = ahora; });
+    renderCampana();
   });
+  $("campana-cerrar").addEventListener("click", () => $("dlg-campana").close());
 
   // ---------- pantalla principal ----------
   async function entrar() {
-    if (!filaValida(pareja) || !pareja.usuario_b) { show("pair"); return; } // sin pareja completa no hay Inicio
+    if (!filaValida(pareja)) { aviso(SIN_CONEXION); return; }
     show("home");
-    const otroId = pareja.usuario_a === user.id ? pareja.usuario_b : pareja.usuario_a;
-    const { data: o } = await sb.from("perfiles").select("*").eq("id", otroId).maybeSingle();
-    otro = o || { id: otroId, nombre: "Tu pareja" };
-    tituloHome();
+    const otroId = pareja.usuario_a === user.id ? pareja.usuario_b : pareja.usuario_a, u = usuarioPareja();
+    const [{ data: o }] = await Promise.all([
+      otroId ? sb.from("perfiles").select("*").eq("id", otroId).maybeSingle() : { data: null },
+      // Registrar mi entrada (una vez por apertura), a la par con lo anterior
+      sessionStorage.getItem("entrada") ? null
+        : sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "entrada" })
+          .then(() => sessionStorage.setItem("entrada", "1")),
+    ]);
+    otro = o || { id: otroId || SIN_CUENTA, nombre: !otroId && u ? nombreDe(u) : "Tu pareja" };
+    tituloHome(); renderPendiente();
     $("heart").classList.add("beat");
     irA(tabDeUrl(location.href));
-
-    // Registrar mi entrada (una vez por apertura)
-    if (!sessionStorage.getItem("entrada")) {
-      await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "entrada" });
-      sessionStorage.setItem("entrada", "1");
-    }
     // Parejas creadas antes de tener fechas: se toman las de config.js
     const F = C.FECHAS || {};
     if (!pareja.desde && !pareja.conocidos && (F.novios || F.conocidos)) {
@@ -239,14 +303,16 @@
     let vista = false; try { vista = localStorage.getItem("bienvenida-vista") === "1"; } catch (e) {}
     $("bienvenida").hidden = vista;
     await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
-      cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones()]);
+      cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones(), cargarCampana()]);
     await quitarCarga(); ritualDelDia();
     // Funciones en archivos aparte (noche.js) arrancan con lo que necesitan de aquí
     window.nosotros = {
       sb, toast, estallido, pocoMovimiento, hora, partes, claveDia, miTz, suTz, tzPareja, renderAvatares,
+      lluvia, vibrar, irA, ago, aIso, diaHoy, fechaCorta, plural,
       get user() { return user; }, get perfil() { return perfil; }, get pareja() { return pareja; }, get otro() { return otro; },
     };
     window.dispatchEvent(new Event("nosotros:dentro"));
+    setTimeout(cargarJuegos, 3000); // después de que el saludo del día termina de dibujarse
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -289,9 +355,13 @@
       { event: "UPDATE", schema: "public", table: "perfiles", filter: `id=eq.${otro.id}` },
       (payload) => { otro = { ...otro, ...payload.new }; tituloHome(); render(); renderDispo(); renderRelojes(); renderAvatares(); renderDistancia(); }
     ).on("postgres_changes",
-      // "juntos desde" cambiado por cualquiera de los dos
+      // "juntos desde" cambiado por cualquiera de los dos, o mi pareja que por fin llegó
       { event: "UPDATE", schema: "public", table: "parejas", filter: `id=eq.${pareja.id}` },
-      (payload) => { pareja = { ...pareja, ...payload.new }; renderJuntos(); }
+      (payload) => {
+        const llego = !pareja.usuario_b && payload.new.usuario_b;
+        pareja = { ...pareja, ...payload.new }; renderJuntos();
+        if (llego) llegoMiPareja();
+      }
     ).on("postgres_changes",
       // si mi pareja corrige su respuesta (las nuevas llegan como evento 'respuesta')
       { event: "UPDATE", schema: "public", table: "respuestas", filter: `pareja_id=eq.${pareja.id}` },
@@ -370,6 +440,8 @@
     cancion: (n) => `${n} te dedicó una canción 🎶`,
     a_dormir: (n) => `${n} se fue a la camita 🌙`,
     despierto: (n) => `${n} despertó y te da los buenos días ☀️`,
+    record: (n) => `${n} te quitó un récord 🏆 ¿Revancha?`,
+    reto: (n) => `${n} te reta a un juego 😏🎮`,
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -393,6 +465,8 @@
     cancion: (n) => `${n} dedicó una canción 🎶`,
     a_dormir: (n) => `${n} se fue a dormir 🌙`,
     despierto: (n) => `${n} despertó ☀️`,
+    record: (n) => `${n} rompió un récord 🏆`,
+    reto: (n) => `${n} retó a un juego 🎮`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {
@@ -410,6 +484,8 @@
     cancion: { emoji: "🎶", vibra: [80, 80, 80] },
     a_dormir: { emoji: "💤", vibra: [60, 80, 60] },
     despierto: { emoji: "☀️", vibra: [100, 80, 100, 80, 100] },
+    record: { emoji: "🏆", vibra: [120, 60, 120, 60, 320] },
+    reto: { emoji: "🎮", vibra: [80, 60, 80] },
   };
   function lluvia(emoji, n = 16) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -541,12 +617,33 @@
   });
 
   // ---------- navegación por pestañas ----------
-  const TABS = ["inicio", "juntos", "horarios", "calendario", "ajustes"];
+  const TABS = ["inicio", "juntos", "juegos", "horarios", "calendario", "ajustes"];
   const AL_ABRIR = {}; // cada pestaña registra aquí qué cargar al abrirse
+  // La sala de juegos vive en juegos/sala.js: se entera por un evento
+  // La sala de juegos (unos 130 KB) se baja con el Inicio ya en pantalla, para no demorar la entrada
+  let juegos = null;
+  function cargarJuegos() {
+    if (juegos) return juegos;
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "/juegos/juegos.css"; document.head.append(css);
+    juegos = new Promise((listo) => {
+      // se bajan a la vez y corren en orden: primero la sala y después cada juego, que se anota en ella
+      ["sala", "corazones", "vuelo", "memoria", "fusion"].forEach((j, i, todos) => {
+        const s = document.createElement("script");
+        s.src = `/juegos/${j}.js`; s.async = false;
+        if (i === todos.length - 1) s.onload = s.onerror = listo;
+        document.body.append(s);
+      });
+    });
+    return juegos;
+  }
+  AL_ABRIR.juegos = () => cargarJuegos().then(() => window.dispatchEvent(new Event("nosotros:juegos")));
   function irA(tab) {
     if (!TABS.includes(tab)) tab = "inicio";
     TABS.forEach((t) => ($("tab-" + t).hidden = t !== tab));
-    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    // Horarios vive dentro de Agenda, junto al calendario: en la barra se enciende el mismo botón
+    const enBarra = tab === "horarios" ? "calendario" : tab;
+    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === enBarra));
     history.replaceState(null, "", tab === "inicio" ? location.pathname : "#" + tab);
     window.scrollTo(0, 0);
     moverLuz(); entrarEscalonado(tab);
@@ -556,6 +653,8 @@
   document.querySelectorAll(".acciones > *").forEach((b) => b.addEventListener("click", () => animar(b, "pop")));
   const tabDeUrl = (u) => (new URL(u, location.origin).hash || "#inicio").slice(1);
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => irA(b.dataset.tab)));
+  // Selector Calendario / Horarios dentro de Agenda
+  document.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click", () => irA(b.dataset.ir)));
   // Al tocar una notificación con la app ya abierta, el service worker nos dice a qué pestaña ir
   if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", (e) => {
     if (e.data && e.data.url && !S.home.hidden) irA(tabDeUrl(e.data.url));
@@ -2109,7 +2208,8 @@
       const n = besosPend; besosPend = 0;
       if (otroAqui && canalVivo) { canalVivo.send({ type: "broadcast", event: "beso", payload: { n } }); return; }
       // si no está en la app, le llega un "te manda un beso" (como mucho uno cada 10 minutos)
-      if (pocoDesde("ultimo-beso", 10)) { toast(`Besitos enviados 😘`); return; }
+      // (no está en la app y ya le llegó un aviso de beso hace poco: no se repite)
+      if (pocoDesde("ultimo-beso", 10)) { toast(`Ya le avisamos de tus besitos hace poco 😘`); return; }
       await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "beso" });
       toast(`${otro.nombre} no está en la app: le llegó tu beso como aviso 😘`); render();
     }, 700);

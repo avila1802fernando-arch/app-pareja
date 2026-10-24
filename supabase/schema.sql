@@ -45,7 +45,8 @@ alter table public.eventos add constraint eventos_tipo_check
     'animo', 'respuesta', 'carta',
     'momento', 'riego', 'vale', 'canje', 'razon',
     'latido', 'notita', 'cancion',
-    'a_dormir', 'despierto'
+    'a_dormir', 'despierto',
+    'record', 'reto'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -183,13 +184,11 @@ drop policy if exists "perfil: leer el mío y el de mi pareja" on public.perfile
 create policy "perfil: leer el mío y el de mi pareja" on public.perfiles
   for select using (id = auth.uid() or public.es_pareja_de(id));
 
--- parejas: leo la mía; creo una donde yo soy usuario_a
+-- parejas: leo la mía. Ya no se crean desde la app: las arma entrar_pareja() (ver más abajo)
 drop policy if exists "pareja: leer la mía" on public.parejas;
 create policy "pareja: leer la mía" on public.parejas
   for select using (usuario_a = auth.uid() or usuario_b = auth.uid());
 drop policy if exists "pareja: crear" on public.parejas;
-create policy "pareja: crear" on public.parejas
-  for insert with check (usuario_a = auth.uid() and usuario_b is null);
 
 -- eventos: leo los de mi pareja; inserto solo los míos
 drop policy if exists "eventos: leer" on public.eventos;
@@ -303,6 +302,49 @@ begin
 end;
 $$;
 grant execute on function public.unirse_pareja(text) to authenticated;
+
+-- ========== ENTRAR A LA PAREJA, SIN CÓDIGOS ==========
+-- La app es solo para dos, así que la pareja se arma sola: el primero que entra la crea y el
+-- segundo queda unido apenas entra. Solo cuentan las cuentas internas (usuario@nosotros.invalid):
+-- esas las crea únicamente la función `cuenta`, con su lista USUARIOS_PERMITIDOS y su tope.
+-- (unirse_pareja queda para las versiones viejas de la app que alguien tenga abiertas.)
+create or replace function public.entrar_pareja(p_desde date default null, p_conocidos date default null)
+returns public.parejas
+language plpgsql security definer set search_path = public as $$
+declare
+  fila public.parejas;
+begin
+  if not exists (select 1 from auth.users
+                  where id = auth.uid() and email like '%@nosotros.invalid' and email_confirmed_at is not null) then
+    return null;
+  end if;
+  -- de a uno: si los dos entran por primera vez al mismo tiempo, igual queda una sola pareja
+  perform pg_advisory_xact_lock(hashtext('nosotros:entrar_pareja'));
+
+  -- ya tengo pareja: la devuelvo
+  select * into fila from public.parejas
+   where usuario_a = auth.uid() or usuario_b = auth.uid()
+   order by creado_en limit 1;
+  if found then return fila; end if;
+
+  -- la otra persona ya entró y me está esperando: me uno a su pareja
+  update public.parejas set usuario_b = auth.uid()
+   where id = (select x.id from public.parejas x join auth.users u on u.id = x.usuario_a
+                where x.usuario_b is null and x.usuario_a <> auth.uid() and u.email like '%@nosotros.invalid'
+                order by x.creado_en limit 1)
+  returning * into fila;
+  if found then return fila; end if;
+
+  -- soy la primera persona: creo la pareja (la columna `codigo` ya no se usa, pero es obligatoria)
+  insert into public.parejas (usuario_a, codigo, desde, conocidos)
+  values (auth.uid(), upper(substr(md5(gen_random_uuid()::text), 1, 8)),
+          case when p_desde between date '1950-01-01' and current_date + 1 then p_desde end,
+          case when p_conocidos between date '1950-01-01' and current_date + 1 then p_conocidos end)
+  returning * into fila;
+  return fila;
+end;
+$$;
+grant execute on function public.entrar_pareja(date, date) to authenticated;
 
 -- ========== FECHAS DE LA PAREJA ==========
 -- Por función (y no con un permiso de UPDATE) para que solo se puedan tocar estas fechas.
@@ -755,6 +797,99 @@ drop trigger if exists noches_despierto on public.noches;
 create trigger noches_despierto after update on public.noches
   for each row execute function public.registrar_despertar();
 
+-- ========== JUEGOS ==========
+-- Una fila por partida terminada. El récord de cada uno en cada juego es su mejor partida.
+create table if not exists public.partidas (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  juego text not null check (juego ~ '^[a-z_]{2,24}$'),
+  puntos integer not null check (puntos between 0 and 100000000),
+  detalle jsonb check (detalle is null or pg_column_size(detalle) <= 2000),
+  creado_en timestamptz not null default now()
+);
+create index if not exists partidas_pareja_idx on public.partidas (pareja_id, creado_en desc);
+create index if not exists partidas_mejor_idx on public.partidas (usuario_id, juego, puntos desc);
+alter table public.partidas enable row level security;
+-- Se leen entre los dos; cada uno guarda solo sus partidas (no se editan ni se borran)
+drop policy if exists "partidas: leer" on public.partidas;
+create policy "partidas: leer" on public.partidas for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "partidas: jugar" on public.partidas;
+create policy "partidas: jugar" on public.partidas
+  for insert with check (usuario_id = auth.uid() and public.es_mi_pareja(pareja_id));
+
+-- Premio secreto: un mensaje que el otro solo puede leer cuando te quita un récord.
+-- Cada uno tiene a lo más un premio esperando; los que ya se ganaron quedan guardados.
+create table if not exists public.premios (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  de_usuario uuid not null references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 400),
+  ganado_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+create unique index if not exists premios_uno_esperando on public.premios (de_usuario) where ganado_en is null;
+alter table public.premios enable row level security;
+drop policy if exists "premios: leer" on public.premios;
+create policy "premios: leer" on public.premios
+  for select using (de_usuario = auth.uid() or (public.es_mi_pareja(pareja_id) and ganado_en is not null));
+drop policy if exists "premios: dejar" on public.premios;
+create policy "premios: dejar" on public.premios
+  for insert with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id) and ganado_en is null);
+drop policy if exists "premios: cambiar el que espera" on public.premios;
+create policy "premios: cambiar el que espera" on public.premios
+  for update using (de_usuario = auth.uid() and ganado_en is null)
+  with check (de_usuario = auth.uid() and public.es_mi_pareja(pareja_id) and ganado_en is null);
+drop policy if exists "premios: quitar el que espera" on public.premios;
+create policy "premios: quitar el que espera" on public.premios
+  for delete using (de_usuario = auth.uid() and ganado_en is null);
+
+-- Al terminar una partida: si le quitó el récord a su pareja, se gana su premio secreto
+-- y le llega un aviso (evento 'record'). Mejorar un récord que ya era tuyo no avisa.
+create or replace function public.registrar_partida() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  otro uuid;
+  su_mejor integer;
+  mi_mejor integer;
+begin
+  select case when usuario_a = new.usuario_id then usuario_b else usuario_a end into otro
+    from public.parejas where id = new.pareja_id;
+  if otro is null then return new; end if;
+  select max(puntos) into su_mejor from public.partidas where usuario_id = otro and juego = new.juego;
+  select max(puntos) into mi_mejor from public.partidas
+   where usuario_id = new.usuario_id and juego = new.juego and id <> new.id;
+  if su_mejor is not null and new.puntos > su_mejor and coalesce(mi_mejor, -1) <= su_mejor then
+    update public.premios set ganado_en = now()
+     where de_usuario = otro and pareja_id = new.pareja_id and ganado_en is null;
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.usuario_id, 'record');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists partidas_record on public.partidas;
+create trigger partidas_record after insert on public.partidas
+  for each row execute function public.registrar_partida();
+
+-- Marcador: el mejor puntaje de cada uno en cada juego, cuántas veces jugó y su mejor de hoy
+create or replace function public.marcador_juegos(p_desde timestamptz)
+returns table (juego text, usuario_id uuid, mejor integer, partidas integer, mejor_hoy integer, ultima timestamptz)
+language sql stable security definer set search_path = public as $$
+  select p.juego, p.usuario_id, max(p.puntos)::int, count(*)::int,
+         (max(p.puntos) filter (where p.creado_en >= p_desde))::int, max(p.creado_en)
+    from public.partidas p
+   where p.pareja_id = public.pareja_de(auth.uid())
+   group by p.juego, p.usuario_id;
+$$;
+-- ¿Mi pareja me dejó un premio que todavía no gano? (sí/no, sin mostrarlo)
+create or replace function public.premio_esperando() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.premios r
+   where public.es_mi_pareja(r.pareja_id) and r.de_usuario <> auth.uid() and r.ganado_en is null);
+$$;
+grant execute on function public.marcador_juegos(timestamptz) to authenticated;
+grant execute on function public.premio_esperando() to authenticated;
+
 -- ========== FOTOS (Supabase Storage) ==========
 -- Bucket PRIVADO. Rutas: <pareja_id>/<usuario_id>/<archivo>. Solo la pareja las ve; cada uno sube y borra las suyas.
 create or replace function public.es_mi_pareja_txt(p text) returns boolean
@@ -776,13 +911,40 @@ drop policy if exists "fotos: borrar las mías" on storage.objects;
 create policy "fotos: borrar las mías" on storage.objects for delete to authenticated
   using (bucket_id = 'fotos' and (storage.foldername(name))[2] = auth.uid()::text);
 
+-- ========== CAMPANITA: LAS NOTIFICACIONES QUEDAN GUARDADAS ==========
+-- Cada push que mandan las funciones (notificar, recordatorios) queda también aquí, para volver a verla
+-- en la app aunque se haya borrado del teléfono o ese teléfono no tenga las push activadas.
+-- Solo las escribe el service role (enviarPush); cada uno lee las suyas y las marca como leídas.
+create table if not exists public.notificaciones (
+  id bigint generated always as identity primary key,
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  titulo text not null,
+  cuerpo text,
+  url text,
+  tag text,
+  creado_en timestamptz not null default now(),
+  leida_en timestamptz
+);
+create index if not exists notificaciones_usuario_idx on public.notificaciones (usuario_id, creado_en desc);
+alter table public.notificaciones enable row level security;
+drop policy if exists "notificaciones: leer las mías" on public.notificaciones;
+create policy "notificaciones: leer las mías" on public.notificaciones
+  for select using (usuario_id = auth.uid());
+
+-- Abrir la campanita las marca todas como leídas (por función: no se puede cambiar nada más)
+create or replace function public.leer_notificaciones() returns void
+language sql security definer set search_path = public as $$
+  update public.notificaciones set leida_en = now() where usuario_id = auth.uid() and leida_en is null;
+$$;
+grant execute on function public.leer_notificaciones() to authenticated;
+
 -- ========== TIEMPO REAL ==========
 -- Agrega las tablas a la publicación solo si aún no están (para poder re-ejecutar).
 do $$
 declare t text;
 begin
   foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
-                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches'] loop
+                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches', 'partidas', 'premios', 'notificaciones'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

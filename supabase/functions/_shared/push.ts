@@ -25,8 +25,21 @@ export function autorizado(req: Request): boolean {
   return req.headers.get("x-webhook-secret") === Deno.env.get("WEBHOOK_SECRET");
 }
 
-// Envía la push a todos los teléfonos de un usuario. Devuelve cuántas salieron.
+// La campanita de la app guarda las notificaciones de los últimos DIAS_CAMPANITA días
+const DIAS_CAMPANITA = 90;
+
+// Guarda la notificación en la campanita (aunque ese usuario no tenga push activado) y la envía
+// a todos sus teléfonos. Devuelve cuántas push salieron.
 export async function enviarPush(sb: SupabaseClient, usuarioId: string, mensaje: Mensaje): Promise<number> {
+  const { error: errCampanita } = await sb.from("notificaciones").insert({
+    usuario_id: usuarioId, titulo: mensaje.title, cuerpo: mensaje.body, url: mensaje.url ?? null, tag: mensaje.tag ?? null,
+  });
+  if (errCampanita) console.error("no se guardó en la campanita", errCampanita.message);
+  else {
+    const hace = new Date(Date.now() - DIAS_CAMPANITA * 86_400_000).toISOString();
+    await sb.from("notificaciones").delete().eq("usuario_id", usuarioId).lt("creado_en", hace);
+  }
+
   const { data: subs } = await sb.from("push_subs").select("endpoint, p256dh, auth").eq("usuario_id", usuarioId);
   let enviadas = 0;
   for (const s of subs ?? []) {

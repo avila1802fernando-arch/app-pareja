@@ -20,6 +20,17 @@ const SENALES: Record<string, (n: string) => Mensaje> = {
   buenos_dias: (n) => ({ title: `☀️ Buenos días, de parte de ${n}`, body: "Que tengas un día bonito.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
   buenas_noches: (n) => ({ title: `🌙 ${n} te da las buenas noches`, body: "Que descanses.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
 };
+// Un tipo que esta función todavía no conoce: aviso genérico (nunca un "te extraño" que nadie mandó)
+const GENERICO = (n: string): Mensaje => ({ title: `💗 ${n} te mandó algo`, body: "Entra a verlo.", url: "/" });
+
+// Juegos (los mismos que en public/juegos/): nombre y cómo se lee el puntaje
+const puntos = (n: number) => `${n.toLocaleString("es")} ${n === 1 ? "punto" : "puntos"}`;
+const JUEGOS: Record<string, { nombre: string; marca: (n: number) => string }> = {
+  corazones: { nombre: "Atrapa los corazones", marca: puntos },
+  vuelo: { nombre: "Vuelo hasta ti", marca: (n) => `${n.toLocaleString("es")} km` },
+  memoria: { nombre: "Memoria de nosotros", marca: puntos },
+  fusion: { nombre: "Fusión de corazones", marca: puntos },
+};
 
 // Ánimos (los mismos que en public/app.js). `abrazo`: el aviso sugiere mandar uno.
 const ESTADOS: Record<string, { emoji: string; frase: string; abrazo?: boolean }> = {
@@ -184,8 +195,30 @@ async function porEvento(ev: Evento) {
       body: n?.sueno ? `Soñó: “${n.sueno}”` : "Que tengas un día precioso 💛",
       tag: "noche", url: "/", vibrate: [100, 80, 100, 80, 100],
     };
+  } else if (ev.tipo === "record" || ev.tipo === "reto") {
+    // La partida de la que se trata es la última que guardó quien manda el aviso
+    const { data: p } = await sb.from("partidas").select("juego, puntos").eq("usuario_id", ev.de_usuario)
+      .order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    const j = JUEGOS[p?.juego ?? ""] ?? { nombre: "un juego", marca: puntos };
+    const marca = p ? j.marca(p.puntos) : "";
+    if (ev.tipo === "record") {
+      // ¿Con ese récord se ganó también tu premio secreto? (el trigger lo marca en el mismo momento)
+      const { count } = await sb.from("premios").select("id", { count: "exact", head: true })
+        .eq("de_usuario", otroId).gte("ganado_en", new Date(Date.now() - 5 * 60_000).toISOString());
+      mensaje = {
+        title: `🏆 ${nombre} te quitó el récord en ${j.nombre}`,
+        body: (marca ? `Hizo ${marca}` : "Te superó") + ((count ?? 0) > 0 ? " y se ganó tu premio secreto 💌" : "") + ". ¿Revancha? 🔥",
+        tag: "juegos", url: "/#juegos", vibrate: [120, 60, 120, 60, 320],
+      };
+    } else {
+      mensaje = {
+        title: `😏 ${nombre} te reta en ${j.nombre}`,
+        body: marca ? `Hizo ${marca}. ¿Le ganas?` : "¿Le ganas?",
+        tag: "juegos", url: "/#juegos", vibrate: [80, 60, 80],
+      };
+    }
   } else {
-    mensaje = (SENALES[ev.tipo] ?? SENALES.te_extrano)(nombre);
+    mensaje = (SENALES[ev.tipo] ?? GENERICO)(nombre);
   }
 
   const enviadas = await enviarPush(sb, otroId, mensaje);

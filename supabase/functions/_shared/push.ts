@@ -8,7 +8,12 @@
 import webpush from "npm:web-push@3.6.7";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
-export type Mensaje = { title: string; body: string; tag?: string; url?: string; vibrate?: number[] };
+// `ttl`: segundos que el servicio de push la guarda si el teléfono está apagado o sin red (por defecto TTL_PUSH)
+export type Mensaje = { title: string; body: string; tag?: string; url?: string; vibrate?: number[]; ttl?: number };
+
+// Las push salen con prioridad alta: con prioridad normal, un Android en reposo (Doze) las retiene hasta
+// su próxima ventana de mantenimiento y, si pasa el TTL, se pierden (solo quedarían en la campanita).
+const TTL_PUSH = 12 * 3600;
 
 // Cliente con permisos totales (solo se usa dentro de las funciones, nunca en el frontend)
 export function clienteAdmin(): SupabaseClient {
@@ -41,13 +46,14 @@ export async function enviarPush(sb: SupabaseClient, usuarioId: string, mensaje:
   }
 
   const { data: subs } = await sb.from("push_subs").select("endpoint, p256dh, auth").eq("usuario_id", usuarioId);
+  const { ttl, ...contenido } = mensaje;
   let enviadas = 0;
   for (const s of subs ?? []) {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify(mensaje),
-        { TTL: 60 * 60 },
+        JSON.stringify(contenido),
+        { TTL: ttl ?? TTL_PUSH, urgency: "high" },
       );
       enviadas++;
     } catch (e) {

@@ -1,0 +1,132 @@
+/* ===== Concentrarnos juntos ⏳ (ver focus.js) =====
+   En el Inicio, una hoja de cuaderno (renglones y margen) con dos velitas chiquitas; a pantalla completa, un
+   escritorio de noche con dos velitas, una de cada uno (rosa y turquesa), que se consumen con el reloj. */
+:root{
+  --fv-a:#2a1620;--fv-b:#1a0e15;--fv-tx:#fbefe8;--fv-suave:#e2c6c4;--fv-llama:#ffd27a;--fv-llama-b:#ff8f4d;
+  --fv-cera-mia:linear-gradient(90deg,#e57a9c,#ffd6e3 45%,#f29ab6);--fv-cera-suya:linear-gradient(90deg,#4cb3a6,#c9f4ec 45%,#7fd8cb);
+}
+
+/* --- tarjeta del Inicio: hoja de cuaderno --- */
+.foco-card{position:relative;border-radius:20px;padding:16px 18px 18px 34px;display:flex;flex-direction:column;gap:4px;color:var(--fg);
+  background-color:var(--papel);
+  background-image:linear-gradient(90deg,transparent 21px,color-mix(in srgb,var(--accent) 50%,transparent) 21px 22.5px,transparent 22.5px),
+                   repeating-linear-gradient(transparent 0 27px,var(--renglon-tinta) 27px 28px);
+  border:1px solid var(--line);box-shadow:0 14px 26px -22px rgba(80,20,50,.55)}
+.foco-card.activa{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--accent) 35%,transparent),0 18px 32px -22px rgba(80,20,50,.6)}
+.foco-card .eyebrow{margin-bottom:2px}
+.foco-titulo{font-family:var(--display);font-size:1.22rem;font-weight:500;line-height:1.25;margin:0;padding-right:44px;text-wrap:balance}
+.foco-sub{margin:0}
+.foco-tarea{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.foco-botones{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.foco-botones button:not(.link){flex:1 1 auto}
+.foco-semana{margin:6px 0 0;font-size:.8rem;font-weight:700;color:var(--accent)}
+.foco-semana:empty{display:none}
+/* dos velitas chiquitas: se encienden cuando cada uno dice ¡vamos! */
+.foco-velitas{position:absolute;top:18px;right:18px;display:flex;gap:8px;align-items:flex-end}
+.foco-velitas i{position:relative;width:9px;height:22px;border-radius:3px 3px 2px 2px;background:var(--fv-cera-mia)}
+.foco-velitas i.suya{height:18px;background:var(--fv-cera-suya)}
+.foco-velitas i::after{content:"";position:absolute;left:50%;bottom:100%;width:1.5px;height:4px;margin-left:-.75px;background:#5a3a2a}
+.foco-velitas i::before{content:"";position:absolute;left:50%;bottom:calc(100% + 2px);width:8px;height:12px;margin-left:-4px;
+  border-radius:50% 50% 50% 50%/62% 62% 38% 38%;transform-origin:50% 100%;opacity:0;transform:scale(.3);
+  background:radial-gradient(circle at 50% 72%,#fffbe8 0 20%,var(--fv-llama) 45%,var(--fv-llama-b) 80%,transparent 82%);
+  transition:opacity .3s,transform .4s var(--resorte)}
+.foco-velitas.mia-on i.mia::before,.foco-velitas.suya-on i.suya::before{opacity:1;transform:scale(1);animation:fv-titila 1.4s ease-in-out infinite alternate}
+
+/* --- configurar el rato --- */
+.fd-tiempo{display:grid;grid-template-columns:52px 1fr 52px;align-items:center;gap:8px;margin-top:4px}
+.fd-min{margin:0;display:flex;align-items:baseline;justify-content:center;gap:6px}
+.fd-min b{font-family:var(--display);font-size:3.4rem;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
+.fd-min span{font-family:var(--hand);font-size:1.3rem;color:var(--muted)}
+.fd-paso{width:52px;height:52px;padding:0;border-radius:50%;font-size:1.5rem;line-height:1}
+.fd-chips,.fd-ideas{display:flex;flex-wrap:wrap;gap:6px}
+.fd-chips button,.fd-ideas button{flex:1 1 auto;min-height:40px;padding:8px 10px;background:var(--blush);color:var(--fg);box-shadow:none;font-size:.85rem;font-weight:600;
+  border:1.5px dashed color-mix(in srgb,var(--accent) 40%,var(--line))}
+.fd-chips button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-style:solid;border-color:var(--accent)}
+.fd-label{margin:6px 0 0;font-size:.8rem;color:var(--muted)}
+.fd-descanso{display:flex;flex-direction:column;gap:10px}
+.fd-rondas{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px}
+.fd-rondas .fd-paso{width:44px;height:44px;font-size:1.3rem}
+.fd-rondas b{text-align:center;font-family:var(--display);font-size:1.2rem;font-weight:500}
+.fd-resumen{margin:4px 0 0;font-family:var(--hand);font-size:1.25rem;line-height:1.2;color:var(--accent);text-align:center;text-wrap:balance}
+
+/* --- el escritorio de noche a pantalla completa (siempre oscuro, también en modo claro) --- */
+.fv{position:fixed;inset:0;z-index:19;overflow:hidden auto;display:flex;align-items:center;justify-content:center;color:var(--fv-tx);
+  background:radial-gradient(120% 70% at 50% 100%,#4a2430 0%,var(--fv-a) 45%,var(--fv-b) 100%);
+  padding:max(68px,env(safe-area-inset-top)) 20px max(28px,env(safe-area-inset-bottom));animation:fv-aparece var(--t-largo) var(--salida)}
+.fv.sale{animation:fv-desaparece var(--t-medio) var(--entrada) forwards}
+.fv.descanso{background:radial-gradient(120% 70% at 50% 100%,#1f4442 0%,#14282b 45%,#0d1719 100%)}
+body.con-foco{overflow:hidden}
+body.con-foco .tabs,body.con-foco .campana,body.con-foco .fondo{visibility:hidden}
+/* el resplandor cálido de las velitas */
+.fv-luz{position:absolute;left:50%;bottom:6%;width:520px;height:520px;margin-left:-260px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,170,90,.22),transparent);transition:opacity 1s}
+.fv.descanso .fv-luz,.fv.pausa .fv-luz,.fv.terminado .fv-luz{opacity:.35}
+.fv-boton{position:absolute;top:max(14px,env(safe-area-inset-top));width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center;
+  background:rgba(255,255,255,.08);color:var(--fv-tx);box-shadow:none;border:1px solid rgba(255,255,255,.14)}
+.fv-boton svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fv-cerrar{left:14px}
+.fv-sonido{right:14px}
+.fv-sonido .fv-mudo,.fv-sonido[aria-pressed=false] .fv-ondas{display:none}
+.fv-sonido[aria-pressed=false] .fv-mudo{display:inline}
+.fv-cuerpo{position:relative;width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.fv-fase{margin:0;font-family:var(--hand);font-size:1.55rem;line-height:1.1;color:var(--fv-suave)}
+/* el reloj: anillo de costura que se va vaciando */
+.fv-reloj{position:relative;width:min(64vw,236px);aspect-ratio:1}
+.fv-anillo{width:100%;height:100%;transform:rotate(-90deg)}
+.fv-anillo circle{fill:none;stroke-width:7;stroke-linecap:round}
+.fv-pista{stroke:rgba(255,255,255,.14);stroke-dasharray:2 7}
+.fv-progreso{stroke:#ff8fb1;stroke-dasharray:1 1;filter:drop-shadow(0 0 6px rgba(255,143,177,.5))}
+.fv.descanso .fv-progreso{stroke:#5fd8c9;filter:drop-shadow(0 0 6px rgba(95,216,201,.45))}
+.fv-centro{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 22px}
+.fv-tiempo{margin:0;font-family:var(--display);font-weight:500;font-size:3.4rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.fv-tiempo.largo{font-size:2.6rem}
+.fv-tiempo.cuenta{font-size:5rem;color:#ffd6e3}
+.fv-tiempo.pop{animation:fv-pop .6s var(--resorte)}
+.fv-para{margin:0;font-size:.85rem;line-height:1.3;color:var(--fv-suave)}
+/* las dos velitas */
+.fv-velas{display:flex;justify-content:center;gap:clamp(24px,10vw,60px)}
+.fv-vela{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px;width:124px}
+.fv-velita{--resto:1;--baja:0px;position:relative;width:34px;height:128px}
+.fv-cera{position:absolute;left:0;right:0;bottom:0;height:96px;border-radius:7px 7px 4px 4px;background:var(--fv-cera-mia);
+  transform-origin:50% 100%;transform:scaleY(var(--resto));transition:transform 1s linear;box-shadow:inset 0 -6px 0 rgba(0,0,0,.12)}
+.fv-vela.suya .fv-cera{background:var(--fv-cera-suya)}
+.fv-llama,.fv-humo{position:absolute;left:50%;bottom:96px;transform:translateY(var(--baja));transition:transform 1s linear}
+.fv-llama{width:20px;height:30px;margin-left:-10px}
+.fv-llama::before{content:"";position:absolute;inset:0 0 4px;border-radius:50% 50% 50% 50%/62% 62% 38% 38%;transform-origin:50% 100%;
+  background:radial-gradient(circle at 50% 72%,#fffbe8 0 18%,var(--fv-llama) 40%,var(--fv-llama-b) 78%,transparent 80%);
+  box-shadow:0 0 22px 8px rgba(255,170,80,.32);animation:fv-titila 1.5s ease-in-out infinite alternate;transition:opacity .4s}
+.fv-llama::after{content:"";position:absolute;left:50%;bottom:0;width:2px;height:7px;margin-left:-1px;border-radius:1px;background:#3b2418}
+.fv-vela.apagada .fv-llama::before{opacity:0;animation:none}
+.fv-vela.prende .fv-llama::before{animation:fv-prende .6s var(--resorte),fv-titila 1.5s ease-in-out .6s infinite alternate}
+.fv.pausa .fv-llama::before{transform:scale(.6);animation:none}
+/* humito cuando se apaga (en el descanso y al terminar) */
+.fv-humo{width:14px;height:40px;margin-left:-7px;opacity:0;pointer-events:none}
+.fv-humo::before{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(closest-side,rgba(255,255,255,.35),transparent)}
+.fv-vela.humea .fv-humo{animation:fv-humo 2.4s ease-out infinite}
+.fv-vela figcaption{display:flex;flex-direction:column;gap:2px;align-items:center;max-width:100%}
+.fv-vela b{font-family:var(--display);font-weight:500;font-size:1.05rem}
+.fv-tarea{font-family:var(--hand);font-size:1.2rem;line-height:1.1;color:var(--fv-suave);overflow-wrap:anywhere}
+.fv-tarea:empty,.fv-vela small:empty{display:none}
+.fv-vela small{font-size:.72rem;line-height:1.3;color:var(--fv-suave);opacity:.85}
+/* botones */
+.fv-acciones{display:flex;gap:10px;width:100%;max-width:320px}
+.fv-acciones button{flex:1;color:var(--fv-tx);border-color:rgba(255,255,255,.3)}
+.fv-terminar{color:var(--fv-suave)}
+/* al terminar */
+.fv-fin{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:340px;padding:18px 18px 16px;border-radius:20px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);animation:fv-pop .5s var(--resorte)}
+.fv-fin-titulo{margin:0;font-family:var(--display);font-size:1.9rem;font-weight:500;line-height:1.1}
+.fv-fin-texto{margin:0;font-family:var(--hand);font-size:1.35rem;line-height:1.2;color:#ffd6e3;text-wrap:balance}
+.fv-fin-semana{color:var(--fv-suave)}
+.fv-fin-botones{display:flex;gap:8px;width:100%;margin-top:6px}
+.fv-fin-botones button{flex:1}
+.fv-fin .ghost{color:var(--fv-tx);border-color:rgba(255,255,255,.3)}
+.fv.terminado .fv-reloj,.fv.terminado .fv-acciones,.fv.terminado .fv-terminar,.fv.terminado .fv-fase{display:none}
+
+@keyframes fv-aparece{from{opacity:0}}
+@keyframes fv-desaparece{to{opacity:0}}
+@keyframes fv-titila{0%{transform:scale(1,1) rotate(-1.5deg)}50%{transform:scale(.94,1.06) rotate(1deg)}100%{transform:scale(1.04,.96) rotate(2deg)}}
+@keyframes fv-prende{0%{transform:scale(0);opacity:0}60%{opacity:1}100%{transform:scale(1)}}
+@keyframes fv-humo{0%{transform:translateY(var(--baja)) scale(.6);opacity:0}25%{opacity:.6}100%{transform:translateY(calc(var(--baja) - 34px)) scale(1.4);opacity:0}}
+@keyframes fv-pop{0%{transform:scale(.7);opacity:0}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.fv-llama::before,.foco-velitas i::before{animation:none!important}.fv-vela.humea .fv-humo{animation:none}}

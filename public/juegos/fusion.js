@@ -50,7 +50,7 @@
     }
     raiz.append(aviso, tablero);
     api.campo.prepend(raiz);
-    let grid = [], S = null, corriendo = false, pausado = false, sigId = 0, inicio = null;
+    let grid = [], S = null, corriendo = false, pausado = false, sigId = 0, inicio = null, finTimer = 0;
 
     function medir() {
       const r = api.campo.getBoundingClientRect();
@@ -153,7 +153,7 @@
       corriendo = false;
       aviso.textContent = "Ya no quedan movimientos 💔";
       api.tono(330, 0.3, "triangle", 0.05); api.tono(262, 0.4, "triangle", 0.05, 0, 0.25);
-      setTimeout(terminar, 1100);
+      finTimer = setTimeout(terminar, 1100);
     }
     function terminar() {
       const [e, txt] = ficha(S.mejor);
@@ -212,8 +212,9 @@
       },
       pausar() { pausado = true; },
       reanudar() { pausado = false; },
-      rendirse() { if (!S) return; corriendo = false; terminar(); },
-      detener() { corriendo = false; window.removeEventListener("keydown", tecla); },
+      rendirse() { if (!S) return; corriendo = false; clearTimeout(finTimer); terminar(); },
+      // el cierre diferido de "sin movimientos" no debe terminar otro juego que se abra después
+      detener() { corriendo = false; clearTimeout(finTimer); window.removeEventListener("keydown", tecla); },
       ajustar: medir,
     };
   }

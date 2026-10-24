@@ -16,13 +16,34 @@
   <!-- conexiones adelantadas: la base y la librería de Supabase se piden apenas abre la app -->
   <link rel="preconnect" href="https://lrsrmblmqvkpltajegqw.supabase.co" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Nunito:wght@400;600;700&family=Fredoka:wght@500;600;700&display=swap">
+  <!-- las dos letras que se ven primero (títulos y texto) se piden junto con la página; el resto, al usarse -->
+  <link rel="preload" href="/fuentes/fraunces-v38.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fuentes/nunito-v32.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/noche.css">
+  <link rel="stylesheet" href="/focus.css">
 </head>
 <body>
+<!-- Íconos propios (mismo trazo que los de la barra): reemplazan a los emojis en botones y listas -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-abrazo" viewBox="0 0 24 24"><path d="M12 15.5c-2.6-1.9-4.2-3.5-4.2-5.4a2.1 2.1 0 0 1 4.2-.6 2.1 2.1 0 0 1 4.2.6c0 1.9-1.6 3.5-4.2 5.4Z"/><path d="M4 9.5c-1 3.8 1.5 8 6 9.5M20 9.5c1 3.8-1.5 8-6 9.5"/></symbol>
+  <symbol id="i-beso" viewBox="0 0 24 24"><path d="M3 12c2.5-3.5 5-4.6 6.6-3.4.9.7 1.6.7 2.4.1.8.6 1.5.6 2.4-.1C16 7.4 18.5 8.5 21 12c-2.3 3.4-5.4 5-9 5s-6.7-1.6-9-5Z"/><path d="M3.5 12c5.5 1.6 11.5 1.6 17 0"/></symbol>
+  <symbol id="i-pienso" viewBox="0 0 24 24"><path d="M7.5 17.5a4.5 4.5 0 0 1-.6-8.96A5.5 5.5 0 0 1 17.6 9a4 4 0 0 1-.6 8.5H7.5Z"/><circle cx="5.5" cy="20.5" r="1"/><path d="M12 15c-1.5-1-2.4-1.9-2.4-2.9a1.2 1.2 0 0 1 2.4-.4 1.2 1.2 0 0 1 2.4.4c0 1-.9 1.9-2.4 2.9Z"/></symbol>
+  <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-luna" viewBox="0 0 24 24"><path d="M19.5 14.5A7.5 7.5 0 1 1 9.5 4.5a6 6 0 0 0 10 10Z"/><path d="M17 3.5v3M15.5 5h3"/></symbol>
+  <symbol id="i-camara" viewBox="0 0 24 24"><path d="M4 8.5h3l1.5-2.5h7L17 8.5h3a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+  <symbol id="i-lapiz" viewBox="0 0 24 24"><path d="M15.5 4.5l4 4L9 19l-5 1 1-5Z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-nota" viewBox="0 0 24 24"><path d="M5 3.5h14A1.5 1.5 0 0 1 20.5 5v9.5l-6 6H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/><path d="M20.5 14.5H16a1.5 1.5 0 0 0-1.5 1.5v4.5M7.5 8.5h9M7.5 12h6"/></symbol>
+  <symbol id="i-musica" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-corazon" viewBox="0 0 24 24"><path d="M12 20.5c-5-3.6-8.5-7-8.5-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5c0 4-3.5 7.4-8.5 11Z"/></symbol>
+  <symbol id="i-latido" viewBox="0 0 24 24"><path d="M12 20.5c-5-3.6-8.5-7-8.5-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5c0 4-3.5 7.4-8.5 11Z"/><path d="M6.5 12.5h2.8l1.4-2.4 2 4.6 1.5-2.2h3.3"/></symbol>
+  <symbol id="i-carta" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6.5L20.5 7"/></symbol>
+  <symbol id="i-pregunta" viewBox="0 0 24 24"><path d="M4 5h16a1.5 1.5 0 0 1 1.5 1.5V15a1.5 1.5 0 0 1-1.5 1.5H9.5L5 20v-3.5H4A1.5 1.5 0 0 1 2.5 15V6.5A1.5 1.5 0 0 1 4 5Z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
+  <symbol id="i-girasol" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="2.5"/><path d="M12 3v1.5M12 12.5V14M6.5 8.5H8M16 8.5h1.5M8.1 4.6l1 1M14.9 11.4l1 1M8.1 12.4l1-1M14.9 5.6l1-1"/><path d="M12 14v7M12 18.5c-2.4 0-3.9-1.4-4.4-3.4 2.4 0 3.9 1.3 4.4 3.4ZM12 19.5c2.4 0 3.9-1.4 4.4-3.4-2.4 0-3.9 1.3-4.4 3.4Z"/></symbol>
+  <symbol id="i-frasco" viewBox="0 0 24 24"><path d="M8 3.5h8M9 3.5v3L6.5 9.5V19a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5V9.5L15 6.5v-3"/><path d="M12 16.6c-1.6-1.1-2.5-2-2.5-3.1a1.2 1.2 0 0 1 2.5-.5 1.2 1.2 0 0 1 2.5.5c0 1.1-.9 2-2.5 3.1Z"/></symbol>
+  <symbol id="i-candado" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2"/></symbol>
+  <symbol id="i-carta-amor" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 5.6 4.3M20.5 7l-5.6 4.3"/><path d="M12 16.2c-1.7-1.2-2.7-2.2-2.7-3.4a1.3 1.3 0 0 1 2.7-.5 1.3 1.3 0 0 1 2.7.5c0 1.2-1 2.2-2.7 3.4Z"/></symbol>
+</svg>
 <!-- Fondo decorativo: aurora suave, corazones que suben, destellos, guirnaldas y flores -->
 <div class="fondo" aria-hidden="true">
   <div class="aurora"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -92,6 +113,7 @@
 
   <!-- Pantalla: iniciar sesión -->
   <section id="s-login" hidden>
+    <div class="matasellos" aria-hidden="true"><span>Por avión</span><b>EC ⇄ CL</b><span>con amor</span></div>
     <p class="eyebrow">Nuestro rincón</p>
     <h1>Cada vez que entras, <em>yo lo sé</em>.</h1>
     <form id="f-login" class="stack">
@@ -111,7 +133,7 @@
       <button type="button" class="ghost" id="btn-modo">Crear una cuenta nueva</button>
     </form>
     <p class="small-note" id="login-msg"></p>
-    <button type="button" class="link" id="btn-instalar-login" hidden>Instalar la app en este dispositivo 📲</button>
+    <button type="button" class="link" id="btn-instalar-login" hidden>Instalar la app en este dispositivo</button>
   </section>
 
   <!-- Pantalla: algo falló al abrir su rincón (la pareja se arma sola, sin códigos) -->
@@ -146,7 +168,7 @@
         <p class="small-note">Aquí pueden mandarse besitos tocando el corazón, ver cuánto falta para verse, escribirse cartas, regar su girasol y mucho más.</p>
         <div class="bienvenida-botones">
           <button type="button" id="bienvenida-guia">Ver cómo funciona</button>
-          <button type="button" class="ghost" id="bienvenida-ok">Entendido 💗</button>
+          <button type="button" class="ghost" id="bienvenida-ok">Entendido</button>
         </div>
       </div>
       <!-- Mientras la otra persona no crea su cuenta: se entra igual y quedan unidos solos cuando llegue -->
@@ -194,13 +216,13 @@
         <p class="small-note" id="especial-prox" hidden></p>
       </div>
       <p class="frase-dia" id="frase-dia"></p>
-      <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo son novios? Agrégalo 💞</button>
+      <button type="button" class="link" id="juntos-poner" hidden>¿Desde cuándo son novios? Agrégalo</button>
      </div>
      <div class="col">
       <div class="notita" id="notita-suya" hidden>
         <p class="notita-de" id="notita-de"></p>
         <p class="notita-texto" id="notita-texto"></p>
-        <button type="button" id="notita-guardar">💗 Guardar en mi corazón</button>
+        <button type="button" id="notita-guardar">Guardar en mi corazón</button>
       </div>
       <div class="cancion" id="cancion-suya" hidden>
         <span class="cancion-disco" aria-hidden="true">🎶</span>
@@ -214,7 +236,7 @@
         <p class="animo-suyo" id="animo-suyo" hidden></p>
       </div>
       <button type="button" class="momento" id="momento-suyo" hidden>
-        <img id="momento-img" alt="">
+        <img id="momento-img" alt="" loading="lazy" decoding="async">
         <span class="momento-pie"><strong id="momento-quien"></strong><span id="momento-texto"></span><small id="momento-cuando"></small></span>
       </button>
       <div class="status libre-status" id="libre-status" hidden>
@@ -226,18 +248,18 @@
         <p class="small-note" id="libre-note"></p>
         <button type="button" id="btn-extrano">Enviar un “te extraño” ahora</button>
         <div class="senales" id="senales" aria-label="Mandar una señal">
-          <button type="button" data-senal="abrazo"><b>🤗</b>Abrazo</button>
-          <button type="button" data-senal="beso"><b>😘</b>Beso</button>
-          <button type="button" data-senal="pensando"><b>💭</b>Pienso en ti</button>
-          <button type="button" data-senal="buenos_dias"><b>☀️</b>Buen día</button>
-          <button type="button" data-senal="buenas_noches"><b>🌙</b>Buenas noches</button>
+          <button type="button" data-senal="abrazo"><b><svg class="ico"><use href="#i-abrazo"/></svg></b>Abrazo</button>
+          <button type="button" data-senal="beso"><b><svg class="ico"><use href="#i-beso"/></svg></b>Beso</button>
+          <button type="button" data-senal="pensando"><b><svg class="ico"><use href="#i-pienso"/></svg></b>Pienso en ti</button>
+          <button type="button" data-senal="buenos_dias"><b><svg class="ico"><use href="#i-sol"/></svg></b>Buen día</button>
+          <button type="button" data-senal="buenas_noches"><b><svg class="ico"><use href="#i-luna"/></svg></b>Buenas noches</button>
         </div>
         <input type="file" id="momento-input" accept="image/*" class="sr">
         <div class="senales acciones" aria-label="Compartir algo">
-          <label for="momento-input" class="accion"><b>📸</b>Momento</label>
-          <button type="button" id="btn-dibujo"><b>✏️</b>Dibujo</button>
-          <button type="button" id="btn-notita"><b>📝</b>Notita</button>
-          <button type="button" id="btn-cancion"><b>🎶</b>Canción</button>
+          <label for="momento-input" class="accion"><b><svg class="ico"><use href="#i-camara"/></svg></b>Momento</label>
+          <button type="button" id="btn-dibujo"><b><svg class="ico"><use href="#i-lapiz"/></svg></b>Dibujo</button>
+          <button type="button" id="btn-notita"><b><svg class="ico"><use href="#i-nota"/></svg></b>Notita</button>
+          <button type="button" id="btn-cancion"><b><svg class="ico"><use href="#i-musica"/></svg></b>Canción</button>
         </div>
         <button type="button" class="ghost animo-mio" id="btn-animo">¿Cómo te sientes hoy?</button>
         <button type="button" class="ghost" id="push-hint" hidden>Activar notificaciones en este teléfono</button>
@@ -295,7 +317,7 @@
         <div class="girasol-top"><h2>Nuestro girasol</h2><span class="etapa" id="girasol-etapa"></span></div>
         <div class="girasol" id="girasol" aria-hidden="true"></div>
         <p class="small-note centro" id="girasol-nota"></p>
-        <button type="button" id="btn-regar">Regar 💧</button>
+        <button type="button" id="btn-regar">Regar</button>
       </div>
       <div class="log">
         <h2>Frasco de razones</h2>
@@ -303,7 +325,7 @@
           <div class="frasco" id="frasco" aria-hidden="true"></div>
           <div class="stack">
             <p class="muted" id="frasco-estado"></p>
-            <button type="button" id="btn-sacar">Sacar una razón 💌</button>
+            <button type="button" id="btn-sacar">Sacar una razón</button>
           </div>
         </div>
         <form id="f-razon" class="fila-deseo">
@@ -326,7 +348,7 @@
       <div class="log">
         <h2>Cartas</h2>
         <p class="small-note">Para leer con calma. Puedes sellarla hasta una fecha especial.</p>
-        <button type="button" id="btn-carta">Escribir una carta 💌</button>
+        <button type="button" id="btn-carta">Escribir una carta</button>
         <ul id="cartas-list" class="cartas"></ul>
       </div>
       <div class="log">
@@ -444,7 +466,7 @@
       <div class="stack">
         <h2>La app en tu pantalla</h2>
         <p class="muted" id="instalar-estado"></p>
-        <button type="button" class="ghost" id="btn-instalar" hidden>Instalar la app 📲</button>
+        <button type="button" class="ghost" id="btn-instalar" hidden>Instalar la app</button>
       </div>
      </div>
      <div class="col">
@@ -459,7 +481,7 @@
           <p class="small-note">Esos días de cada mes son especiales: les llega un aviso a los dos a las 9 de la mañana.</p>
           <button type="submit" class="ghost">Guardar fechas</button>
         </form>
-        <button type="button" class="ghost" id="btn-ubicacion">📍 Usar mi ubicación para ver la distancia</button>
+        <button type="button" class="ghost" id="btn-ubicacion">Usar mi ubicación para ver la distancia</button>
         <p class="small-note" id="ubicacion-nota">Se guarda aproximada (unos 10 km), solo para calcular cuánto los separa.</p>
       </div>
       <form id="f-clave" class="stack">
@@ -622,7 +644,7 @@
     <img class="momento-prev" id="momento-prev" alt="Vista previa">
     <label for="momento-texto-in">Cuéntale algo (opcional)</label>
     <input id="momento-texto-in" maxlength="140" placeholder="Pensando en ti mientras…">
-    <button type="submit" id="momento-enviar">Compartir 📸</button>
+    <button type="submit" id="momento-enviar">Compartir</button>
     <button type="button" class="link" id="momento-cancelar">Cancelar</button>
   </form>
 </dialog>
@@ -643,7 +665,7 @@
     <label for="vale-texto">Vale por…</label>
     <input id="vale-texto" maxlength="100" required placeholder="Un abrazo de 10 minutos">
     <div class="vale-emojis" id="vale-emojis" role="radiogroup" aria-label="Dibujito del vale"></div>
-    <button type="submit">Regalar 🎟️</button>
+    <button type="submit">Regalar</button>
     <button type="button" class="link" id="vale-cancelar">Cancelar</button>
   </form>
 </dialog>
@@ -653,7 +675,7 @@
   <div class="stack centro">
     <p class="eyebrow" id="razon-de"></p>
     <p class="papelito" id="razon-leida"></p>
-    <button type="button" id="razon-cerrar">Guardar en el corazón 💗</button>
+    <button type="button" id="razon-cerrar">Guardar en el corazón</button>
   </div>
 </dialog>
 
@@ -670,7 +692,7 @@
       <button type="button" data-color="lila" aria-label="Lila"></button>
     </div>
     <p class="small-note" id="notita-ayuda"></p>
-    <button type="submit">Pegar en su Inicio 📝</button>
+    <button type="submit">Pegar en su Inicio</button>
     <button type="button" class="link" id="notita-cancelar">Cancelar</button>
   </form>
 </dialog>
@@ -685,7 +707,7 @@
     <input id="cancion-url-in" type="url" maxlength="400" inputmode="url" placeholder="https://…">
     <label for="cancion-nota-in">Dedicatoria (opcional)</label>
     <input id="cancion-nota-in" maxlength="140" placeholder="Me acordé de ti apenas sonó">
-    <button type="submit">Dedicar 🎶</button>
+    <button type="submit">Dedicar</button>
     <button type="button" class="link" id="cancion-cancelar">Cancelar</button>
   </form>
 </dialog>
@@ -705,7 +727,7 @@
     </div>
     <label for="dibujo-texto" class="sr">Texto (opcional)</label>
     <input id="dibujo-texto" maxlength="140" placeholder="Un texto para acompañarlo (opcional)">
-    <button type="button" id="dibujo-enviar">Enviar dibujo ✏️</button>
+    <button type="button" id="dibujo-enviar">Enviar dibujo</button>
     <button type="button" class="link" id="dibujo-cancelar">Cancelar</button>
   </div>
 </dialog>
@@ -716,7 +738,7 @@
     <div class="gran-corazon" aria-hidden="true">💞</div>
     <h2 class="gran-titulo" id="gran-titulo">¡Hoy es el día!</h2>
     <p class="mano gran-texto" id="gran-texto"></p>
-    <button type="button" id="gran-cerrar">Ir a abrazarte 🤗</button>
+    <button type="button" id="gran-cerrar">Ir a abrazarte</button>
   </div>
 </dialog>
 
@@ -765,14 +787,16 @@
     <p class="ritual-dato" id="ritual-falta" hidden></p>
     <p class="ritual-frase mano" id="ritual-frase"></p>
     <p class="ritual-firma mano" id="ritual-firma"></p>
-    <button type="button" class="ritual-boton" id="ritual-entrar">Empezar el día 💗</button>
+    <button type="button" class="ritual-boton" id="ritual-entrar">Empezar el día</button>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="/config.js"></script>
-<script src="/preguntas.js"></script>
-<script src="/app.js"></script>
-<script src="/noche.js"></script>
+<!-- defer: la página se pinta sin esperar a los scripts; igual corren en este orden apenas termina de leerse -->
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script defer src="/config.js"></script>
+<script defer src="/preguntas.js"></script>
+<script defer src="/app.js"></script>
+<script defer src="/noche.js"></script>
+<script defer src="/focus.js"></script>
 </body>
 </html>

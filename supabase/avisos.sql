@@ -4,7 +4,8 @@
 -- Antes de pegarlo en Supabase → SQL Editor, cambia en las dos líneas marcadas con ◀:
 --   TU_REF            → el "Reference ID" del proyecto (Project Settings → General)
 --   TU_WEBHOOK_SECRET → el mismo WEBHOOK_SECRET que cargaste en las funciones (archivo .env)
--- Se puede volver a ejecutar: reemplaza lo anterior sin duplicar nada.
+-- Se puede volver a ejecutar: reemplaza lo anterior sin duplicar nada. Si se corre sin cambiar las líneas ◀
+-- (con TU_REF / TU_WEBHOOK_SECRET), se queda con la URL y el secreto que ya estaban guardados.
 
 create extension if not exists pg_net;
 create extension if not exists pg_cron;
@@ -16,7 +17,8 @@ create table if not exists privado.config (clave text primary key, valor text no
 insert into privado.config (clave, valor) values
   ('funciones_url', 'https://TU_REF.supabase.co/functions/v1'),   -- ◀
   ('webhook_secret', 'TU_WEBHOOK_SECRET')                          -- ◀
-on conflict (clave) do update set valor = excluded.valor;
+on conflict (clave) do update set valor = excluded.valor
+  where excluded.valor not like '%TU\_%';  -- los valores de ejemplo nunca pisan los de verdad
 
 -- Llama a una Edge Function con el secreto (pg_net: no bloquea a quien escribió)
 create or replace function privado.llamar(funcion text, cuerpo jsonb) returns void
@@ -63,6 +65,18 @@ drop trigger if exists aviso_calendario on public.eventos_cal;
 create trigger aviso_calendario
   after insert or update or delete on public.eventos_cal
   for each row execute function privado.aviso_calendario();
+
+-- Los Database Webhooks del panel (`notificar` y `notificar-calendario`, de una versión anterior de la guía)
+-- hacen lo mismo que estos dos triggers: si quedaran los dos, cada aviso llegaría doble. Se quitan solo
+-- cuando ya hay una URL de verdad guardada, para no quedarse nunca sin avisos.
+do $$
+begin
+  if exists (select 1 from privado.config where clave = 'funciones_url' and valor not like '%TU\_%') then
+    drop trigger if exists "notificar" on public.eventos;
+    drop trigger if exists "notificar-calendario" on public.eventos_cal;
+  end if;
+end;
+$$;
 
 -- Cada 5 minutos → recordatorios (calendario 30 min antes, cartas que ya se abren, "libre" vencido)
 select cron.unschedule('nosotros-recordatorios')

@@ -1,5 +1,5 @@
 // Edge Function "recordatorios"
-// La llama pg_cron cada 5 minutos (ver supabase/cron.sql). En cada pasada:
+// La llama pg_cron cada 5 minutos (ver supabase/avisos.sql). En cada pasada:
 //   1. apaga las disponibilidades ("estoy libre") que ya vencieron
 //   2. manda un recordatorio push a los dos por cada evento del calendario
 //      que empieza en los próximos MINUTOS_ANTES minutos (una sola vez por evento)
@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
         body: `${TIPOS[ev.tipo] ?? ev.tipo} · ${fechaEn(ev.inicio, perfil?.tz)} (tu hora)`,
         tag: `recordatorio-${ev.id}`,
         url: "/#calendario",
+        ttl: MINUTOS_ANTES * 60, // "En 30 min…" que llega cuando ya empezó solo confunde
       });
     }
     // Marcar como recordado (el webhook de eventos_cal ignora este cambio)

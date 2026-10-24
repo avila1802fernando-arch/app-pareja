@@ -31,6 +31,7 @@
   const claveNoche = (t) => X.claveDia(new Date(t - 12 * H).toISOString(), X.tzPareja());
   const diaAntes = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10); };
   function duracion(t) {
+    t = Math.max(0, t); // si el reloj del teléfono va un poco atrasado, nunca "-1 min"
     const h = Math.floor(t / H), m = Math.floor((t % H) / 60e3);
     return h ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`;
   }
@@ -79,7 +80,8 @@
     el.acostarme = nodo("button", null, "Me voy a dormir 🌙"); el.acostarme.type = "button";
     el.ver = nodo("button", "ghost", "Ver nuestra noche"); el.ver.type = "button";
     el.despertar = nodo("button", "ghost", "Buenos días ☀️"); el.despertar.type = "button";
-    const botones = nodo("div", "noche-botones"); botones.append(el.acostarme, el.ver, el.despertar);
+    const botones = nodo("div", "noche-botones"); el.noDormir = nodo("button", "link", "No me voy a dormir todavía"); el.noDormir.type = "button";
+    botones.append(el.acostarme, el.ver, el.despertar, el.noDormir);
     el.cuenta = nodo("p", "noche-cuenta");
     card.append(cielo, nodo("p", "eyebrow", "🌙 Dormir juntos"), el.titulo, el.sub, el.sueno, botones, el.cuenta);
     el.card = card;
@@ -107,7 +109,8 @@
     el.vHoras = nodo("p", "nv-horas");
     el.vFrase = nodo("p", "nv-frase");
     el.vBoton = nodo("button", null, "Buenos días ☀️"); el.vBoton.type = "button";
-    const cont = nodo("div", "nv-cont"); cont.append(cama, el.vTitulo, el.vTiempo, el.vHoras, el.vFrase, el.vBoton);
+    const cont = nodo("div", "nv-cont"); el.vNoDormir = nodo("button", "link nv-no-dormir", "No me voy a dormir todavía"); el.vNoDormir.type = "button";
+    cont.append(cama, el.vTitulo, el.vTiempo, el.vHoras, el.vFrase, el.vBoton, el.vNoDormir);
     v.append(estrellas, luna, el.cerrar, cont);
     document.body.append(v);
     el.vista = v;
@@ -130,6 +133,8 @@
     el.despertar.addEventListener("click", pedirDespertar);
     el.vBoton.addEventListener("click", () => (estado().mia ? pedirDespertar() : acostarme()));
     el.cerrar.addEventListener("click", cerrarVista);
+    el.noDormir.addEventListener("click", noDormir);
+    el.vNoDormir.addEventListener("click", noDormir);
     v.addEventListener("keydown", (e) => { if (e.key === "Escape") cerrarVista(); });
     d.querySelector("#despertar-cancelar").addEventListener("click", () => d.close());
     d.querySelector("form").addEventListener("submit", despertar);
@@ -154,7 +159,9 @@
       el.titulo.textContent = `${nom} ya está en la camita 💤`;
       el.sub.textContent = `Se acostó a las ${X.hora(suya.inicio, tz)} (tu hora) y te espera.`;
     } else {
-      const anoche = mapa.get(diaAntes(claveNoche(Date.now()))) || mapa.get(claveNoche(Date.now()));
+      // de mañana, la noche que acaba de terminar es la de "ayer"; de tarde o de noche, "anoche" fue la anterior
+      const k = claveNoche(Date.now()), hoyK = X.claveDia(new Date().toISOString(), X.tzPareja());
+      const anoche = mapa.get(k === hoyK ? diaAntes(k) : k);
       el.titulo.textContent = h >= 20 || h < 5 ? "¿Ya es hora de dormir?" : "Esta noche, a dormir juntos";
       el.sub.textContent = anoche ? `Anoche durmieron juntos ${duracion(anoche)} 💞`
         : "Cuando se vayan a dormir, toquen los dos «Me voy a dormir» 🌙";
@@ -172,6 +179,7 @@
     el.acostarme.textContent = suya ? `Acostarme con ${nom} 🌙` : "Me voy a dormir 🌙";
     el.ver.hidden = !(mia || suya);
     el.despertar.hidden = !mia;
+    el.noDormir.hidden = !mia;
     el.cuenta.textContent = total
       ? `💤 ${total.toLocaleString("es")} ${total === 1 ? "noche" : "noches"} durmiendo juntos` + (r >= 2 ? ` · 🔥 ${r} seguidas` : "")
       : "";
@@ -202,6 +210,7 @@
     const k = claveNoche(Date.now());
     el.vFrase.textContent = FRASES[[...k].reduce((a, c) => a + c.charCodeAt(0), 0) % FRASES.length];
     el.vBoton.textContent = mia ? "Buenos días ☀️" : `Acostarme con ${nom} 🌙`;
+    el.vNoDormir.hidden = !mia;
   }
 
   function abrirVista() {
@@ -224,6 +233,16 @@
   }
 
   // ---------- acciones ----------
+  // Me equivoqué (o era una siesta que no fue): se borra mi noche abierta y todo vuelve como antes
+  async function noDormir() {
+    el.noDormir.disabled = el.vNoDormir.disabled = true;
+    const { data, error } = await X.sb.rpc("cancelar_noche");
+    el.noDormir.disabled = el.vNoDormir.disabled = false;
+    if (error) { X.toast("No se pudo, intenta otra vez"); return; }
+    if (data) quitar(data);
+    cerrarVista();
+    X.toast("Listo, deshicimos el «me voy a dormir» 💛");
+  }
   async function acostarme() {
     const nom = (X.otro && X.otro.nombre) || "tu pareja";
     const { suya } = estado();
@@ -258,38 +277,63 @@
   }
 
   // ---------- datos ----------
+  let cambiadas = null; // mientras hay una recarga en camino: las noches guardadas aquí, que no se pisan
+  // una noche borrada ("No me voy a dormir todavía") no vuelve aunque llegue una recarga vieja
+  const borradas = new Set();
+  function quitar(id) {
+    borradas.add(id);
+    if (cambiadas) cambiadas.delete(id);
+    noches = noches.filter((n) => n.id !== id);
+    pintar();
+  }
   function guardar(n) {
+    if (cambiadas) cambiadas.set(n.id, n);
     const i = noches.findIndex((x) => x.id === n.id);
     if (i >= 0) noches[i] = n; else noches.push(n);
     noches.sort((a, b) => ms(b.inicio) - ms(a.inicio));
     pintar();
   }
   async function cargar() {
-    const { data } = await X.sb.from("noches").select("id, usuario_id, inicio, fin, sueno")
+    const mias = (cambiadas = cambiadas || new Map());
+    const { data, error } = await X.sb.from("noches").select("id, usuario_id, inicio, fin, sueno")
       .eq("pareja_id", X.pareja.id).order("inicio", { ascending: false }).limit(1000);
-    noches = data || [];
+    if (cambiadas === mias) cambiadas = null;
+    if (error) return; // sin red se queda lo que ya había en pantalla
+    // lo guardado mientras tanto ("Buenos días", "Me voy a dormir", tiempo real) manda sobre lo cargado
+    const nuevas = (data || []).filter((n) => !borradas.has(n.id)).map((n) => mias.get(n.id) || n);
+    mias.forEach((n, id) => { if (!nuevas.some((x) => x.id === id)) nuevas.push(n); });
+    nuevas.sort((a, b) => ms(b.inicio) - ms(a.inicio));
+    noches = nuevas;
     pintar();
   }
 
-  function iniciar() {
-    X = window.nosotros;
-    if (!X || !X.pareja) return;
-    montar();
-    cargar();
+  function suscribir() {
     if (canal) X.sb.removeChannel(canal);
     canal = X.sb.channel(`noches-${X.pareja.id}`).on("postgres_changes",
       { event: "*", schema: "public", table: "noches", filter: `pareja_id=eq.${X.pareja.id}` },
       (p) => {
+        if (p.eventType === "DELETE") { if (p.old && p.old.id) quitar(p.old.id); return; }
         if (!p.new || !p.new.id) return;
         const llega = p.eventType === "INSERT" && p.new.usuario_id !== X.user.id;
         guardar(p.new);
         if (llega && !el.vista.hidden) { el.avSuyo.classList.add("llega"); setTimeout(() => el.avSuyo.classList.remove("llega"), 500); }
       }).subscribe();
+  }
+  function iniciar() {
+    X = window.nosotros;
+    if (!X || !X.pareja) return;
+    montar();
+    cargar();
+    suscribir();
     clearInterval(timer);
     timer = setInterval(pintar, 30000);
   }
   // al volver a la app (p. ej. en la mañana) se trae lo último por si el tiempo real se durmió
   document.addEventListener("visibilitychange", () => { if (!document.hidden && X && el) cargar(); });
+  // app.js avisa cuando se pone al día tras un rato en segundo plano: si el canal se cayó, se vuelve a abrir
+  window.addEventListener("nosotros:aldia", () => {
+    if (X && el && (!canal || canal.state === "closed" || canal.state === "errored")) suscribir();
+  });
 
   window.addEventListener("nosotros:dentro", iniciar);
   if (window.nosotros) iniciar();

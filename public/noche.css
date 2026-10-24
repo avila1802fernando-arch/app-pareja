@@ -73,3 +73,5 @@ body.con-noche .tabs{visibility:hidden}
   .noche-vista,.noche-vista *,.noche-cielo i{animation:none!important}
   .noche-vista.ambos .nv-z{opacity:.7}
 }
+/* "No me voy a dormir todavía": deshace el acostarse sin contar la noche */
+.noche-card button.link,.nv-no-dormir{color:var(--noche-suave)}

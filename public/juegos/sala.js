@@ -185,6 +185,9 @@
         .order("ganado_en", { ascending: false }).limit(30),
     ]);
     if (m.error) {
+      // Un corte de red no cuenta: se queda lo que había y se reintenta al volver a la pestaña
+      const falta = m.error.code === "PGRST202" || m.error.code === "42883" || /could not find the function|does not exist/i.test(m.error.message || "");
+      if (!falta) return;
       // la base todavía no tiene los juegos: se juega igual, con el récord propio guardado aquí
       sinBase = true; marcador = {};
       Object.entries(localDe()).forEach(([j, p]) => { marcador[j] = { [y.id]: { mejor: p, partidas: 0, hoy: null, ultima: null } }; });
@@ -206,9 +209,10 @@
     anotarEnMarcador(y.id, juego, puntos, ahora);
     recientes = [{ usuario_id: y.id, juego, puntos, creado_en: ahora }, ...recientes].slice(0, 12);
     if (prueba || sinBase || !X.sb || !X.pareja) return false;
-    const { error } = await X.sb.from("partidas").insert({ pareja_id: X.pareja.id, usuario_id: y.id, juego, puntos, detalle: detalle || null });
+    const { data, error } = await X.sb.from("partidas").insert({ pareja_id: X.pareja.id, usuario_id: y.id, juego, puntos, detalle: detalle || null })
+      .select("creado_en").single();
     if (error) { toast("No se pudo guardar la partida 😢 Tu récord queda en este teléfono."); return false; }
-    return true;
+    return data.creado_en; // con esto se sabe si ESTA partida ganó el premio secreto
   }
 
   // ---------- la pestaña: marcador, juegos, premio secreto y últimas partidas ----------
@@ -347,7 +351,10 @@
     S.pEstado.textContent = mio ? `Tu premio está escondido 🔒 ${o.nombre} tiene que quitarte un récord para leerlo.`
       : ultimo && ultimo.ganado_en ? `💌 ${o.nombre} se ganó tu premio ${X.ago ? X.ago(ultimo.ganado_en) : ""}. ¿Le escondes otro?`
       : `Escribe algo bonito para ${o.nombre}: solo podrá leerlo cuando te quite un récord.`;
-    if (document.activeElement !== S.pTexto) S.pTexto.value = mio ? mio.texto : "";
+    // solo se rellena si nadie lo editó desde la última vez que lo rellenamos (no se pierde un borrador)
+    if (document.activeElement !== S.pTexto && S.pTexto.value === (S.pTextoPuesto || "")) {
+      S.pTexto.value = S.pTextoPuesto = mio ? mio.texto : "";
+    }
     S.pGuardar.textContent = mio ? "Cambiar mi premio" : "Esconder mi premio 🔒";
     S.pQuitar.hidden = !mio;
   }
@@ -380,6 +387,7 @@
     S.pGuardar.disabled = false;
     if (error) { toast("No se pudo guardar tu premio"); return; }
     premio.mio = data; premio.mios = [data, ...premio.mios.filter((x) => x.id !== data.id)];
+    S.pTextoPuesto = S.pTexto.value; // ya guardado: pintarPremio puede volver a rellenarlo
     S.pTexto.blur(); pintarPremio();
     toast(`Premio escondido 🔒 ${o.nombre} tendrá que quitarte un récord para leerlo`);
     if (X.estallido) X.estallido(S.pGuardar, "💌", 7);
@@ -389,6 +397,7 @@
     const { error } = await X.sb.from("premios").delete().eq("id", premio.mio.id);
     if (error) { toast("No se pudo quitar"); return; }
     premio.mios = premio.mios.filter((x) => x.id !== premio.mio.id); premio.mio = null;
+    S.pTextoPuesto = S.pTexto.value; // se quitó: que pintarPremio lo vacíe
     pintarPremio();
   }
 
@@ -623,7 +632,8 @@
   }
 
   async function terminar(res) {
-    if (!actual || actual.estado !== "jugando") return;
+    // también en pausa: un juego puede terminar solo (p. ej. Memoria tras su última ronda) mientras está pausado
+    if (!actual || (actual.estado !== "jugando" && actual.estado !== "pausa")) return;
     actual.estado = "fin";
     const { def } = actual, o = elOtro(), antes = recordsDe(def.id);
     const puntos = Math.max(0, Math.round(res.puntos || 0));
@@ -653,20 +663,21 @@
     else if (nuevo) { fanfarria(); setTimeout(() => X.lluvia && X.lluvia("✨", 12), 250); }
     else consuelo();
 
-    const yaGuardada = await guardarPartida(def.id, puntos, res.detalle);
+    const guardadaEn = await guardarPartida(def.id, puntos, res.detalle);
     if (!actual || actual.def !== def) return;
-    actual.guardada = yaGuardada;
-    V.retar.disabled = !yaGuardada && !prueba;
-    if (leGana && yaGuardada) mostrarPremioGanado();
+    actual.guardada = !!guardadaEn;
+    V.retar.disabled = !guardadaEn && !prueba;
+    if (leGana && guardadaEn) mostrarPremioGanado(guardadaEn);
   }
 
-  // Si al quitarle el récord se ganó su premio secreto, se ofrece leerlo ahí mismo
-  async function mostrarPremioGanado() {
+  // Si al quitarle el récord se ganó su premio secreto, se ofrece leerlo ahí mismo.
+  // El trigger de la partida marca ganado_en en la misma transacción: si coincide con la partida, lo ganó esta.
+  async function mostrarPremioGanado(partidaEn) {
     const o = elOtro();
     const { data } = await X.sb.from("premios").select("id, texto, ganado_en, creado_en").eq("de_usuario", o.id)
       .not("ganado_en", "is", null).order("ganado_en", { ascending: false }).limit(1);
     const p = data && data[0];
-    if (!p || Date.now() - new Date(p.ganado_en).getTime() > 3 * 60000) return;
+    if (!p || new Date(p.ganado_en).getTime() !== new Date(partidaEn).getTime()) return;
     premio.esperando = false;
     premio.ganados = [p, ...premio.ganados.filter((x) => x.id !== p.id)];
     if (!actual) return;
@@ -721,10 +732,7 @@
     return "ok";
   }
 
-  function iniciar() {
-    if (!window.nosotros || !window.nosotros.pareja) return;
-    X = window.nosotros; prueba = false;
-    montarSala();
+  function suscribir() {
     if (canal) X.sb.removeChannel(canal);
     canal = X.sb.channel(`juegos-${X.pareja.id}`).on("postgres_changes",
       { event: "INSERT", schema: "public", table: "partidas", filter: `pareja_id=eq.${X.pareja.id}` },
@@ -735,6 +743,12 @@
         recientes = [f, ...recientes].slice(0, 12);
         pintarSala(); marcarPunto();
       }).subscribe();
+  }
+  function iniciar() {
+    if (!window.nosotros || !window.nosotros.pareja) return;
+    X = window.nosotros; prueba = false;
+    montarSala();
+    suscribir();
     cargar().then(() => { pintarSala(); marcarPunto(); });
   }
 
@@ -745,8 +759,21 @@
     montarSala(); pintarSala(); marcarPunto();
     cargar().then(() => { pintarSala(); marcarPunto(); });
   });
-  window.addEventListener("popstate", () => { if (actual) cerrar(); });
+  // Al volver a la app tras un rato: el marcador se pone al día y, si el canal se cayó, se vuelve a abrir
+  window.addEventListener("nosotros:aldia", () => {
+    if (!X || prueba) return;
+    if (!canal || canal.state === "closed" || canal.state === "errored") suscribir();
+    cargar().then(() => { pintarSala(); marcarPunto(); });
+  });
+  // "Atrás" (botón o gesto de Android) en plena partida la pausa en vez de tirarla; si no se está jugando, cierra
+  window.addEventListener("popstate", () => {
+    if (!actual) return;
+    if (actual.estado === "jugando") { history.pushState({ juego: actual.def.id }, ""); pausar(); return; }
+    cerrar();
+  });
   window.addEventListener("resize", () => { if (actual && actual.inst && actual.inst.ajustar) actual.inst.ajustar(); });
   document.addEventListener("visibilitychange", () => { if (document.hidden) pausar(); });
+  // bajar la cortina de notificaciones no oculta la página, pero sí le quita el foco
+  window.addEventListener("blur", () => pausar());
   if (window.nosotros) iniciar();
 })();

@@ -1,5 +1,5 @@
 // Edge Function "notificar"
-// La llaman los Database Webhooks:
+// La llaman los triggers de supabase/avisos.sql (mismo formato que un Database Webhook):
 //   - `eventos` (INSERT): entrada, "te extraño", "estoy libre", abrazo, beso, a dormir… → push a la otra persona
 //   - `eventos_cal` (INSERT / UPDATE / DELETE): cambios del calendario → push a la otra persona
 //
@@ -10,15 +10,17 @@ import { autorizado, clienteAdmin, enviarPush, fechaEn, horaEn, type Mensaje } f
 const MINUTOS_SIN_REPETIR = 15; // no avisar dos "entradas" seguidas en menos de 15 min
 const TIPOS: Record<string, string> = { llamada: "☎️ Llamada", cita: "💞 Cita", viaje: "✈️ Viaje", aniversario: "🎉 Aniversario", otro: "📌 Otro" };
 
-// Señales simples: el texto solo depende del nombre de quien la manda
+// Señales simples: el texto solo depende del nombre de quien la manda.
+// Cada tipo lleva su `tag`: en la bandeja, un aviso nuevo reemplaza solo a uno del mismo tipo, nunca a otro distinto.
 const SENALES: Record<string, (n: string) => Mensaje> = {
-  entrada: (n) => ({ title: `${n} acaba de entrar ❤️`, body: "Y te extraña." }),
-  te_extrano: (n) => ({ title: `${n} dice: te extraño ❤️`, body: "Entra y respóndele.", vibrate: [200, 100, 200] }),
+  // (las que dicen "ahora" duran 3 h: llegar a la mañana siguiente diciendo "acaba de entrar" confunde)
+  entrada: (n) => ({ title: `${n} acaba de entrar ❤️`, body: "Y te extraña.", tag: "entrada", ttl: 3 * 3600 }),
+  te_extrano: (n) => ({ title: `${n} dice: te extraño ❤️`, body: "Entra y respóndele.", tag: "te_extrano", vibrate: [200, 100, 200] }),
   abrazo: (n) => ({ title: `🤗 ${n} te manda un abrazo`, body: "Bien apretado.", tag: "abrazo", vibrate: [500] }),
   beso: (n) => ({ title: `😘 ${n} te manda un beso`, body: "Y otro más.", tag: "beso", vibrate: [80, 60, 80] }),
-  pensando: (n) => ({ title: `💭 ${n} está pensando en ti`, body: "Justo ahora.", tag: "pensando", vibrate: [60] }),
-  buenos_dias: (n) => ({ title: `☀️ Buenos días, de parte de ${n}`, body: "Que tengas un día bonito.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
-  buenas_noches: (n) => ({ title: `🌙 ${n} te da las buenas noches`, body: "Que descanses.", tag: "dia", vibrate: [100, 80, 100, 80, 100] }),
+  pensando: (n) => ({ title: `💭 ${n} está pensando en ti`, body: "Justo ahora.", tag: "pensando", vibrate: [60], ttl: 3 * 3600 }),
+  buenos_dias: (n) => ({ title: `☀️ Buenos días, de parte de ${n}`, body: "Que tengas un día bonito.", tag: "buenos_dias", vibrate: [100, 80, 100, 80, 100] }),
+  buenas_noches: (n) => ({ title: `🌙 ${n} te da las buenas noches`, body: "Que descanses.", tag: "buenas_noches", vibrate: [100, 80, 100, 80, 100] }),
 };
 // Un tipo que esta función todavía no conoce: aviso genérico (nunca un "te extraño" que nadie mandó)
 const GENERICO = (n: string): Mensaje => ({ title: `💗 ${n} te mandó algo`, body: "Entra a verlo.", url: "/" });
@@ -107,6 +109,7 @@ async function porEvento(ev: Evento) {
       title: `${nombre} está libre para una llamada ☎️`,
       body: d?.hasta ? `Hasta las ${horaEn(d.hasta, tz)} (tu hora). ¿Hablamos?` : "¿Hablamos?",
       tag: "libre",
+      ttl: 2 * 3600, // "estoy libre" dura 2 h: después ya no sirve que llegue
     };
   } else if (ev.tipo === "animo") {
     const { data: a } = await sb.from("animos").select("estado, nota").eq("usuario_id", ev.de_usuario).maybeSingle();
@@ -166,7 +169,7 @@ async function porEvento(ev: Evento) {
     // El vale canjeado lo había regalado quien recibe este aviso
     const { data: v } = await sb.from("vales").select("emoji, texto").eq("de_usuario", otroId)
       .not("canjeado_en", "is", null).order("canjeado_en", { ascending: false }).limit(1).maybeSingle();
-    mensaje = { title: `🎟️ ${nombre} canjeó tu vale`, body: v ? `${v.emoji} ${v.texto} 💗` : "¡Cumple lo prometido! 💗", tag: "vale", url: "/#juntos" };
+    mensaje = { title: `🎟️ ${nombre} canjeó tu vale`, body: v ? `${v.emoji} ${v.texto} 💗` : "¡Cumple lo prometido! 💗", tag: "canje", url: "/#juntos" };
   } else if (ev.tipo === "razon") {
     mensaje = { title: `🫙 ${nombre} echó una razón nueva al frasco`, body: "Sácala cuando quieras 💌", tag: "frasco", url: "/#juntos" };
   } else if (ev.tipo === "latido") {
@@ -193,7 +196,7 @@ async function porEvento(ev: Evento) {
     mensaje = {
       title: `☀️ ${nombre} despertó y te da los buenos días`,
       body: n?.sueno ? `Soñó: “${n.sueno}”` : "Que tengas un día precioso 💛",
-      tag: "noche", url: "/", vibrate: [100, 80, 100, 80, 100],
+      tag: "despierto", url: "/", vibrate: [100, 80, 100, 80, 100],
     };
   } else if (ev.tipo === "record" || ev.tipo === "reto") {
     // La partida de la que se trata es la última que guardó quien manda el aviso
@@ -202,21 +205,31 @@ async function porEvento(ev: Evento) {
     const j = JUEGOS[p?.juego ?? ""] ?? { nombre: "un juego", marca: puntos };
     const marca = p ? j.marca(p.puntos) : "";
     if (ev.tipo === "record") {
-      // ¿Con ese récord se ganó también tu premio secreto? (el trigger lo marca en el mismo momento)
+      // ¿Con ESTE récord se ganó también tu premio secreto? El trigger marca ganado_en y crea este evento en la
+      // misma transacción (los dos con now()): coinciden exacto. Una ventana de minutos atraparía un premio de antes.
       const { count } = await sb.from("premios").select("id", { count: "exact", head: true })
-        .eq("de_usuario", otroId).gte("ganado_en", new Date(Date.now() - 5 * 60_000).toISOString());
+        .eq("de_usuario", otroId).eq("ganado_en", ev.creado_en);
       mensaje = {
         title: `🏆 ${nombre} te quitó el récord en ${j.nombre}`,
         body: (marca ? `Hizo ${marca}` : "Te superó") + ((count ?? 0) > 0 ? " y se ganó tu premio secreto 💌" : "") + ". ¿Revancha? 🔥",
-        tag: "juegos", url: "/#juegos", vibrate: [120, 60, 120, 60, 320],
+        tag: "record", url: "/#juegos", vibrate: [120, 60, 120, 60, 320],
       };
     } else {
       mensaje = {
         title: `😏 ${nombre} te reta en ${j.nombre}`,
         body: marca ? `Hizo ${marca}. ¿Le ganas?` : "¿Le ganas?",
-        tag: "juegos", url: "/#juegos", vibrate: [80, 60, 80],
+        tag: "reto", url: "/#juegos", vibrate: [80, 60, 80],
       };
     }
+  } else if (ev.tipo === "foco" || ev.tipo === "foco_empieza") {
+    // El rato de foco del que se trata es el último de la pareja
+    const { data: f } = await sb.from("focos").select("minutos, rondas, tareas")
+      .eq("pareja_id", ev.pareja_id).order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    const tarea = (f?.tareas as Record<string, string> | null)?.[ev.de_usuario];
+    const plan = f ? `${f.minutos} min${f.rondas > 1 ? ` × ${f.rondas} rondas` : ""}` : "Un rato";
+    mensaje = ev.tipo === "foco"
+      ? { title: `📚 ${nombre} quiere concentrarse contigo`, body: `${plan}${tarea ? ` · ${tarea}` : ""}. Entra y dale a «¡Vamos!»`, tag: "foco", url: "/", vibrate: [60, 60, 60] }
+      : { title: `⏳ ${nombre} se sumó: ¡empezó su rato de foco!`, body: `${plan} juntos, cada uno en lo suyo. ¡Ánimo! 💪`, tag: "foco", url: "/", vibrate: [80, 60, 80] };
   } else {
     mensaje = (SENALES[ev.tipo] ?? GENERICO)(nombre);
   }

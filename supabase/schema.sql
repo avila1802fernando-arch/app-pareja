@@ -46,7 +46,8 @@ alter table public.eventos add constraint eventos_tipo_check
     'momento', 'riego', 'vale', 'canje', 'razon',
     'latido', 'notita', 'cancion',
     'a_dormir', 'despierto',
-    'record', 'reto'
+    'record', 'reto',
+    'foco', 'foco_empieza'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -202,6 +203,18 @@ create policy "eventos: insertar" on public.eventos
 drop policy if exists "push: propias" on public.push_subs;
 create policy "push: propias" on public.push_subs
   for all using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
+
+-- La suscripción de un aparato queda a nombre de quien lo usa ahora. Si antes se entró en ese teléfono con
+-- la otra cuenta, la política de arriba no deja que un upsert la cambie de dueño (y el aparato seguiría
+-- recibiendo los avisos de la otra persona). El endpoint es secreto: solo lo conoce el navegador que lo creó.
+create or replace function public.guardar_push(p_endpoint text, p_p256dh text, p_auth text) returns void
+language sql security definer set search_path = public as $$
+  insert into public.push_subs (endpoint, usuario_id, p256dh, auth)
+  select p_endpoint, auth.uid(), p_p256dh, p_auth where auth.uid() is not null
+  on conflict (endpoint) do update set usuario_id = excluded.usuario_id, p256dh = excluded.p256dh, auth = excluded.auth;
+$$;
+revoke all on function public.guardar_push(text, text, text) from public, anon;
+grant execute on function public.guardar_push(text, text, text) to authenticated;
 
 -- disponibilidad: leo la mía y la de mi pareja; escribo solo la mía
 drop policy if exists "disponibilidad: leer" on public.disponibilidad;
@@ -781,6 +794,15 @@ language sql security definer set search_path = public as $$
 $$;
 grant execute on function public.despertar(text) to authenticated;
 
+-- Me equivoqué, no me voy a dormir: borra mi noche abierta (no cuenta como noche ni manda buenos días)
+create or replace function public.cancelar_noche() returns uuid
+language sql security definer set search_path = public as $$
+  delete from public.noches
+   where id = (select id from public.noches where usuario_id = auth.uid() and fin is null order by inicio desc limit 1)
+  returning id;
+$$;
+grant execute on function public.cancelar_noche() to authenticated;
+
 drop trigger if exists noches_aviso on public.noches;
 create trigger noches_aviso after insert on public.noches
   for each row execute function public.evento_desde_tabla('a_dormir');
@@ -938,13 +960,244 @@ language sql security definer set search_path = public as $$
 $$;
 grant execute on function public.leer_notificaciones() to authenticated;
 
+-- ========== CONCENTRARNOS JUNTOS (FOCO) ==========
+-- Un rato de estudio o trabajo a la par, cada uno en su teléfono: uno propone (minutos, rondas, descanso y en qué
+-- va a trabajar) y queda listo; cuando el otro dice "¡Vamos!" arranca el mismo reloj para los dos (con 4 segundos
+-- de cuenta regresiva). Vive aquí para que siga bien aunque se cierre la app, y solo se cambia con las funciones
+-- foco_* (una sola sesión activa por pareja). public/focus.js es la otra mitad.
+create table if not exists public.focos (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  creado_por uuid not null references auth.users(id) on delete cascade,
+  cambiado_por uuid references auth.users(id) on delete set null,
+  minutos int not null check (minutos between 5 and 180),
+  descanso int not null default 10 check (descanso between 0 and 30),
+  rondas int not null default 1 check (rondas between 1 and 6),
+  ronda int not null default 1,
+  fase text not null default 'preparando' check (fase in ('preparando', 'foco', 'descanso', 'pausa', 'terminado', 'cancelado')),
+  fase_previa text check (fase_previa is null or fase_previa in ('foco', 'descanso')),
+  listos uuid[] not null default '{}',
+  tareas jsonb not null default '{}'::jsonb,
+  fase_inicio timestamptz,
+  fase_fin timestamptz,
+  fase_total_ms int,
+  restante_ms int,
+  minutos_hechos int not null default 0,
+  creado_en timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+create index if not exists focos_pareja_idx on public.focos (pareja_id, creado_en desc);
+alter table public.focos enable row level security;
+drop policy if exists "focos: leer" on public.focos;
+create policy "focos: leer" on public.focos for select using (public.es_mi_pareja(pareja_id));
+
+-- La hora del servidor: así los dos relojes marcan lo mismo aunque un teléfono esté adelantado
+create or replace function public.ahora() returns timestamptz language sql stable as $$ select now() $$;
+grant execute on function public.ahora() to authenticated;
+
+-- ¡Vamos!: me sumo a lo propuesto (y digo en qué voy a trabajar). Con los dos listos arranca el reloj.
+create or replace function public.foco_vamos(p_id uuid, p_tarea text default null) returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare
+  f public.focos;
+  tarea text := nullif(left(btrim(coalesce(p_tarea, '')), 60), '');
+begin
+  select * into f from public.focos where id = p_id and public.es_mi_pareja(pareja_id) for update;
+  if not found or f.fase <> 'preparando' then return f; end if;
+  update public.focos set
+    listos = (select array_agg(distinct u) from unnest(f.listos || auth.uid()) as u),
+    tareas = case when tarea is null then tareas else tareas || jsonb_build_object(auth.uid()::text, tarea) end,
+    cambiado_por = auth.uid(), actualizado_en = now()
+   where id = p_id returning * into f;
+  if cardinality(f.listos) >= 2 then
+    update public.focos set fase = 'foco', ronda = 1, fase_total_ms = f.minutos * 60000,
+      fase_inicio = now() + interval '4 seconds', fase_fin = now() + interval '4 seconds' + f.minutos * interval '1 minute'
+     where id = p_id returning * into f;
+  end if;
+  return f;
+end;
+$$;
+grant execute on function public.foco_vamos(uuid, text) to authenticated;
+
+-- Proponer (o cambiar lo que propuse): quien propone queda listo y a su pareja le llega un aviso.
+-- Si su pareja ya había propuesto algo, proponer es sumarse a eso. Lo que quedó abierto de antes se cierra solo.
+create or replace function public.foco_proponer(p_minutos int, p_descanso int, p_rondas int, p_tarea text default null)
+returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare
+  p uuid;
+  f public.focos;
+  tarea text := nullif(left(btrim(coalesce(p_tarea, '')), 60), '');
+  m int := least(greatest(coalesce(p_minutos, 25), 5), 180);
+  d int := least(greatest(coalesce(p_descanso, 5), 0), 30);
+  r int := least(greatest(coalesce(p_rondas, 1), 1), 6);
+begin
+  select id into p from public.parejas
+   where (usuario_a = auth.uid() or usuario_b = auth.uid()) and usuario_b is not null;
+  if p is null then return null; end if;
+  perform pg_advisory_xact_lock(hashtext('nosotros:foco:' || p));
+  update public.focos set fase = case when fase = 'preparando' then 'cancelado' else 'terminado' end, actualizado_en = now()
+   where pareja_id = p and fase in ('preparando', 'foco', 'descanso', 'pausa')
+     and actualizado_en < now() - case when fase = 'preparando' then interval '2 hours' else interval '12 hours' end;
+  select * into f from public.focos
+   where pareja_id = p and fase in ('preparando', 'foco', 'descanso', 'pausa') order by creado_en desc limit 1;
+  if found then
+    if f.fase <> 'preparando' then return f; end if;                                       -- ya están en un rato de foco
+    if not (auth.uid() = any(f.listos)) then return public.foco_vamos(f.id, tarea); end if; -- era de mi pareja: me sumo
+    update public.focos set minutos = m, descanso = d, rondas = r, listos = array[auth.uid()],
+      tareas = jsonb_strip_nulls(tareas || jsonb_build_object(auth.uid()::text, tarea)),
+      cambiado_por = auth.uid(), actualizado_en = now()
+     where id = f.id returning * into f;
+    return f;
+  end if;
+  insert into public.focos (pareja_id, creado_por, cambiado_por, minutos, descanso, rondas, listos, tareas)
+  values (p, auth.uid(), auth.uid(), m, d, r, array[auth.uid()], jsonb_strip_nulls(jsonb_build_object(auth.uid()::text, tarea)))
+  returning * into f;
+  return f;
+end;
+$$;
+grant execute on function public.foco_proponer(int, int, int, text) to authenticated;
+
+-- Pausar y seguir (para los dos)
+create or replace function public.foco_pausar(p_id uuid) returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare f public.focos;
+begin
+  select * into f from public.focos where id = p_id and public.es_mi_pareja(pareja_id) for update;
+  if not found or f.fase not in ('foco', 'descanso') then return f; end if;
+  update public.focos set fase_previa = f.fase, fase = 'pausa',
+    restante_ms = greatest(0, least(f.fase_total_ms, (extract(epoch from (f.fase_fin - now())) * 1000)::int)),
+    cambiado_por = auth.uid(), actualizado_en = now()
+   where id = p_id returning * into f;
+  return f;
+end;
+$$;
+grant execute on function public.foco_pausar(uuid) to authenticated;
+
+create or replace function public.foco_seguir(p_id uuid) returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare f public.focos;
+begin
+  select * into f from public.focos where id = p_id and public.es_mi_pareja(pareja_id) for update;
+  if not found or f.fase <> 'pausa' then return f; end if;
+  update public.focos set fase = f.fase_previa, fase_previa = null, fase_inicio = now(),
+    fase_fin = now() + coalesce(f.restante_ms, 0) * interval '1 millisecond', restante_ms = null,
+    cambiado_por = auth.uid(), actualizado_en = now()
+   where id = p_id returning * into f;
+  return f;
+end;
+$$;
+grant execute on function public.foco_seguir(uuid) to authenticated;
+
+-- Sumar minutos a lo que está corriendo (el "+5 min")
+create or replace function public.foco_sumar(p_id uuid, p_minutos int default 5) returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare
+  f public.focos;
+  extra int := least(greatest(coalesce(p_minutos, 5), 1), 60) * 60000;
+begin
+  select * into f from public.focos where id = p_id and public.es_mi_pareja(pareja_id) for update;
+  if not found or f.fase not in ('foco', 'descanso', 'pausa') then return f; end if;
+  update public.focos set fase_total_ms = f.fase_total_ms + extra,
+    fase_fin = case when f.fase = 'pausa' then f.fase_fin else f.fase_fin + extra * interval '1 millisecond' end,
+    restante_ms = case when f.fase = 'pausa' then f.restante_ms + extra else f.restante_ms end,
+    cambiado_por = auth.uid(), actualizado_en = now()
+   where id = p_id returning * into f;
+  return f;
+end;
+$$;
+grant execute on function public.foco_sumar(uuid, int) to authenticated;
+
+-- Se acabó el tiempo de la fase: lo llama cualquiera de los dos teléfonos (el primero que llega; al otro no le
+-- cambia nada). Foco → descanso (o la siguiente ronda, o terminado); descanso → otra ronda con cuenta regresiva.
+-- Si nadie miró en más de media hora, el rato se da por terminado.
+create or replace function public.foco_avanzar(p_id uuid, p_fase text) returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare
+  f public.focos;
+  tarde boolean;
+  hechos int;
+begin
+  select * into f from public.focos where id = p_id and public.es_mi_pareja(pareja_id) for update;
+  if not found or f.fase <> p_fase or f.fase not in ('foco', 'descanso') or f.fase_fin > now() + interval '1 second' then
+    return f;
+  end if;
+  tarde := now() - f.fase_fin > interval '30 minutes';
+  hechos := f.minutos_hechos + case when f.fase = 'foco' then round(f.fase_total_ms / 60000.0)::int else 0 end;
+  if tarde or (f.fase = 'foco' and f.ronda >= f.rondas) then
+    update public.focos set fase = 'terminado', minutos_hechos = hechos, fase_fin = now(), restante_ms = null,
+      cambiado_por = auth.uid(), actualizado_en = now()
+     where id = p_id returning * into f;
+  elsif f.fase = 'foco' and f.descanso > 0 then
+    update public.focos set fase = 'descanso', minutos_hechos = hechos, fase_inicio = now(),
+      fase_total_ms = f.descanso * 60000, fase_fin = now() + f.descanso * interval '1 minute',
+      cambiado_por = auth.uid(), actualizado_en = now()
+     where id = p_id returning * into f;
+  else
+    -- otra ronda (después del descanso, o seguida si no hay descanso), con su cuenta regresiva
+    update public.focos set fase = 'foco', ronda = f.ronda + 1, minutos_hechos = hechos,
+      fase_inicio = now() + interval '4 seconds', fase_total_ms = f.minutos * 60000,
+      fase_fin = now() + interval '4 seconds' + f.minutos * interval '1 minute',
+      cambiado_por = auth.uid(), actualizado_en = now()
+     where id = p_id returning * into f;
+  end if;
+  return f;
+end;
+$$;
+grant execute on function public.foco_avanzar(uuid, text) to authenticated;
+
+-- Terminar para los dos (o cancelar lo propuesto). Cuenta lo que alcanzaron a concentrarse.
+create or replace function public.foco_terminar(p_id uuid) returns public.focos
+language plpgsql security definer set search_path = public as $$
+declare
+  f public.focos;
+  quedaba int;
+  hechos int;
+begin
+  select * into f from public.focos where id = p_id and public.es_mi_pareja(pareja_id) for update;
+  if not found or f.fase not in ('preparando', 'foco', 'descanso', 'pausa') then return f; end if;
+  if f.fase = 'preparando' then
+    update public.focos set fase = 'cancelado', cambiado_por = auth.uid(), actualizado_en = now()
+     where id = p_id returning * into f;
+    return f;
+  end if;
+  hechos := f.minutos_hechos;
+  if f.fase = 'foco' or (f.fase = 'pausa' and f.fase_previa = 'foco') then
+    quedaba := case when f.fase = 'pausa' then coalesce(f.restante_ms, 0)
+                    else greatest(0, least(f.fase_total_ms, (extract(epoch from (f.fase_fin - now())) * 1000)::int)) end;
+    hechos := hechos + floor((f.fase_total_ms - quedaba) / 60000.0)::int;
+  end if;
+  update public.focos set fase = 'terminado', minutos_hechos = hechos, fase_fin = now(), restante_ms = null,
+    cambiado_por = auth.uid(), actualizado_en = now()
+   where id = p_id returning * into f;
+  return f;
+end;
+$$;
+grant execute on function public.foco_terminar(uuid) to authenticated;
+
+-- Avisos: la propuesta le llega a la pareja, y a quien propuso le avisa cuando el otro se suma
+create or replace function public.registrar_foco() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.creado_por, 'foco');
+  elsif old.fase = 'preparando' and new.fase = 'foco' then
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, coalesce(new.cambiado_por, new.creado_por), 'foco_empieza');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists focos_aviso on public.focos;
+create trigger focos_aviso after insert or update on public.focos
+  for each row execute function public.registrar_foco();
+
 -- ========== TIEMPO REAL ==========
 -- Agrega las tablas a la publicación solo si aún no están (para poder re-ejecutar).
 do $$
 declare t text;
 begin
   foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
-                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches', 'partidas', 'premios', 'notificaciones'] loop
+                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches', 'partidas', 'premios', 'notificaciones', 'focos'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

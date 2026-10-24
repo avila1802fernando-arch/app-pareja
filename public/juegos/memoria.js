@@ -54,7 +54,8 @@
     api.campo.prepend(raiz);
     const iniciales = `${(api.yo.nombre || "?").charAt(0).toUpperCase()} ♥ ${(api.otro.nombre || "?").charAt(0).toUpperCase()}`;
     let S = null, raf = 0, ultimo = 0, corriendo = false, pausado = false, esperas = [];
-    const despues = (fn, ms) => { const t = setTimeout(fn, ms); esperas.push(t); };
+    // las esperas se congelan mientras el juego está en pausa (si no, la ronda siguiente arrancaría tapada)
+    const despues = (fn, ms) => { const t = setTimeout(() => (pausado ? despues(fn, 250) : fn()), ms); esperas.push(t); };
     const limpiar = () => { esperas.forEach(clearTimeout); esperas = []; };
 
     // cartas del tamaño justo para que la ronda quepa en la pantalla

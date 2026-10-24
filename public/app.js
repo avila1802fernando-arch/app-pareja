@@ -1,8 +1,17 @@
 /* Nosotros — app principal */
 (function () {
   const C = window.NOSOTROS_CONFIG;
-  // Por si algo falla al conectar: la pantalla de carga nunca se queda pegada
-  setTimeout(() => quitarCarga(), 10000);
+  // Por si algo falla al conectar: la pantalla de carga nunca se queda pegada y, si a los 10 s no apareció
+  // ninguna pantalla (una petición colgada, o no cargó supabase-js), se ofrece reintentar en vez de una
+  // tarjeta vacía. Solo con getElementById: también corre si la app no alcanzó a arrancar.
+  setTimeout(() => {
+    quitarCarga();
+    const id = (x) => document.getElementById(x);
+    if (!["s-login", "s-aviso", "s-home"].every((x) => id(x) && id(x).hidden)) return;
+    id("aviso-msg").textContent = "Revisa tu conexión a internet e intenta de nuevo.";
+    id("s-aviso").hidden = false;
+    id("aviso-reintentar").onclick = () => location.reload();
+  }, 10000);
   // La sesión queda guardada en el teléfono y se renueva sola: no hay que volver a entrar
   // hasta tocar "Cerrar sesión".
   const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY, {
@@ -11,8 +20,15 @@
   // Las funciones de Supabase que devuelven una fila, cuando no encuentran nada devuelven una fila vacía (id null)
   const filaValida = (d) => !!(d && d.id);
   const $ = (id) => document.getElementById(id);
+  // Un ícono del sprite de index.html (mismo trazo que la barra; reemplaza a los emojis en listas y botones)
+  const iconoSvg = (id) => `<svg class="ico" aria-hidden="true"><use href="#i-${id}"/></svg>`;
 
   const HORAS_LIBRE = 2; // "Estoy libre para hablar" se apaga solo después de estas horas
+  // Teléfonos con poca memoria o con "ahorro de datos" activado: el fondo queda más simple (.ligera en styles.css)
+  try {
+    const red = navigator.connection;
+    if ((red && red.saveData) || (navigator.deviceMemory && navigator.deviceMemory <= 2)) document.documentElement.classList.add("ligera");
+  } catch (e) {}
 
   const S = { login: $("s-login"), aviso: $("s-aviso"), home: $("s-home") };
   let user = null, perfil = null, pareja = null, otro = null, canal = null, toastTimer = null;
@@ -53,8 +69,9 @@
     if (d < 60) return "hace un momento";
     if (d < 3600) return `hace ${Math.floor(d / 60)} min`;
     if (d < 86400) return `hace ${Math.floor(d / 3600)} h`;
-    const dt = new Date(iso);
-    return `el ${dt.toLocaleDateString("es", { day: "numeric", month: "short" })} a las ${dt.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}`;
+    // en la zona del perfil, como el resto de la app (no la del teléfono, que cambia si viajas)
+    const dt = new Date(iso), f = (tz) => `el ${dt.toLocaleDateString("es", { day: "numeric", month: "short", timeZone: tz })} a las ${dt.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", timeZone: tz })}`;
+    try { return f(miTz()); } catch (e) { return f(undefined); }
   }
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
@@ -119,9 +136,25 @@
     msg.textContent = "Entrando…";
     const { error } = await sb.auth.signInWithPassword({ email: correoDe(usuario), password: clave });
     btn.disabled = false;
-    msg.textContent = error ? "Usuario o contraseña incorrectos." : "";
+    // solo un 400 de Supabase es "datos incorrectos"; lo demás (sin red, demasiados intentos) no es culpa de la contraseña
+    const datosMalos = error && (error.status === 400 || /invalid login credentials/i.test(error.message || ""));
+    msg.textContent = !error ? "" : datosMalos ? "Usuario o contraseña incorrectos." : "No se pudo entrar. Revisa tu conexión a internet e intenta de nuevo.";
   });
-  $("btn-logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+  // Cerrar sesión solo en este aparato (sin el scope "local", Supabase la cierra en todos los teléfonos de la cuenta)
+  // y sin dejar las notificaciones de esta cuenta llegando aquí.
+  async function cerrarSesion() {
+    try {
+      const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
+      const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+      if (sub && user) await sb.from("push_subs").delete().eq("endpoint", sub.endpoint);
+    } catch (e) {}
+    const { error } = await sb.auth.signOut({ scope: "local" });
+    if (error) { toast("No se pudo cerrar la sesión. Revisa tu conexión e intenta de nuevo."); return; }
+    // lo que este teléfono guarda de esta cuenta no queda para la próxima (p. ej. un borrador de carta sorpresa)
+    try { ["borrador-carta", "ultimo-beso", "ultimo-latido"].forEach((k) => localStorage.removeItem(k)); sessionStorage.clear(); } catch (e) {}
+    location.reload();
+  }
+  $("btn-logout").addEventListener("click", cerrarSesion);
 
   // Solo se carga todo al entrar o si cambia la persona: al renovarse la sesión (cada hora)
   // o al volver a la app no se recarga ni salta al inicio de la página.
@@ -140,11 +173,12 @@
   const SIN_CONEXION = "Revisa tu conexión a internet e intenta de nuevo.";
   async function cargar() {
     // perfil y pareja a la vez: es la espera más larga al abrir la app
-    const [{ data: p, error: errPerfil }, { data: pj }] = await Promise.all([
+    const [{ data: p, error: errPerfil }, { data: pj, error: errPareja }] = await Promise.all([
       sb.from("perfiles").select("*").eq("id", user.id).maybeSingle(),
       sb.from("parejas").select("*").or(`usuario_a.eq.${user.id},usuario_b.eq.${user.id}`).maybeSingle(),
     ]);
-    if (errPerfil) { aviso(SIN_CONEXION); return; }
+    // un corte de red no es "no tengo pareja" (PGRST116 = más de una fila: ahí decide entrar_pareja)
+    if (errPerfil || (errPareja && errPareja.code !== "PGRST116")) { aviso(SIN_CONEXION); return; }
     perfil = p;
     if (!perfil) {
       const nuevo = { id: user.id, nombre: nombreDe(usuarioDe(user.email)).slice(0, 24), tz: tzNavegador };
@@ -171,12 +205,15 @@
   }
   function aviso(msg) { $("aviso-msg").textContent = msg; show("aviso"); }
   $("aviso-reintentar").addEventListener("click", () => cargar());
-  $("aviso-salir").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+  $("aviso-salir").addEventListener("click", cerrarSesion);
 
   // Al crear la pareja, el primer encuentro queda en el calendario como viaje (el corazón del Inicio cuenta los días)
   async function agendarEncuentro() {
     const F = C.FECHAS || {};
     if (!F.encuentro || F.encuentro < claveDia(new Date().toISOString(), miTz())) return;
+    // solo en una pareja recién creada: entrar_pareja también devuelve la que ya existía
+    const { count, error } = await sb.from("eventos_cal").select("id", { count: "exact", head: true }).eq("pareja_id", pareja.id);
+    if (error || count) return;
     await sb.from("eventos_cal").insert({
       pareja_id: pareja.id, creado_por: user.id, tipo: "viaje",
       titulo: F.lugar ? `Nos vemos por primera vez en ${F.lugar} 💞` : "Nos vemos por primera vez 💞",
@@ -214,9 +251,9 @@
   // Las guarda enviarPush (funciones notificar y recordatorios) en la tabla notificaciones.
   let notis = [], canalCampana = null;
   async function cargarCampana() {
-    const { data } = await sb.from("notificaciones").select("id, titulo, cuerpo, url, creado_en, leida_en")
+    const { data, error } = await sb.from("notificaciones").select("id, titulo, cuerpo, url, creado_en, leida_en")
       .eq("usuario_id", user.id).order("creado_en", { ascending: false }).limit(60);
-    notis = data || [];
+    if (!error) notis = data || []; // sin red se quedan las que había (el canal se abre igual)
     renderCampana();
     // en su propio canal: si la tabla todavía no está en tiempo real, no se cae el resto
     if (canalCampana) sb.removeChannel(canalCampana);
@@ -278,13 +315,15 @@
     if (!filaValida(pareja)) { aviso(SIN_CONEXION); return; }
     show("home");
     const otroId = pareja.usuario_a === user.id ? pareja.usuario_b : pareja.usuario_a, u = usuarioPareja();
-    const [{ data: o }] = await Promise.all([
+    const [{ data: o, error: errOtro }] = await Promise.all([
       otroId ? sb.from("perfiles").select("*").eq("id", otroId).maybeSingle() : { data: null },
       // Registrar mi entrada (una vez por apertura), a la par con lo anterior
       sessionStorage.getItem("entrada") ? null
         : sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "entrada" })
           .then(() => sessionStorage.setItem("entrada", "1")),
     ]);
+    // sin su perfil (corte de red) no sabríamos su zona horaria: mejor reintentar que mostrar horas equivocadas
+    if (errOtro) { aviso(SIN_CONEXION); return; }
     otro = o || { id: otroId || SIN_CUENTA, nombre: !otroId && u ? nombreDe(u) : "Tu pareja" };
     tituloHome(); renderPendiente();
     $("heart").classList.add("beat");
@@ -296,14 +335,19 @@
       if (data && data.id) pareja = { ...pareja, ...data };
     }
     // relojes y contadores: se repintan cada 30 s (también cambia "es mañana" → "¡hoy!" a medianoche)
-    clearInterval(relojTimer); renderRelojes();
-    relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); }, 30000);
+    clearInterval(relojTimer); renderRelojes(); diaVisto = diaPregunta();
+    // a medianoche (de quien vive más al oeste) cambian la pregunta, el riego y "Hoy te toca": se recarga todo
+    relojTimer = setInterval(() => { renderRelojes(); renderJuntos(); if (diaPregunta() !== diaVisto) ponerseAlDia(); }, 30000);
     renderAvatares(); renderDistancia(); conectarVivo();
     // Bienvenida la primera vez que entran
     let vista = false; try { vista = localStorage.getItem("bienvenida-vista") === "1"; } catch (e) {}
     $("bienvenida").hidden = vista;
-    await Promise.all([render(), cargarDispo(), cargarAnimos(), cargarJuntos(), cargarPregunta(), cargarCartas(),
-      cargarMomentos(), cargarGirasol(), cargarFrasco(), cargarVales(), cargarNotitas(), cargarCanciones(), cargarCampana()]);
+    // La carga se va apenas está lo de arriba del Inicio (la cuenta regresiva y "Hoy te toca");
+    // lo demás sigue llegando sin hacer esperar. Los vales se cargan al abrir Juntos.
+    Promise.all([render(), cargarDispo(), cargarAnimos(), cargarMomentos(), cargarNotitas(), cargarCanciones(), cargarCampana()]);
+    // si una de estas cargas falla, igual se sigue: sin esto quedarían sin abrir el tiempo real y las notificaciones
+    try { await Promise.all([cargarJuntos(), cargarPregunta(), cargarCartas(), cargarGirasol(), cargarFrasco()]); }
+    catch (e) { console.error(e); }
     await quitarCarga(); ritualDelDia();
     // Funciones en archivos aparte (noche.js) arrancan con lo que necesitan de aquí
     window.nosotros = {
@@ -313,6 +357,12 @@
     };
     window.dispatchEvent(new Event("nosotros:dentro"));
     setTimeout(cargarJuegos, 3000); // después de que el saludo del día termina de dibujarse
+    suscribirPareja();
+    prepararPush();
+  }
+
+  // Canal de la pareja: lo que el otro hace aparece al instante. Se vuelve a abrir si se cae (ver ponerseAlDia).
+  function suscribirPareja() {
     if (canal) sb.removeChannel(canal);
     canal = sb.channel("pareja").on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
@@ -394,8 +444,10 @@
       { event: "*", schema: "public", table: "horarios" },
       (payload) => {
         const r = payload.eventType === "DELETE" ? payload.old : payload.new;
-        if (r.usuario_id !== otro.id) return;
-        if (payload.eventType === "DELETE") horarios.suyos.delete(idx(r.dia, r.hora)); else horarios.suyos.add(idx(r.dia, r.hora));
+        // (si todavía no se abrió Horarios, se cargará completo al abrirlo)
+        if (r.usuario_id !== otro.id || !refSuyo) return;
+        const l = refSuyo.aLocal[idx(r.dia, r.hora)];
+        if (payload.eventType === "DELETE") horarios.suyos.delete(l); else horarios.suyos.add(l);
         if (!$("tab-horarios").hidden && mapaMio) renderHorarios();
       }
     ).on("postgres_changes",
@@ -408,8 +460,32 @@
         cargarJuntos();
       }
     ).subscribe();
-    prepararPush();
   }
+
+  // ---------- al volver a la app: ponerse al día ----------
+  // El tiempo real no repite lo que pasó mientras el teléfono dormía, y a veces el canal se cae.
+  // Al volver tras un rato, al recuperar la red o al cambiar el día, se recarga lo que se ve y se
+  // reabren los canales caídos. noche.js y la sala de juegos se enteran con "nosotros:aldia".
+  let ocultaDesde = 0, diaVisto = null;
+  const caido = (c) => !c || c.state === "closed" || c.state === "errored";
+  function ponerseAlDia() {
+    if (!pareja || !otro || S.home.hidden) return;
+    diaVisto = diaPregunta();
+    if (caido(canal)) suscribirPareja();
+    if (caido(canalVivo)) conectarVivo();
+    render(); cargarDispo(); cargarAnimos(); cargarNotitas(); cargarCanciones(); cargarCampana(); cargarMomentos();
+    cargarJuntos(); cargarPregunta(); cargarCartas(); cargarGirasol(); cargarFrasco();
+    const tab = TABS.find((t) => !$("tab-" + t).hidden);
+    if (tab === "juntos") { cargarHistorial(); cargarDeseos(); cargarVales(); cargarNumeros(); }
+    // (Ajustes no: rehacerlo borraría lo que estás escribiendo en el formulario)
+    else if (tab && tab !== "inicio" && tab !== "ajustes" && AL_ABRIR[tab]) AL_ABRIR[tab]();
+    window.dispatchEvent(new Event("nosotros:aldia"));
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { ocultaDesde = Date.now(); return; }
+    if (ocultaDesde && Date.now() - ocultaDesde > 30000) ponerseAlDia();
+  });
+  window.addEventListener("online", ponerseAlDia);
 
   function tituloHome() {
     $("home-title").innerHTML = "";
@@ -440,6 +516,8 @@
     cancion: (n) => `${n} te dedicó una canción 🎶`,
     a_dormir: (n) => `${n} se fue a la camita 🌙`,
     despierto: (n) => `${n} despertó y te da los buenos días ☀️`,
+    foco: (n) => `${n} quiere concentrarse contigo 📚`,
+    foco_empieza: (n) => `${n} se sumó: ¡a concentrarse! ⏳`,
     record: (n) => `${n} te quitó un récord 🏆 ¿Revancha?`,
     reto: (n) => `${n} te reta a un juego 😏🎮`,
   };
@@ -465,6 +543,8 @@
     cancion: (n) => `${n} dedicó una canción 🎶`,
     a_dormir: (n) => `${n} se fue a dormir 🌙`,
     despierto: (n) => `${n} despertó ☀️`,
+    foco: (n) => `${n} propuso un rato de foco 📚`,
+    foco_empieza: (n) => `${n} se sumó al rato de foco ⏳`,
     record: (n) => `${n} rompió un récord 🏆`,
     reto: (n) => `${n} retó a un juego 🎮`,
   };
@@ -558,8 +638,20 @@
   window.addEventListener("resize", moverLuz);
 
   async function render() {
-    const { data: evs } = await sb.from("eventos").select("*").eq("pareja_id", pareja.id)
-      .order("creado_en", { ascending: false }).limit(12);
+    // las últimas señales de los dos y, aparte, su última entrada y su último "te extraño"
+    // (entre las 12 últimas pueden no estar: con unas horas de uso de uno solo ya quedan afuera)
+    const suUltimo = (tipo) => sb.from("eventos").select("creado_en").eq("pareja_id", pareja.id).eq("de_usuario", otro.id)
+      .eq("tipo", tipo).order("creado_en", { ascending: false }).limit(1).maybeSingle();
+    const [{ data: evs, error: errEvs }, { data: ultEntrada }, { data: ultMsg }, { count: veces }] = await Promise.all([
+      sb.from("eventos").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(12),
+      suUltimo("entrada"), suUltimo("te_extrano"),
+      // ¿Cuántas veces pensó en ti hoy? (señales de cariño desde la medianoche de tu zona)
+      sb.from("eventos").select("id", { count: "exact", head: true })
+        .eq("pareja_id", pareja.id).eq("de_usuario", otro.id)
+        .in("tipo", ["te_extrano", "pensando", "beso", "abrazo", "latido", "buenos_dias", "buenas_noches", "notita", "carta", "razon", "cancion"])
+        .gte("creado_en", aIso(diaHoy() + "T00:00", miTz())),
+    ]);
+    if (errEvs) return; // sin red se queda lo que ya se veía
     const suyos = (evs || []).filter((e) => e.de_usuario !== user.id);
     // Si abriste la app por una señal reciente (p. ej. tocando la notificación del abrazo), la sientes al entrar
     const ult = suyos[0];
@@ -567,15 +659,8 @@
         && sessionStorage.getItem("sentido") !== String(ult.id)) {
       sessionStorage.setItem("sentido", ult.id); sentir(ult.tipo);
     }
-    const ultEntrada = suyos.find((e) => e.tipo === "entrada");
-    const ultMsg = suyos.find((e) => e.tipo === "te_extrano");
     $("status-title").textContent = ultEntrada ? `${otro.nombre} entró ${ago(ultEntrada.creado_en)}` : `${otro.nombre} todavía no ha entrado`;
     $("status-when").textContent = ultMsg ? `último “te extraño” ${ago(ultMsg.creado_en)}` : "aún sin mensajes";
-    // ¿Cuántas veces pensó en ti hoy? (señales de cariño desde la medianoche de tu zona)
-    const { count: veces } = await sb.from("eventos").select("id", { count: "exact", head: true })
-      .eq("pareja_id", pareja.id).eq("de_usuario", otro.id)
-      .in("tipo", ["te_extrano", "pensando", "beso", "abrazo", "latido", "buenos_dias", "buenas_noches", "notita", "carta", "razon", "cancion"])
-      .gte("creado_en", aIso(diaHoy() + "T00:00", miTz()));
     $("pensando-hoy").hidden = !veces;
     if (veces) $("pensando-hoy").textContent = `💭 Hoy ${otro.nombre} pensó en ti ${veces === 1 ? "1 vez" : veces + " veces"}`;
     const list = $("log-list"); list.innerHTML = "";
@@ -634,6 +719,9 @@
         if (i === todos.length - 1) s.onload = s.onerror = listo;
         document.body.append(s);
       });
+    }).then(() => {
+      // si la sala no llegó a bajarse (sin red), la próxima vez que se abra Juegos se vuelve a intentar
+      if (!window.NosotrosJuegos) { juegos = null; css.remove(); }
     });
     return juegos;
   }
@@ -644,7 +732,8 @@
     // Horarios vive dentro de Agenda, junto al calendario: en la barra se enciende el mismo botón
     const enBarra = tab === "horarios" ? "calendario" : tab;
     document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === enBarra));
-    history.replaceState(null, "", tab === "inicio" ? location.pathname : "#" + tab);
+    // se conserva el estado: si hay un juego abierto (p. ej. al tocar una notificación), "atrás" lo sigue cerrando
+    history.replaceState(history.state, "", tab === "inicio" ? location.pathname : "#" + tab);
     window.scrollTo(0, 0);
     moverLuz(); entrarEscalonado(tab);
     if (AL_ABRIR[tab]) AL_ABRIR[tab]();
@@ -655,6 +744,11 @@
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => irA(b.dataset.tab)));
   // Selector Calendario / Horarios dentro de Agenda
   document.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click", () => irA(b.dataset.ir)));
+  // Al volver "atrás" desde un juego, la URL vuelve a decir la pestaña que se ve (pudo cambiar con el juego abierto)
+  window.addEventListener("popstate", () => {
+    const t = TABS.find((x) => !$("tab-" + x).hidden);
+    if (t) history.replaceState(history.state, "", t === "inicio" ? location.pathname : "#" + t);
+  });
   // Al tocar una notificación con la app ya abierta, el service worker nos dice a qué pestaña ir
   if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", (e) => {
     if (e.data && e.data.url && !S.home.hidden) irA(tabDeUrl(e.data.url));
@@ -736,7 +830,8 @@
     const { error } = await sb.from("perfiles").update({ nombre, tz }).eq("id", user.id);
     if (error) { toast("No se pudo guardar"); return; }
     perfil = { ...perfil, nombre, tz };
-    toast("Guardado ❤️"); render(); renderDispo(); renderAjustes();
+    // el saludo, los relojes y las fechas usan el nombre y la zona: se repintan ya, no al próximo tic del reloj
+    toast("Guardado ❤️"); render(); renderDispo(); renderAjustes(); renderRelojes(); renderAvatares(); renderJuntos();
   });
   AL_ABRIR.ajustes = renderAjustes;
 
@@ -747,7 +842,7 @@
   function estaLibre(d) { return !!(d && d.libre && (!d.hasta || new Date(d.hasta) > new Date())); }
 
   async function cargarDispo() {
-    const { data } = await sb.from("disponibilidad").select("*").in("usuario_id", [user.id, otro.id]);
+    const { data, error } = await sb.from("disponibilidad").select("*").in("usuario_id", [user.id, otro.id]); if (error) return; // sin red se queda lo que ya se veía
     dispo.mia = (data || []).find((d) => d.usuario_id === user.id) || null;
     dispo.suya = (data || []).find((d) => d.usuario_id === otro.id) || null;
     renderDispo();
@@ -807,7 +902,7 @@
   let animoElegido = null;
 
   async function cargarAnimos() {
-    const { data } = await sb.from("animos").select("*").in("usuario_id", [user.id, otro.id]);
+    const { data, error } = await sb.from("animos").select("*").in("usuario_id", [user.id, otro.id]); if (error) return; // sin red se queda lo que ya se veía
     animos.mio = (data || []).find((a) => a.usuario_id === user.id) || null;
     animos.suyo = (data || []).find((a) => a.usuario_id === otro.id) || null;
     renderAnimos();
@@ -855,14 +950,20 @@
   });
 
   // ---------- horarios habituales ----------
-  // Se guardan en UTC (dia 0=domingo … 6=sábado, hora 0-23) y cada uno los ve en su zona.
+  // Se guardan como hora UTC (dia 0=domingo … 6=sábado, hora 0-23) de una semana fija de referencia
+  // (SEMANA_REF): así "lunes 20:00" sigue siendo lunes 20:00 para quien lo marcó aunque su país cambie
+  // de hora (Chile en abril y septiembre). Para cruzar los dos horarios se usa la semana actual.
+  // En memoria: mios = horas locales mías, suyos = horas locales de mi pareja (índice dia*24+hora).
   const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
   const DIAS_LARGO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
   const ORDEN_DIAS = [1, 2, 3, 4, 5, 6, 0]; // lunes primero
   const horarios = { mios: new Set(), suyos: new Set() }; // índices UTC: dia*24+hora
   const idx = (d, h) => d * 24 + h;
   const hh = (h) => String(h % 24).padStart(2, "0") + ":00";
-  let mapaMio = null, mapaSuyo = null;
+  let mapaMio = null, mapaSuyo = null, refMio = null, refSuyo = null;
+  // Semana del 15 de noviembre de 2026: sin cambios de hora en América ni en Europa, y con los mismos
+  // desfases con que se marcaron los primeros horarios (Ecuador UTC−5, Chile UTC−3)
+  const SEMANA_REF = new Date(Date.UTC(2026, 10, 15));
 
   // Desplazamiento (en minutos) de una zona horaria en un instante dado
   function offsetMin(tz, date) {
@@ -872,10 +973,10 @@
     const comoUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
     return Math.round((comoUtc - date.getTime()) / 60000);
   }
-  // Para una zona: índice UTC → índice local y al revés, tomando la semana actual como referencia
-  function mapaTz(tz) {
+  // Para una zona: índice UTC → índice local y al revés, en la semana de `ref` (por defecto, la actual)
+  function mapaTz(tz, ref = new Date()) {
     const aLocal = new Array(168), aUtc = new Array(168);
-    const base = new Date(); base.setUTCHours(0, 0, 0, 0);
+    const base = new Date(ref); base.setUTCHours(0, 0, 0, 0);
     base.setUTCDate(base.getUTCDate() - base.getUTCDay()); // domingo de esta semana, 00:00 UTC
     for (let i = 0; i < 168; i++) {
       const t = new Date(base.getTime() + i * 3600000);
@@ -890,11 +991,19 @@
   // Hora local de mi pareja para mi (día, hora) local
   const horaSuya = (d, h) => mapaSuyo.aLocal[mapaMio.aUtc[idx(d, h % 24)]] % 24;
 
+  // Mi hora local (índice) → la hora local de mi pareja en ese mismo instante de esta semana
+  const enSuya = (l) => mapaSuyo.aLocal[mapaMio.aUtc[l]];
   async function cargarHorarios() {
     mapaMio = mapaTz(miTz()); mapaSuyo = mapaTz(suTz());
-    const { data } = await sb.from("horarios").select("usuario_id, dia, hora").in("usuario_id", [user.id, otro.id]);
+    refMio = mapaTz(miTz(), SEMANA_REF); refSuyo = mapaTz(suTz(), SEMANA_REF);
+    const { data, error } = await sb.from("horarios").select("usuario_id, dia, hora").in("usuario_id", [user.id, otro.id]);
+    if (error) return;
     horarios.mios = new Set(); horarios.suyos = new Set();
-    (data || []).forEach((r) => (r.usuario_id === user.id ? horarios.mios : horarios.suyos).add(idx(r.dia, r.hora)));
+    (data || []).forEach((r) => {
+      const guardado = idx(r.dia, r.hora);
+      if (r.usuario_id === user.id) horarios.mios.add(refMio.aLocal[guardado]);
+      else horarios.suyos.add(refSuyo.aLocal[guardado]);
+    });
     renderHorarios();
   }
   AL_ABRIR.horarios = cargarHorarios;
@@ -911,10 +1020,10 @@
       g.append(lab);
       ORDEN_DIAS.forEach((d) => {
         const c = document.createElement("div"); c.className = "celda";
-        const u = mapaMio.aUtc[idx(d, h)];
-        c.dataset.u = u;
-        c.classList.toggle("mio", horarios.mios.has(u));
-        c.classList.toggle("suyo", horarios.suyos.has(u));
+        const l = idx(d, h);
+        c.dataset.l = l;
+        c.classList.toggle("mio", horarios.mios.has(l));
+        c.classList.toggle("suyo", horarios.suyos.has(enSuya(l)));
         g.append(c);
       });
     }
@@ -924,14 +1033,14 @@
   // Lista "Horas en común": cruce de los dos, agrupado por mi día local, con las dos horas
   function renderComun() {
     const list = $("comun-list"); list.innerHTML = "";
-    const comunes = [...horarios.mios].filter((u) => horarios.suyos.has(u));
+    const comunes = [...horarios.mios].filter((l) => horarios.suyos.has(enSuya(l)));
     if (!comunes.length) {
       const li = document.createElement("li"); li.className = "muted";
       li.textContent = horarios.suyos.size ? "Todavía no coinciden horas. Marca más o pídele que marque." : `${otro.nombre} todavía no marcó su horario.`;
       list.append(li); return;
     }
     const porDia = {};
-    comunes.forEach((u) => { const l = mapaMio.aLocal[u]; (porDia[Math.floor(l / 24)] = porDia[Math.floor(l / 24)] || []).push(l % 24); });
+    comunes.forEach((l) => (porDia[Math.floor(l / 24)] = porDia[Math.floor(l / 24)] || []).push(l % 24));
     ORDEN_DIAS.filter((d) => porDia[d]).forEach((d) => {
       const rangos = [];
       porDia[d].sort((a, b) => a - b).forEach((h) => {
@@ -951,11 +1060,11 @@
   let pintando = null; // { valor, tocados }
   const grilla = $("horario");
   function pintar(c) {
-    const u = +c.dataset.u;
-    if (pintando.tocados.has(u)) return;
-    pintando.tocados.add(u);
+    const l = +c.dataset.l;
+    if (pintando.tocados.has(l)) return;
+    pintando.tocados.add(l);
     c.classList.toggle("mio", pintando.valor);
-    if (pintando.valor) horarios.mios.add(u); else horarios.mios.delete(u);
+    if (pintando.valor) horarios.mios.add(l); else horarios.mios.delete(l);
   }
   grilla.addEventListener("pointerdown", (e) => {
     const c = e.target.closest(".celda"); if (!c) return;
@@ -971,7 +1080,8 @@
   async function guardarHorario() {
     if (!pintando) return;
     const { valor, tocados } = pintando; pintando = null;
-    const us = [...tocados]; if (!us.length) return;
+    // de mis horas locales a lo que se guarda (UTC de la semana de referencia)
+    const us = [...tocados].map((l) => refMio.aUtc[l]); if (!us.length) return;
     let error;
     if (valor) {
       const filas = us.map((u) => ({ usuario_id: user.id, dia: Math.floor(u / 24), hora: u % 24 }));
@@ -1020,7 +1130,7 @@
   };
 
   async function cargarCal() {
-    const { data } = await sb.from("eventos_cal").select("*").eq("pareja_id", pareja.id).order("inicio");
+    const { data, error } = await sb.from("eventos_cal").select("*").eq("pareja_id", pareja.id).order("inicio"); if (error) return; // sin red se queda lo que ya se veía
     eventosCal = data || [];
     if (!mesVisto) { const p = partes(new Date().toISOString(), miTz()); mesVisto = { y: p.y, m: p.m }; }
     renderCal();
@@ -1195,7 +1305,7 @@
   const SALUDOS = { manana: ["Buenos días", "☀️"], tarde: ["Buenas tardes", "🌤️"], noche: ["Buenas noches", "🌙"] };
   function renderSaludo() {
     const [s, e] = SALUDOS[momentoDelDia()];
-    $("saludo").textContent = `${s}, ${perfil.nombre} ${e}`;
+    $("saludo").textContent = `${s}, ${perfil.nombre} ${e}`; // el emoji no queda solo en otra línea
   }
   // Una frase bonita por día (la misma para los dos)
   const FRASES = [
@@ -1361,10 +1471,13 @@
 
   // El próximo viaje o cita del calendario es el encuentro que contamos
   async function cargarJuntos() {
-    const hace60 = new Date(Date.now() - 60 * 86400000).toISOString();
-    const { data } = await sb.from("eventos_cal").select("titulo, tipo, inicio, fin, creado_en")
-      .eq("pareja_id", pareja.id).in("tipo", ["viaje", "cita"]).gte("inicio", hace60).order("inicio").limit(20);
-    proximo = (data || []).find((ev) => new Date(ev.fin || ev.inicio).getTime() >= Date.now()) || null;
+    // el que está pasando ahora (no terminó) o, si no hay, el siguiente: los ya pasados no cuentan
+    const ahora = new Date().toISOString();
+    const { data, error } = await sb.from("eventos_cal").select("titulo, tipo, inicio, fin, creado_en")
+      .eq("pareja_id", pareja.id).in("tipo", ["viaje", "cita"])
+      .or(`fin.gte."${ahora}",inicio.gte."${ahora}"`).order("inicio").limit(1);
+    if (error) return; // sin red se queda la cuenta que ya se veía
+    proximo = (data && data[0]) || null;
     renderJuntos();
   }
   function renderJuntos() {
@@ -1439,16 +1552,26 @@
 
   async function cargarPregunta() {
     const dia = diaPregunta();
-    $("preg-texto").textContent = preguntaDe(dia);
+    // pasó la medianoche mientras escribes tu respuesta: se queda la pregunta que estás respondiendo
+    // (se guarda en su día y después aparece la nueva)
+    const escribiendo = document.activeElement === $("resp-texto") && $("resp-texto").value.trim();
+    if (respHoy.dia && dia !== respHoy.dia && escribiendo) return;
+    // la primera vez se muestra al tiro; después, solo cuando llega la respuesta (si falla, pregunta y respuesta siguen juntas)
+    if (!respHoy.dia) $("preg-texto").textContent = preguntaDe(dia);
     $("resp-su-nombre").textContent = otro.nombre;
-    const [{ data: filas }, { data: suya }, { data: racha }] = await Promise.all([
+    const [{ data: filas, error }, { data: suya }, { data: racha }] = await Promise.all([
       sb.from("respuestas").select("*").eq("pareja_id", pareja.id).eq("dia", dia),
       sb.rpc("respondio_pareja", { p_dia: dia }),
       sb.rpc("racha_preguntas", { p_hoy: dia }),
     ]);
+    if (error) return; // sin red se queda lo que ya se veía
+    respHoy.dia = dia;
     respHoy.mia = (filas || []).find((r) => r.usuario_id === user.id) || null;
     respHoy.suya = (filas || []).find((r) => r.usuario_id === otro.id) || null;
     respHoy.suyaRespondio = !!suya;
+    // la pregunta que quedó guardada con la respuesta manda (si se agregan preguntas, el cálculo del día cambia)
+    respHoy.pregunta = (respHoy.mia && respHoy.mia.pregunta) || (respHoy.suya && respHoy.suya.pregunta) || preguntaDe(dia);
+    $("preg-texto").textContent = respHoy.pregunta;
     $("preg-racha").textContent = racha > 1 ? `🔥 ${racha} días seguidos` : "";
     renderPregunta();
   }
@@ -1458,7 +1581,6 @@
     $("f-respuesta").hidden = !responder;
     $("respuestas").hidden = responder;
     if (responder) {
-      if (mia) $("resp-texto").value = mia.texto;
       $("resp-enviar").textContent = mia ? "Guardar cambio" : "Responder";
       $("resp-nota").textContent = mia ? ""
         : suyaRespondio ? `${otro.nombre} ya respondió 👀 Responde para ver lo que dijo.`
@@ -1474,23 +1596,31 @@
   $("f-respuesta").addEventListener("submit", async (e) => {
     e.preventDefault();
     const texto = $("resp-texto").value.trim(); if (!texto) return;
-    const dia = diaPregunta(), primera = !respHoy.mia;
-    const { error } = primera
-      ? await sb.from("respuestas").insert({ pareja_id: pareja.id, usuario_id: user.id, dia, pregunta: preguntaDe(dia), texto })
-      : await sb.from("respuestas").update({ texto }).eq("usuario_id", user.id).eq("dia", dia);
-    if (error) { toast("No se pudo guardar"); return; }
+    // se guarda en el día de la pregunta que está en pantalla, aunque justo haya pasado la medianoche
+    const dia = respHoy.dia || diaPregunta(), primera = !respHoy.mia;
+    const { data: filas, error } = primera
+      ? await sb.from("respuestas").insert({ pareja_id: pareja.id, usuario_id: user.id, dia, pregunta: respHoy.pregunta || preguntaDe(dia), texto }).select("dia")
+      : await sb.from("respuestas").update({ texto }).eq("usuario_id", user.id).eq("dia", dia).select("dia");
+    if (error || !filas || !filas.length) { toast("No se pudo guardar"); return; }
+    $("resp-texto").value = "";
     editandoResp = false;
     if (primera) lluvia("💗", 10);
     await cargarPregunta(); cargarHistorial();
   });
-  $("resp-editar").addEventListener("click", () => { editandoResp = true; renderPregunta(); $("resp-texto").focus(); });
+  $("resp-editar").addEventListener("click", () => {
+    editandoResp = true; renderPregunta();
+    // se rellena una sola vez al empezar a editar: una recarga por tiempo real no pisa lo que estás escribiendo
+    if (respHoy.mia) $("resp-texto").value = respHoy.mia.texto;
+    $("resp-texto").focus();
+  });
 
   // Días anteriores (último mes). La respuesta de tu pareja aparece solo en los días que respondiste.
   async function cargarHistorial() {
     const dia = diaPregunta();
     const desde = new Date(utcDe(dia) - 30 * 86400000).toISOString().slice(0, 10);
-    const { data } = await sb.from("respuestas").select("*").eq("pareja_id", pareja.id)
+    const { data, error } = await sb.from("respuestas").select("*").eq("pareja_id", pareja.id)
       .lt("dia", dia).gte("dia", desde).order("dia", { ascending: false });
+    if (error) return;
     const porDia = {};
     (data || []).forEach((r) => {
       const d = (porDia[r.dia] = porDia[r.dia] || { pregunta: r.pregunta });
@@ -1523,7 +1653,7 @@
   // ---------- lista "Cuando nos veamos" ----------
   let deseos = [];
   async function cargarDeseos() {
-    const { data } = await sb.from("deseos").select("*").eq("pareja_id", pareja.id).order("creado_en");
+    const { data, error } = await sb.from("deseos").select("*").eq("pareja_id", pareja.id).order("creado_en"); if (error) return; // sin red se queda lo que ya se veía
     deseos = data || []; renderDeseos();
   }
   function renderDeseos() {
@@ -1570,18 +1700,26 @@
   // ---------- cartas ----------
   let cartas = [], selladas = [];
   async function cargarCartas() {
-    const [{ data: cs }, { data: sl }] = await Promise.all([
+    const [{ data: cs, error }, { data: sl }, { data: sinLeer }] = await Promise.all([
       sb.from("cartas").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(40),
       sb.rpc("cartas_selladas"),
+      // las suyas sin leer aunque sean viejas: una carta sellada hace meses aparece recién al llegar su fecha
+      sb.from("cartas").select("*").eq("pareja_id", pareja.id).neq("de_usuario", user.id).is("leida_en", null),
     ]);
-    cartas = cs || []; selladas = sl || [];
+    if (error) return; // sin red se queda la lista que ya se veía
+    // lo más nuevo arriba; una carta sellada cuenta desde el momento en que se pudo abrir
+    const desde = (c) => (c.abrir_en && new Date(c.abrir_en) <= new Date() ? c.abrir_en : c.creado_en);
+    const vistas = new Set();
+    cartas = [...(sinLeer || []), ...(cs || [])].filter((c) => !vistas.has(c.id) && vistas.add(c.id))
+      .sort((a, b) => new Date(desde(b)) - new Date(desde(a)));
+    selladas = sl || [];
     renderCartas();
   }
   function renderCartas() {
     const list = $("cartas-list"); list.innerHTML = "";
     const item = (icono, titulo, detalle, clase, alTocar) => {
       const li = document.createElement("li"); if (clase) li.className = clase;
-      const i = document.createElement("span"); i.className = "c-icono"; i.textContent = icono; i.setAttribute("aria-hidden", "true");
+      const i = document.createElement("span"); i.className = "c-icono"; i.innerHTML = iconoSvg(icono);
       const t = document.createElement("span"); t.className = "c-texto";
       const a = document.createElement("strong"), b = document.createElement("small");
       a.textContent = titulo; b.textContent = detalle; t.append(a, b); li.append(i, t);
@@ -1594,7 +1732,7 @@
     };
     selladas.forEach((s) => {
       const dias = diasEntre(diaHoy(), claveDia(s.abrir_en, miTz()));
-      item("🔒", `Carta sellada de ${otro.nombre}`,
+      item("candado", `Carta sellada de ${otro.nombre}`,
         `Se abre el ${fechaCorta(s.abrir_en, miTz())} a las ${hora(s.abrir_en, miTz())}` + (dias > 0 ? ` · en ${plural(dias, "día", "días")}` : ""),
         "sellada");
     });
@@ -1602,9 +1740,9 @@
       if (c.de_usuario === user.id) {
         const estado = c.abrir_en && new Date(c.abrir_en) > new Date() ? `🔒 sellada hasta el ${fechaCorta(c.abrir_en, miTz())}`
           : c.leida_en ? `leída ✓ ${ago(c.leida_en)}` : "aún sin abrir";
-        item("✉️", `Para ${otro.nombre}`, `${fechaCorta(c.creado_en, miTz())} · ${estado}`, "", () => leerCarta(c));
+        item("carta", `Para ${otro.nombre}`, `${fechaCorta(c.creado_en, miTz())} · ${estado}`, "", () => leerCarta(c));
       } else {
-        item("💌", `Carta de ${otro.nombre}`, c.leida_en ? `${fechaCorta(c.creado_en, miTz())}` : "nueva · tócala para abrirla",
+        item("carta-amor", `Carta de ${otro.nombre}`, c.leida_en ? `${fechaCorta(c.creado_en, miTz())}` : "nueva · tócala para abrirla",
           c.leida_en ? "" : "nueva", () => leerCarta(c));
       }
     });
@@ -1668,7 +1806,9 @@
     e.preventDefault();
     const texto = $("carta-texto").value.trim(); if (!texto) return;
     let abrir_en = null;
-    if ($("carta-sellar").checked && $("carta-abrir").value) {
+    if ($("carta-sellar").checked) {
+      // marcada para sellar pero sin fecha: no se manda abierta por error
+      if (!$("carta-abrir").value) { toast("Elige cuándo se podrá abrir"); return; }
       abrir_en = aIso($("carta-abrir").value, miTz());
       if (new Date(abrir_en) <= new Date()) { toast("Elige una fecha futura para sellarla"); return; }
     }
@@ -1704,16 +1844,16 @@
   function renderHoyToca() {
     const items = [];
     const nueva = cartas.find((c) => c.de_usuario !== user.id && !c.leida_en);
-    if (nueva) items.push(["💌", `Leer la carta de ${otro.nombre}`, () => leerCarta(nueva)]);
-    if (respHoy.cargada && !respHoy.mia) items.push(["💬",
+    if (nueva) items.push(["carta", `Leer la carta de ${otro.nombre}`, () => leerCarta(nueva)]);
+    if (respHoy.cargada && !respHoy.mia) items.push(["pregunta",
       respHoy.suyaRespondio ? `Responder la pregunta: ${otro.nombre} ya respondió` : "Responder la pregunta del día",
       () => irAJuntos("f-respuesta", "resp-texto")]);
-    if (pendientes.girasol) items.push(["🌻", `Regar el girasol: ${otro.nombre} ya lo regó`, () => irAJuntos("btn-regar")]);
-    if (pendientes.frasco) items.push(["🫙", "Sacar una razón del frasco", () => irAJuntos("btn-sacar")]);
+    if (pendientes.girasol) items.push(["girasol", `Regar el girasol: ${otro.nombre} ya lo regó`, () => irAJuntos("btn-regar")]);
+    if (pendientes.frasco) items.push(["frasco", "Sacar una razón del frasco", () => irAJuntos("btn-sacar")]);
     const ul = $("hoy-toca-list"); ul.innerHTML = "";
     items.forEach(([ico, texto, alTocar]) => {
       const li = document.createElement("li"), b = document.createElement("button");
-      b.type = "button"; b.innerHTML = `<b aria-hidden="true">${ico}</b><span></span><i aria-hidden="true">›</i>`;
+      b.type = "button"; b.innerHTML = `<b>${iconoSvg(ico)}</b><span></span><i aria-hidden="true">›</i>`;
       b.querySelector("span").textContent = texto;
       b.addEventListener("click", alTocar);
       li.append(b); ul.append(li);
@@ -1722,21 +1862,42 @@
   }
 
   // ---------- fotos (bucket privado de Storage) ----------
-  // Rutas: <pareja_id>/<usuario_id>/<archivo>. Se muestran con URLs firmadas que vencen en 1 hora.
-  const urlsFotos = {};
-  async function urlDeFoto(ruta) {
-    if (!ruta) return null;
-    const c = urlsFotos[ruta];
-    if (c && c.vence > Date.now()) return c.url;
-    const { data } = await sb.storage.from("fotos").createSignedUrl(ruta, 3600);
-    if (!data) return null;
-    urlsFotos[ruta] = { url: data.signedUrl, vence: Date.now() + 50 * 60000 };
-    return data.signedUrl;
+  // Rutas: <pareja_id>/<usuario_id>/<archivo>. Se muestran con URLs firmadas que duran una semana y quedan
+  // guardadas en el teléfono: así cada foto conserva su dirección y el navegador no la vuelve a bajar cada vez
+  // que se abre la app. Las del álbum se firman todas juntas, en un solo pedido.
+  const VIDA_URL = 7 * 86400; // segundos que dura una URL firmada
+  const urlsFotos = (() => { try { return JSON.parse(localStorage.getItem("urls-fotos") || "{}") || {}; } catch (e) { return {}; } })();
+  const firmando = {}; // ruta → pedido en curso, para no firmar dos veces la misma foto
+  const vigente = (ruta) => { const c = urlsFotos[ruta]; return c && c.vence > Date.now() ? c.url : null; };
+  const anotarUrl = (ruta, url) => (urlsFotos[ruta] = { url, vence: Date.now() + (VIDA_URL - 3600) * 1000 }); // una hora de margen
+  function guardarUrls() { // solo las vigentes, y no más de 300
+    const vivas = Object.entries(urlsFotos).filter(([, c]) => c.vence > Date.now()).sort((a, b) => b[1].vence - a[1].vence).slice(0, 300);
+    try { localStorage.setItem("urls-fotos", JSON.stringify(Object.fromEntries(vivas))); } catch (e) {}
+  }
+  function urlDeFoto(ruta) {
+    if (!ruta) return Promise.resolve(null);
+    const ya = vigente(ruta);
+    if (ya) return Promise.resolve(ya);
+    return (firmando[ruta] = firmando[ruta] || sb.storage.from("fotos").createSignedUrl(ruta, VIDA_URL)
+      .then(({ data }) => { if (!data) return null; anotarUrl(ruta, data.signedUrl); guardarUrls(); return data.signedUrl; }, () => null)
+      .finally(() => delete firmando[ruta]));
+  }
+  async function firmarFotos(rutas) {
+    const faltan = [...new Set(rutas.filter((r) => r && !vigente(r)))];
+    if (faltan.length) {
+      const { data } = await sb.storage.from("fotos").createSignedUrls(faltan, VIDA_URL).catch(() => ({ data: null }));
+      (data || []).forEach((d) => { if (d.path && d.signedUrl) anotarUrl(d.path, d.signedUrl); });
+      guardarUrls();
+    }
+    return rutas.map(vigente);
   }
   const cargarImagen = (file) => new Promise((ok, mal) => {
     const img = new Image(); img.onload = () => ok(img); img.onerror = mal; img.src = URL.createObjectURL(file);
   });
-  const aJpeg = (canvas, calidad) => new Promise((ok) => canvas.toBlob(ok, "image/jpeg", calidad));
+  // WebP pesa como un tercio menos que JPEG con la misma calidad; si el teléfono no sabe crearlo, va en JPEG
+  const aImagen = (canvas, calidad) => new Promise((ok) => canvas.toBlob((b) => {
+    if (b && b.type === "image/webp") ok(b); else canvas.toBlob(ok, "image/jpeg", calidad);
+  }, "image/webp", calidad));
   // Achica la foto antes de subirla (así carga rápido y ocupa poco)
   async function reducir(file, max = 1280) {
     const img = await cargarImagen(file);
@@ -1744,11 +1905,13 @@
     const c = document.createElement("canvas");
     c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
     c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    return aJpeg(c, 0.82);
+    return aImagen(c, 0.82);
   }
+  // Una foto nunca cambia (cada una tiene su propio nombre): el teléfono puede guardarla por un año
   async function subirFoto(blob, nombre) {
-    const ruta = `${pareja.id}/${user.id}/${nombre}-${Date.now()}.jpg`;
-    const { error } = await sb.storage.from("fotos").upload(ruta, blob, { contentType: "image/jpeg" });
+    const webp = blob.type === "image/webp";
+    const ruta = `${pareja.id}/${user.id}/${nombre}-${Date.now()}.${webp ? "webp" : "jpg"}`;
+    const { error } = await sb.storage.from("fotos").upload(ruta, blob, { contentType: webp ? "image/webp" : "image/jpeg", cacheControl: "31536000" });
     return error ? null : ruta;
   }
 
@@ -1798,7 +1961,7 @@
     const b = $("recorte-ok"); b.disabled = true;
     const out = document.createElement("canvas"); out.width = out.height = 400;
     out.getContext("2d").drawImage(lienzo, 0, 0, 400, 400);
-    const ruta = await subirFoto(await aJpeg(out, 0.88), "perfil");
+    const ruta = await subirFoto(await aImagen(out, 0.88), "perfil");
     if (!ruta) { b.disabled = false; toast("No se pudo subir la foto"); return; }
     const vieja = perfil.foto;
     const { error } = await sb.from("perfiles").update({ foto: ruta }).eq("id", user.id);
@@ -1819,7 +1982,7 @@
   // ---------- momentos: la foto del día ----------
   let momentos = [], momentoArchivo = null;
   async function cargarMomentos() {
-    const { data } = await sb.from("momentos").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(30);
+    const { data, error } = await sb.from("momentos").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(30); if (error) return; // sin red se queda lo que ya se veía
     momentos = data || []; renderMomentos();
   }
   async function renderMomentos() {
@@ -1834,19 +1997,26 @@
       box.onclick = () => verMomento(suyo);
       urlDeFoto(suyo.ruta).then((u) => { if (u) $("momento-img").src = u; });
     }
-    // en Juntos, el álbum
-    const g = $("album"); g.innerHTML = "";
+    // en Juntos, el álbum: se arma solo con esa pestaña abierta (al abrirla se vuelve a cargar), con todas las
+    // fotos firmadas en un pedido y cada una bajando recién cuando aparece en pantalla
+    const g = $("album");
+    if ($("tab-juntos").hidden) return;
     if (!momentos.length) {
       const p = document.createElement("p"); p.className = "small-note"; p.style.gridColumn = "1 / -1";
-      p.textContent = "Aquí se irán guardando sus momentos 📸 Compártelos desde Inicio."; g.append(p); return;
+      p.textContent = "Aquí se irán guardando sus momentos 📸 Compártelos desde Inicio.";
+      g.replaceChildren(p); return;
     }
-    momentos.forEach((m) => {
+    const lista = momentos, urls = await firmarFotos(lista.map((m) => m.ruta));
+    if (lista !== momentos) return; // mientras se firmaban llegó una lista más nueva
+    g.replaceChildren(...lista.map((m, i) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "album-foto";
       b.setAttribute("aria-label", `${m.de_usuario === user.id ? "Tu momento" : "Momento de " + otro.nombre}${m.texto ? ": " + m.texto : ""}, ${ago(m.creado_en)}`);
       b.addEventListener("click", () => verMomento(m));
-      urlDeFoto(m.ruta).then((u) => { if (u) b.style.backgroundImage = `url("${u}")`; });
-      g.append(b);
-    });
+      const img = document.createElement("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+      if (urls[i]) img.src = urls[i];
+      b.append(img);
+      return b;
+    }));
   }
   $("momento-input").addEventListener("change", (e) => {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
@@ -1893,8 +2063,13 @@
   const ETAPAS = [[0, "Semillita"], [1, "Brotecito"], [3, "Tallito"], [6, "Con hojitas"], [10, "Creciendo fuerte"], [16, "Con botón"], [23, "¡Abriéndose!"], [30, "En flor 🌻"]];
   let riegos = [];
   async function cargarGirasol() {
-    const { data } = await sb.from("riegos").select("usuario_id, dia").eq("pareja_id", pareja.id);
-    riegos = data || []; renderGirasol();
+    // los más recientes primero: Supabase entrega como mucho 1000 filas y los de hoy no pueden quedar afuera
+    // (1000 riegos son más de 400 puntos; el girasol con su ramo completo llega a 90)
+    const { data, error } = await sb.from("riegos").select("usuario_id, dia").eq("pareja_id", pareja.id)
+      .order("dia", { ascending: false }).limit(1000);
+    // sin red se quedan los riegos que había, pero se repinta: si cambió el día, el botón vuelve a "Regar"
+    if (!error) riegos = data || [];
+    renderGirasol();
   }
   function puntosGirasol() {
     const porDia = {};
@@ -1948,7 +2123,7 @@
       : sed ? "Tiene sed… ¿lo riegan hoy? 🥺"
       : `Riéguenlo los dos cada día para que florezca ${lugar}.`;
     $("btn-regar").disabled = yo;
-    $("btn-regar").textContent = yo ? "Regado hoy ✓" : "Regar 💧";
+    $("btn-regar").textContent = yo ? "Regado hoy ✓" : "Regar";
     pendientes.girasol = suyo && !yo; actualizarPuntos();
     // ¿Subió de etapa desde la última vez que lo viste en este teléfono? Entonces crece con rebote
     const nivel = etapa + extra;
@@ -1981,10 +2156,11 @@
   // ---------- frasco de razones ----------
   let enFrasco = 0;
   async function cargarFrasco() {
-    const [{ data: n }, { data: rs }] = await Promise.all([
+    const [{ data: n, error: e1 }, { data: rs, error: e2 }] = await Promise.all([
       sb.rpc("razones_en_frasco"),
       sb.from("razones").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(200),
     ]);
+    if (e1 || e2) return; // sin red se queda lo que ya se veía
     enFrasco = n || 0;
     const leidas = (rs || []).filter((r) => r.de_usuario !== user.id); // las de tu pareja que ya sacaste (RLS esconde el resto)
     const mias = (rs || []).filter((r) => r.de_usuario === user.id);
@@ -2037,7 +2213,7 @@
   const EMOJIS_VALES = ["🎟️", "🤗", "😘", "💆", "🍳", "🎬", "🌅", "💃", "🍦", "🌻", "🍷", "🎁"];
   let vales = [], valeEmoji = "🎟️", valeRecien = null;
   async function cargarVales() {
-    const { data } = await sb.from("vales").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false });
+    const { data, error } = await sb.from("vales").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }); if (error) return; // sin red se queda lo que ya se veía
     vales = data || []; renderVales();
   }
   function renderVales() {
@@ -2210,7 +2386,9 @@
       // si no está en la app, le llega un "te manda un beso" (como mucho uno cada 10 minutos)
       // (no está en la app y ya le llegó un aviso de beso hace poco: no se repite)
       if (pocoDesde("ultimo-beso", 10)) { toast(`Ya le avisamos de tus besitos hace poco 😘`); return; }
-      await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "beso" });
+      const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "beso" });
+      // si no salió, la espera de 10 minutos no corre: el próximo besito lo vuelve a intentar
+      if (error) { olvidarDesde("ultimo-beso"); toast("No se pudo mandar tu beso, intenta otra vez"); return; }
       toast(`${otro.nombre} no está en la app: le llegó tu beso como aviso 😘`); render();
     }, 700);
   }
@@ -2221,6 +2399,7 @@
     try { localStorage.setItem(clave, String(Date.now())); } catch (e) {}
     return false;
   }
+  const olvidarDesde = (clave) => { try { localStorage.removeItem(clave); } catch (e) {} };
   // Mantener el corazón = tu latido
   let toque = null;
   const corazon = $("heart");
@@ -2245,19 +2424,22 @@
     if (!cancelado && !otroAqui && Date.now() - t.t >= 1500) {
       if (pocoDesde("ultimo-latido", 10)) { toast("Tu latido ya va en camino 💓"); return; }
       const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "latido" });
+      if (error) olvidarDesde("ultimo-latido");
       toast(error ? "No se pudo mandar" : `Le mandaste tu latido a ${otro.nombre} 💓`); render();
     }
   }
   corazon.addEventListener("pointerup", () => soltarCorazon(false));
   corazon.addEventListener("pointerleave", () => soltarCorazon(false));
-  corazon.addEventListener("pointercancel", () => soltarCorazon(true));
+  // El navegador cancela el toque si el dedo se corre un poco (cree que vas a desplazar la página).
+  // Un toque corto cancelado era un scroll: no manda nada. Pero si el latido ya había empezado, se manda igual.
+  corazon.addEventListener("pointercancel", () => soltarCorazon(!(toque && toque.largo)));
   corazon.addEventListener("contextmenu", (e) => e.preventDefault());
   corazon.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); mandarBeso(); } });
 
   // ---------- notita en la nevera ----------
   let notitaColor = "amarillo", notitaSuya = null, misNotitas = 0;
   async function cargarNotitas() {
-    const { data } = await sb.from("notitas").select("*").eq("pareja_id", pareja.id).is("despegada_en", null).order("creado_en", { ascending: false });
+    const { data, error } = await sb.from("notitas").select("*").eq("pareja_id", pareja.id).is("despegada_en", null).order("creado_en", { ascending: false }); if (error) return; // sin red se queda lo que ya se veía
     const suyas = (data || []).filter((n) => n.de_usuario === otro.id);
     misNotitas = (data || []).filter((n) => n.de_usuario === user.id).length;
     const anterior = notitaSuya && notitaSuya.id;
@@ -2308,7 +2490,7 @@
   let canciones = [];
   const enlaceSeguro = (url) => { try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.href : null; } catch (e) { return null; } };
   async function cargarCanciones() {
-    const { data } = await sb.from("canciones").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(60);
+    const { data, error } = await sb.from("canciones").select("*").eq("pareja_id", pareja.id).order("creado_en", { ascending: false }).limit(60); if (error) return; // sin red se queda lo que ya se veía
     canciones = data || []; renderCanciones();
   }
   function renderCanciones() {
@@ -2353,6 +2535,8 @@
     const titulo = $("cancion-titulo-in").value.trim(); if (!titulo) return;
     const crudo = $("cancion-url-in").value.trim(), url = crudo ? enlaceSeguro(crudo) : null;
     if (crudo && !url) { toast("Ese enlace no parece válido (debe empezar con https://)"); return; }
+    // ya normalizado puede crecer (tildes, espacios): la base acepta hasta 400 caracteres
+    if (url && url.length > 400) { toast("Ese enlace es demasiado largo. Prueba con el botón Compartir → Copiar enlace"); return; }
     const nota = $("cancion-nota-in").value.trim() || null;
     const { error } = await sb.from("canciones").insert({ pareja_id: pareja.id, de_usuario: user.id, titulo, url, nota });
     if (error) { toast("No se pudo dedicar"); return; }
@@ -2423,7 +2607,7 @@
   $("dibujo-enviar").addEventListener("click", async () => {
     if (!dib.trazos.length) { toast("Dibuja algo primero 😊"); return; }
     const b = $("dibujo-enviar"); b.disabled = true; b.textContent = "Enviando…";
-    const ruta = await subirFoto(await aJpeg(baseD, 0.9), "dibujo");
+    const ruta = await subirFoto(await aImagen(baseD, 0.9), "dibujo");
     const texto = $("dibujo-texto").value.trim() || "✏️ Te hice un dibujo";
     const { error } = ruta ? await sb.from("momentos").insert({ pareja_id: pareja.id, de_usuario: user.id, ruta, texto }) : { error: true };
     b.disabled = false; b.textContent = "Enviar dibujo ✏️";
@@ -2458,17 +2642,28 @@
   async function cargarNumeros() {
     const hace7 = new Date(Date.now() - 7 * 86400000).toISOString();
     const hace60 = new Date(Date.now() - 60 * 86400000).toISOString();
-    const { data } = await sb.from("eventos").select("de_usuario, tipo, creado_en").eq("pareja_id", pareja.id).gte("creado_en", hace60).limit(5000);
-    const evs = data || [], semana = evs.filter((e) => e.creado_en >= hace7);
+    // Supabase entrega como mucho 1000 filas: se piden solo los tipos que se cuentan aquí, los más nuevos primero
+    // (las entradas, riegos, etc. llenarían el cupo y dejarían afuera lo de esta semana)
+    const [{ data, error }, { data: noches }] = await Promise.all([
+      sb.from("eventos").select("de_usuario, tipo, creado_en").eq("pareja_id", pareja.id).gte("creado_en", hace7)
+        .in("tipo", ["beso", "abrazo", "te_extrano", "pensando", "latido", "carta", "notita"])
+        .order("creado_en", { ascending: false }).limit(1000),
+      sb.from("eventos").select("de_usuario, tipo, creado_en").eq("pareja_id", pareja.id).gte("creado_en", hace60)
+        .eq("tipo", "buenas_noches").order("creado_en", { ascending: false }).limit(1000),
+    ]);
+    if (error) return;
+    const evs = [...(data || []), ...(noches || [])], semana = evs.filter((e) => e.creado_en >= hace7);
     const cuenta = (tipos, quien) => semana.filter((e) => tipos.includes(e.tipo) && (!quien || e.de_usuario === quien)).length;
     const g = $("numeros"); g.innerHTML = "";
-    [["😘", "besos", ["beso"]], ["🤗", "abrazos", ["abrazo"]], ["❤️", "te extraño", ["te_extrano"]],
-     ["💭", "pienso en ti", ["pensando"]], ["💓", "latidos", ["latido"]], ["💌", "cartas y notitas", ["carta", "notita"]]].forEach(([em, nombre, tipos]) => {
+    [["beso", ["beso", "besos"], ["beso"]], ["abrazo", ["abrazo", "abrazos"], ["abrazo"]], ["corazon", ["te extraño", "te extraño"], ["te_extrano"]],
+     ["pienso", ["pienso en ti", "pienso en ti"], ["pensando"]], ["latido", ["latido", "latidos"], ["latido"]],
+     ["carta", ["carta o notita", "cartas y notitas"], ["carta", "notita"]]].forEach(([ico, [uno, varios], tipos]) => {
       const d = document.createElement("div"); d.className = "numero";
       const b = document.createElement("b"), s = document.createElement("strong"), sm = document.createElement("small");
-      b.textContent = em; b.setAttribute("aria-hidden", "true");
-      contar(s, cuenta(tipos)); // los números cuentan desde 0
-      sm.textContent = `${nombre} · tú ${cuenta(tipos, user.id)}, ${otro.nombre} ${cuenta(tipos, otro.id)}`;
+      b.innerHTML = iconoSvg(ico);
+      const total = cuenta(tipos);
+      contar(s, total); // los números cuentan desde 0
+      sm.textContent = `${total === 1 ? uno : varios} · tú ${cuenta(tipos, user.id)}, ${otro.nombre} ${cuenta(tipos, otro.id)}`;
       d.append(b, s, sm); g.append(d);
     });
     // ¿Quién extraña más? (todas las señales de cariño de la semana)
@@ -2511,7 +2706,9 @@
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (sub && Notification.permission === "granted") {
-      await guardarSub(sub); estado.textContent = "Activadas en este teléfono ✓"; return;
+      estado.textContent = (await guardarSub(sub)) ? "Activadas en este teléfono ✓"
+        : "No se pudieron dejar listas en este teléfono. Revisa tu conexión y vuelve a abrir la app.";
+      return;
     }
     if (Notification.permission === "denied") {
       estado.textContent = "Bloqueadas en este navegador. Permítelas en los ajustes del teléfono."; return;
@@ -2525,19 +2722,24 @@
       if (perm !== "granted") { toast("Sin permiso para notificar"); return; }
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(C.VAPID_PUBLIC_KEY) });
-      await guardarSub(sub);
-      toast("Notificaciones activadas ❤️");
+      toast((await guardarSub(sub)) ? "Notificaciones activadas ❤️" : "No se pudieron activar. Revisa tu conexión e intenta de nuevo.");
     } catch (e) { toast("No se pudo activar: " + e.message); }
     prepararPush();
   });
   $("push-hint").addEventListener("click", () => {
     if (!$("btn-push").hidden) $("btn-push").click(); else irA("ajustes");
   });
+  // Devuelve si quedó guardada. guardar_push la pasa a esta cuenta aunque el aparato estuviera a nombre de la
+  // otra (con RLS un upsert no puede); si la base todavía no tiene esa función, se usa el upsert de siempre.
   async function guardarSub(sub) {
     const j = sub.toJSON();
-    await sb.from("push_subs").upsert(
-      { usuario_id: user.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth },
-      { onConflict: "endpoint" }
-    );
+    let { error } = await sb.rpc("guardar_push", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+    if (error && (error.code === "PGRST202" || error.code === "42883")) {
+      ({ error } = await sb.from("push_subs").upsert(
+        { usuario_id: user.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth },
+        { onConflict: "endpoint" }
+      ));
+    }
+    return !error;
   }
 })();

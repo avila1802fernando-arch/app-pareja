@@ -261,15 +261,28 @@
     }
 
     // ---------- toques ----------
+    // El dedo tapa más que su punta y el toque llega un instante tarde, cuando el corazón ya bajó un
+    // poco: cuenta un margen alrededor de cada ficha y también el trecho que bajó en ese instante.
+    // Si hay varias cerca gana la más cercana, y un 💔 solo cuenta si de verdad lo tocaste.
+    const MARGEN = 16, RETRASO = 0.1; // px de holgura y segundos que tarda en llegar el toque
+    function distancia(e, x, y) {
+      const bajo = e.vy * (S.freezeT > 0 ? 0.45 : 1) * RETRASO;
+      const yy = Math.min(e.y, Math.max(e.y - bajo, y)); // el punto del trecho más cercano al dedo
+      return Math.hypot(x - e.cx, y - yy) - e.size * 0.6; // 0 = justo en el borde del círculo dibujado
+    }
     function tocar(ev) {
       if (!running || paused || S.countdown > 0) return;
       ev.preventDefault();
       const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
       S.taps++;
-      for (let i = S.ents.length - 1; i >= 0; i--) {
-        const e = S.ents[i], dx = x - e.cx, dy = y - e.y, rad = e.size * 0.56;
-        if (dx * dx + dy * dy <= rad * rad) { S.ents.splice(i, 1); hit(e); return; }
-      }
+      let elegido = -1, mejor = Infinity;
+      S.ents.forEach((e, i) => {
+        const d = distancia(e, x, y), roto = e.type === "broken";
+        if (d > (roto ? 0 : MARGEN)) return;
+        const peso = roto ? d + MARGEN : d; // ante la duda, gana el corazón bueno
+        if (peso < mejor) { mejor = peso; elegido = i; }
+      });
+      if (elegido >= 0) { const e = S.ents[elegido]; S.ents.splice(elegido, 1); hit(e); return; }
       S.score = Math.max(0, S.score - 5);
       addFloat(S.combo >= 3 ? "racha perdida · -5" : "-5", x, y, dark() ? "#ffd6e3" : "#b8285a", 15);
       S.combo = 0;

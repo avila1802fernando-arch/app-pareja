@@ -135,7 +135,8 @@
     campo.prepend(cv);
     const L = { cv, g: cv.getContext("2d"), W: 0, H: 0, dpr: 1 };
     L.ajustar = () => {
-      const r = campo.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // se mide el lienzo y no el campo (que tiene borde): así lo dibujado cae justo donde se toca
+      const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
       L.W = Math.max(1, r.width); L.H = Math.max(1, r.height); L.dpr = dpr;
       cv.width = Math.round(L.W * dpr); cv.height = Math.round(L.H * dpr);
       L.g.setTransform(dpr, 0, 0, dpr, 0, 0);

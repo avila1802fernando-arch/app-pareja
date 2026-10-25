@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Recreo</title>
+  <meta name="description" content="Juegos para jugar en familia, con ranking de todos.">
+  <meta name="theme-color" content="#FFF6E5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0F1428" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Recreo">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/favicon-96.png">
+  <link rel="apple-touch-icon" href="/icons/apple-180.png">
+  <link rel="preconnect" href="https://lrsrmblmqvkpltajegqw.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preload" href="/fuentes/fredoka-v17.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fuentes/nunito-v32.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/estilos.css">
+  <link rel="stylesheet" href="/juegos/juegos.css">
+</head>
+<body>
+<!-- Íconos (trazo 2,2, puntas redondas): <svg class="ico"><use href="#i-…"/></svg> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-juegos" viewBox="0 0 24 24"><path d="M7 7.5h10a5 5 0 0 1 4.9 6l-.8 3.6a2.4 2.4 0 0 1-4.1 1.1L14.6 16H9.4L7 18.2a2.4 2.4 0 0 1-4.1-1.1l-.8-3.6a5 5 0 0 1 4.9-6Z"/><path d="M8 10.5v3M6.5 12h3"/><circle cx="15.5" cy="11.2" r=".6"/><circle cx="17.3" cy="13" r=".6"/></symbol>
+  <symbol id="i-ranking" viewBox="0 0 24 24"><path d="M9 20.5V9.5h6v11M3 20.5v-7h6M15 20.5V13h6v7.5M2.5 20.5h19"/><path d="m12 3 .9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3Z"/></symbol>
+  <symbol id="i-yo" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c.9-4 4-6 8-6s7.1 2 8 6"/></symbol>
+  <symbol id="i-jugar" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></symbol>
+  <symbol id="i-flecha" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-atras" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-sonido" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-mudo" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-compartir" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
+  <symbol id="i-otra" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1L19.5 9M19.5 4.5V9H15M19.5 12a7.5 7.5 0 0 1-13 5.1L4.5 15M4.5 19.5V15H9"/></symbol>
+  <symbol id="i-instalar" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M12 7v7M9 11.5l3 3 3-3M10 18.5h4"/></symbol>
+  <symbol id="i-salir" viewBox="0 0 24 24"><path d="M14.5 4.5h3a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3M10 16.5 14.5 12 10 7.5M14.5 12H4"/></symbol>
+  <symbol id="i-candado" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2"/></symbol>
+  <symbol id="i-corona" viewBox="0 0 24 24"><path d="M3.5 8.5 8 12l4-6.5 4 6.5 4.5-3.5-1.8 9.5H5.3L3.5 8.5Z"/></symbol>
+  <symbol id="logo" viewBox="0 0 64 64"><g transform="rotate(-6 32 32)"><rect class="ficha" x="5" y="5" width="25" height="25" rx="8" fill="#E8603F"/><rect class="ficha" x="34" y="5" width="25" height="25" rx="8" fill="#2C55E0"/><rect class="ficha" x="5" y="34" width="25" height="25" rx="8" fill="#0E9C82"/><rect class="ficha" x="34" y="34" width="25" height="25" rx="8" fill="#FFC53D"/>
+    <path d="m17.5 10.5 1.9 3.9 4.3.6-3.1 3 .7 4.2-3.8-2-3.8 2 .7-4.2-3.1-3 4.3-.6Z" fill="#fff"/>
+    <path d="M39 18.5 53.5 12 47.5 25l-2.6-5.2Z" fill="#fff"/><path d="m44.9 19.8 8.6-7.8" stroke="#2C55E0" stroke-width="1.6" stroke-linecap="round"/>
+    <rect x="11" y="39" width="10" height="14" rx="2.5" fill="#fff"/><rect x="16.5" y="41" width="9" height="13" rx="2.5" fill="#fff" stroke="#0E9C82" stroke-width="1.6"/>
+    <circle cx="42.5" cy="50" r="4.2" fill="#fff"/><circle cx="51" cy="51" r="4.2" fill="#fff"/><path d="M42.5 46c1-4.5 4-7 8.5-7.5M51 47c-.3-3.5-.8-6.2-.2-8.4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></g></symbol>
+</svg>
+
+<div class="carga" id="carga" role="status" aria-label="Abriendo el Recreo">
+  <svg viewBox="0 0 64 64" aria-hidden="true"><g transform="rotate(-6 32 32)"><rect class="ficha" x="5" y="5" width="25" height="25" rx="8" fill="#E8603F"/><rect class="ficha" x="34" y="5" width="25" height="25" rx="8" fill="#2C55E0"/><rect class="ficha" x="5" y="34" width="25" height="25" rx="8" fill="#0E9C82"/><rect class="ficha" x="34" y="34" width="25" height="25" rx="8" fill="#FFC53D"/></g></svg>
+  <p>Recreo</p>
+  <small>abriendo los juegos…</small>
+</div>
+
+<div class="franja" id="franja-prueba" hidden>Modo prueba: nada se guarda <button type="button" id="salir-prueba">Salir</button></div>
+
+<main id="app">
+  <!-- ¿Quién va a jugar? -->
+  <section id="s-entrada" class="pantalla-sola" hidden>
+    <div class="logo-g">
+      <svg aria-hidden="true"><use href="#logo"/></svg>
+      <h1>Recreo</h1>
+      <p class="ojo">Juegos en familia</p>
+    </div>
+    <h2>¿Quién va a jugar?</h2>
+    <div class="pila" id="personas"></div>
+    <p class="nota centro">La primera vez eliges una contraseña. Después, el teléfono se acuerda de ti.</p>
+    <button type="button" class="enlace centro" id="btn-otra-cuenta">¿Eres Fernando o Martina?</button>
+    <button type="button" class="btn btn-sec" id="btn-instalar-entrada" hidden><svg class="ico"><use href="#i-instalar"/></svg>Poner el Recreo en mi pantalla</button>
+  </section>
+
+  <!-- Contraseña (crear o entrar) -->
+  <section id="s-clave" class="pantalla-sola" hidden>
+    <button type="button" class="volver" id="clave-volver"><svg class="ico"><use href="#i-atras"/></svg>Volver</button>
+    <div class="cabeza-clave">
+      <span class="av xg" id="clave-av" aria-hidden="true"></span>
+      <h1 id="clave-titulo"></h1>
+      <p class="nota" id="clave-texto"></p>
+    </div>
+    <div class="pila" id="clave-elegir" hidden>
+      <button type="button" class="btn btn-primario btn-ancho" data-modo="entrar">Ya tengo contraseña</button>
+      <button type="button" class="btn btn-sec btn-ancho" data-modo="crear">Es mi primera vez</button>
+    </div>
+    <form id="f-clave" class="pila" novalidate>
+      <div class="campo" id="clave-usuario-caja" hidden>
+        <label for="clave-usuario">Usuario</label>
+        <input id="clave-usuario" maxlength="24" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="fernando">
+      </div>
+      <input type="text" id="clave-usuario-oculto" autocomplete="username" hidden aria-hidden="true" tabindex="-1">
+      <div class="campo">
+        <label for="clave">Contraseña</label>
+        <div class="campo-clave">
+          <input id="clave" type="password" minlength="8" maxlength="72" autocomplete="current-password">
+          <button type="button" class="ver-clave" aria-label="Mostrar contraseña" aria-pressed="false"></button>
+        </div>
+      </div>
+      <div class="campo" id="clave2-caja" hidden>
+        <label for="clave2">Repite la contraseña</label>
+        <div class="campo-clave">
+          <input id="clave2" type="password" minlength="8" maxlength="72" autocomplete="new-password">
+          <button type="button" class="ver-clave" aria-label="Mostrar contraseña" aria-pressed="false"></button>
+        </div>
+      </div>
+      <p class="error" id="clave-error" role="alert"></p>
+      <button type="submit" class="btn btn-primario btn-ancho" id="btn-clave">Entrar</button>
+    </form>
+    <p class="nota centro" id="clave-olvido">¿Olvidaste tu contraseña? Pídele a Fernando que te ayude: él la puede cambiar.</p>
+  </section>
+
+  <!-- Elige tu personaje (la primera vez) -->
+  <section id="s-personaje" class="pantalla-sola" hidden>
+    <p class="ojo">Antes de jugar</p>
+    <h1>Elige tu personaje</h1>
+    <div class="vista-personaje"><span class="av xg" id="pj-vista" aria-hidden="true"></span><b id="pj-vista-nombre"></b></div>
+    <div class="seccion-yo"><p class="ojo">Tu personaje</p><div class="personajes" id="pj-personajes" role="group" aria-label="Tu personaje"></div></div>
+    <div class="seccion-yo"><p class="ojo">Tu color</p><div class="colores" id="pj-colores" role="group" aria-label="Tu color"></div></div>
+    <div class="campo"><label for="pj-nombre">Tu nombre en el ranking</label><input id="pj-nombre" maxlength="20" autocomplete="nickname"></div>
+    <div class="ajuste"><div><b id="pj-letra-lab">Letra grande</b><small>Todo el texto más grande</small></div><button type="button" class="interruptor" id="pj-letra" role="switch" aria-checked="false" aria-labelledby="pj-letra-lab"></button></div>
+    <p class="error" id="pj-error" role="alert"></p>
+    <button type="button" class="btn btn-primario btn-ancho" id="pj-listo">¡Listo!</button>
+  </section>
+
+  <!-- Algo falló -->
+  <section id="s-aviso" class="pantalla-sola" hidden>
+    <p class="ojo">Un momentito</p>
+    <h1>No pudimos abrir el Recreo</h1>
+    <p id="aviso-msg"></p>
+    <button type="button" class="btn btn-primario" id="aviso-reintentar">Intentar de nuevo</button>
+    <button type="button" class="btn btn-sec" id="aviso-salir">Cerrar sesión</button>
+  </section>
+
+  <!-- La app: tres pestañas -->
+  <section id="s-app" hidden>
+    <div class="tab" id="tab-juegos">
+      <header class="saludo">
+        <span class="av g" id="hola-av" aria-hidden="true"></span>
+        <div><h1 id="hola-titulo">¡Hola!</h1><p class="nota">¿Qué jugamos hoy?</p></div>
+        <button type="button" class="boton-redondo" id="btn-sonido"></button>
+      </header>
+      <p class="aviso-red" id="sin-red" hidden>Sin internet: mostrando lo último que vimos.</p>
+      <section class="novedades tarjeta" id="novedades" hidden aria-labelledby="novedades-titulo"></section>
+      <div id="juegos-lista"></div>
+    </div>
+
+    <div class="tab" id="tab-ranking" hidden>
+      <div class="ranking-cab">
+        <h1>Ranking</h1>
+        <div class="segmento" role="group" aria-label="Qué ranking ver">
+          <button type="button" data-cuando="siempre" aria-pressed="true">De siempre</button>
+          <button type="button" data-cuando="hoy" aria-pressed="false">De hoy</button>
+        </div>
+      </div>
+      <section class="tarjeta bloque" id="medallero" aria-label="Medallero"></section>
+      <div id="tablas"></div>
+      <section class="tarjeta bloque" aria-labelledby="recientes-titulo">
+        <div class="bloque-titulo"><h2 id="recientes-titulo">Últimas partidas</h2></div>
+        <ul class="recientes" id="recientes"></ul>
+      </section>
+    </div>
+
+    <div class="tab" id="tab-yo" hidden>
+      <section class="yo-cab tarjeta" id="yo-cab">
+        <div class="cinta">Hola, me llamo<b id="yo-nombre"></b></div>
+        <span class="av xg" id="yo-av" aria-hidden="true"></span>
+      </section>
+      <div class="seccion-yo"><p class="ojo">Tu personaje</p><div class="personajes" id="yo-personajes" role="group" aria-label="Tu personaje"></div></div>
+      <div class="seccion-yo"><p class="ojo">Tu color</p><div class="colores" id="yo-colores" role="group" aria-label="Tu color"></div></div>
+      <form class="fila-nombre" id="f-nombre">
+        <div class="campo"><label for="yo-nombre-input">Tu nombre en el ranking</label><input id="yo-nombre-input" maxlength="20" autocomplete="nickname"></div>
+        <button type="submit" class="btn btn-sec btn-chico">Guardar</button>
+      </form>
+      <div class="ajuste"><div><b id="aj-letra-lab">Letra grande</b><small>Todo el texto más grande</small></div><button type="button" class="interruptor" id="aj-letra" role="switch" aria-checked="false" aria-labelledby="aj-letra-lab"></button></div>
+      <div class="ajuste"><div><b id="aj-sonido-lab">Sonido</b><small>Los tonos de los juegos</small></div><button type="button" class="interruptor" id="aj-sonido" role="switch" aria-checked="true" aria-labelledby="aj-sonido-lab"></button></div>
+      <div class="ajuste"><div><b id="aj-vibrar-lab">Vibración</b><small>Cuando atrapas algo o pierdes una vida</small></div><button type="button" class="interruptor" id="aj-vibrar" role="switch" aria-checked="true" aria-labelledby="aj-vibrar-lab"></button></div>
+      <div class="acciones-yo">
+        <button type="button" class="btn btn-sec" id="btn-instalar"><svg class="ico"><use href="#i-instalar"/></svg>Poner el Recreo en mi pantalla</button>
+        <p class="nota centro" id="instalar-estado"></p>
+        <form class="pila" id="f-nueva-clave" hidden>
+          <div class="campo"><label for="nueva-clave">Cambiar contraseña</label>
+            <div class="campo-clave"><input id="nueva-clave" type="password" minlength="8" maxlength="72" autocomplete="new-password"><button type="button" class="ver-clave" aria-label="Mostrar contraseña" aria-pressed="false"></button></div>
+          </div>
+          <button type="submit" class="btn btn-sec"><svg class="ico"><use href="#i-candado"/></svg>Guardar contraseña nueva</button>
+        </form>
+        <button type="button" class="btn btn-sec" id="btn-salir"><svg class="ico"><use href="#i-salir"/></svg>Cerrar sesión</button>
+        <p class="nota centro" id="yo-usuario"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="barra" id="tabs" aria-label="Secciones" hidden>
+  <button type="button" data-tab="juegos" class="on"><span class="caja"><svg class="ico"><use href="#i-juegos"/></svg></span>Juegos</button>
+  <button type="button" data-tab="ranking"><span class="caja"><svg class="ico"><use href="#i-ranking"/></svg></span>Ranking</button>
+  <button type="button" data-tab="yo"><span class="caja"><svg class="ico"><use href="#i-yo"/></svg></span>Yo</button>
+</nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script defer src="/config.js"></script>
+<script defer src="/datos.js"></script>
+<script defer src="/app.js"></script>
+<script defer src="/ranking.js"></script>
+<script defer src="/juegos/sala.js"></script>
+<script defer src="/juegos/fusion.js"></script>
+<script defer src="/juegos/memoria.js"></script>
+<script defer src="/juegos/vuelo.js"></script>
+<script defer src="/juegos/lluvia.js"></script>
+</body>
+</html>

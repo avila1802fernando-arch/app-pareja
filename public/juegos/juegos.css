@@ -104,7 +104,8 @@
 .j-papel small{font-size:.72rem;opacity:.75}
 .j-premio-form textarea.papel{font-size:1.3rem}
 .j-premio-form .link{align-self:center}
-.j-recientes li span:first-child{min-width:0;overflow-wrap:anywhere}
+.j-recientes li span:first-child,.j-familia li span:first-child{min-width:0;overflow-wrap:anywhere}
+.j-familia .small-note{margin:-4px 0 6px}
 .j-dlg-premio .papelito{margin:6px 0 4px}
 
 /* ---------- la vista de un juego, a pantalla completa ---------- */

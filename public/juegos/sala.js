@@ -25,6 +25,7 @@
   let recientes = [];         // últimas partidas de los dos
   let premio = { esperando: false, mio: null, mios: [], ganados: [] };
   let sinBase = false;        // la base todavía no tiene la tabla de partidas: récords solo en este teléfono
+  let familia = [];           // los récords de Eli y Maritza en el Recreo: { nombre, avatar, juego, mejor, partidas, ultima }
   let prueba = false;         // abierto con NosotrosJuegos.probar() (sin sesión)
   let canal = null, S = null, V = null, actual = null, foco = null;
 
@@ -175,6 +176,13 @@
     const y = yo(), o = elOtro();
     let desde;
     try { desde = X.aIso(X.diaHoy() + "T00:00", X.miTz()); } catch (e) { desde = new Date(Date.now() - 86400000).toISOString(); }
+    // Los récords de la familia (Eli y Maritza juegan en el Recreo, la app de juegos aparte). Va por su cuenta:
+    // si la base todavía no tiene records_familia, la tarjeta simplemente no aparece.
+    X.sb.rpc("records_familia").then(({ data, error }) => {
+      if (error && !/could not find the function|does not exist/i.test(error.message || "") && error.code !== "PGRST202") return;
+      familia = error ? [] : data || [];
+      if (S) pintarFamilia();
+    }, () => {});
     const [m, r, esp, mios, ganados] = await Promise.all([
       X.sb.rpc("marcador_juegos", { p_desde: desde }),
       X.sb.from("partidas").select("id, usuario_id, juego, puntos, creado_en").eq("pareja_id", X.pareja.id)
@@ -265,7 +273,29 @@
     const rec = nodo("section", "log j-recientes");
     rec.append(nodo("h2", null, "Últimas partidas"));
     S.recientes = nodo("ul"); rec.append(S.recientes);
-    dos.append(p, rec);
+
+    // récords de la familia (Eli y Maritza, desde el Recreo)
+    S.familia = nodo("section", "log j-familia"); S.familia.hidden = true;
+    S.familia.append(nodo("h2", null, "Récords de la familia 🎮"),
+      nodo("p", "small-note", "Eli y Maritza juegan estos mismos juegos en el Recreo, con las mismas reglas: sus marcas se comparan con las de ustedes."));
+    S.familiaLista = nodo("ul"); S.familia.append(S.familiaLista);
+    dos.append(p, rec, S.familia);
+  }
+
+  // El mejor de Eli y de Maritza en cada juego; 👑 si es más que el récord de los dos
+  function pintarFamilia() {
+    if (!S || !S.familia) return;
+    const ul = S.familiaLista;
+    ul.innerHTML = "";
+    const filas = JUEGOS.flatMap((j) => familia.filter((f) => f.juego === j.id).sort((a, b) => b.mejor - a.mejor).map((f) => ({ j, f })));
+    S.familia.hidden = !filas.length;
+    filas.forEach(({ j, f }) => {
+      const r = recordsDe(j.id), deLosDos = Math.max(r.mio == null ? -1 : r.mio, r.suyo == null ? -1 : r.suyo);
+      const li = nodo("li"), a = nodo("span"), b = nodo("span");
+      a.textContent = `${f.avatar} ${f.nombre} · ${j.nombre}: ${j.marca(f.mejor)}${f.mejor > deLosDos ? " 👑" : ""}`;
+      b.textContent = X && X.ago ? X.ago(f.ultima) : "";
+      li.append(a, b); ul.append(li);
+    });
   }
 
   function pintarSala() {
@@ -290,7 +320,7 @@
     S.aviso.hidden = !sinBase || prueba;
     S.lista.innerHTML = "";
     JUEGOS.forEach((j) => S.lista.append(cartaJuego(j)));
-    pintarPremio(); pintarRecientes();
+    pintarPremio(); pintarRecientes(); pintarFamilia();
     if (X.renderAvatares) X.renderAvatares();
   }
 
@@ -727,6 +757,7 @@
       if (suyo != null) marcador[j].otro = { mejor: suyo, partidas: 2, hoy: null, ultima: null };
     });
     premio = { esperando: !!op.premio, mio: null, mios: [], ganados: [] };
+    familia = op.familia || [];
     montarSala(); pintarSala();
     if (id) { const def = JUEGOS.find((j) => j.id === id); if (def) abrir(def); }
     return "ok";

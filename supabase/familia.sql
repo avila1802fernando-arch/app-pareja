@@ -174,6 +174,25 @@ on conflict (usuario_id) do nothing;
 update public.familia_miembros set oculto = true
  where usuario_id in (select id from auth.users where email = 'martina@nosotros.invalid') and not oculto;
 
+-- ========== LA FAMILIA EN NOSOTROS ==========
+-- Fernando y Martina ven en su sala de juegos los récords de Eli y Maritza (lo pidió Fernando el 2026-10-25).
+-- Solo los de la familia (@familia.invalid, no ocultos) y solo para las dos cuentas de la pareja completa.
+-- El juego sale con su nombre de Nosotros ("lluvia" del Recreo = "corazones"): las reglas de puntaje son las mismas.
+create or replace function public.records_familia()
+returns table (nombre text, avatar text, color text, juego text, mejor integer, partidas integer, ultima timestamptz)
+language sql stable security definer set search_path = public as $$
+  select m.nombre, m.avatar, m.color, case f.juego when 'lluvia' then 'corazones' else f.juego end,
+         max(f.puntos)::int, count(*)::int, max(f.creado_en)
+    from public.familia_partidas f
+    join public.familia_miembros m on m.usuario_id = f.usuario_id and not m.oculto
+    join auth.users u on u.id = f.usuario_id and u.email like '%@familia.invalid'
+   where exists (select 1 from public.parejas x
+                  where (x.usuario_a = auth.uid() or x.usuario_b = auth.uid()) and x.usuario_b is not null)
+   group by m.usuario_id, m.nombre, m.avatar, m.color, f.juego;
+$$;
+revoke all on function public.records_familia() from public, anon;
+grant execute on function public.records_familia() to authenticated;
+
 -- ========== TIEMPO REAL ==========
 -- Una partida nueva o un personaje cambiado se ven al instante (RLS: solo les llega a los del Recreo)
 do $$

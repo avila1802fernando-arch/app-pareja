@@ -108,6 +108,16 @@ await como("eli", "update public.familia_miembros set nombre = 'Hackeado' where 
 ok((await db.query("select nombre from public.familia_miembros where usuario_id = $1", [uid("mam")])).rows[0].nombre === "Maritza",
   "Eli no puede cambiarle el nombre a Maritza");
 
+// La familia en Nosotros: Fernando y Martina ven los récords de Eli y Maritza
+const rf = (await como("fer", "select * from public.records_familia()")).rows;
+ok(rf.length === 1 && rf[0].nombre === "Eli" && rf[0].juego === "corazones" && rf[0].mejor === 1800,
+  "Fernando ve el récord de Eli (lluvia del Recreo = corazones en Nosotros)");
+ok(!rf.some((r) => r.nombre === "Martina" || r.nombre === "Fernando"), "ahí solo sale la familia, no la pareja");
+ok((await como("mar", "select * from public.records_familia()")).rows.length === 1, "Martina también los ve (aunque esté oculta en el Recreo)");
+ok((await como("eli", "select * from public.records_familia()")).rows.length === 0, "Eli no puede usar records_familia");
+ok((await como("suelta", "select * from public.records_familia()")).rows.length === 0, "una cuenta suelta tampoco");
+ok(!!(await falla("anon", "select * from public.records_familia()")), "sin sesión, nada");
+
 // Borrar una cuenta de la familia no toca nada de Nosotros
 await db.exec(`delete from auth.users where id = '${uid("eli")}'`);
 ok((await db.query("select count(*)::int n from public.familia_partidas where usuario_id = $1", [uid("eli")])).rows[0].n === 0, "borrar a Eli borra sus partidas del Recreo");

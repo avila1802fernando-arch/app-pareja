@@ -47,7 +47,8 @@ alter table public.eventos add constraint eventos_tipo_check
     'latido', 'notita', 'cancion',
     'a_dormir', 'despierto',
     'record', 'reto',
-    'foco', 'foco_empieza'
+    'foco', 'foco_empieza',
+    'sesion', 'sesion_msj', 'sesion_fin'
   ));
 create index if not exists eventos_pareja_idx on public.eventos (pareja_id, creado_en desc);
 
@@ -1191,13 +1192,177 @@ drop trigger if exists focos_aviso on public.focos;
 create trigger focos_aviso after insert or update on public.focos
   for each row execute function public.registrar_foco();
 
+-- ========== SESIONES DE PAREJA (CON CLAUDE) ==========
+-- Un rato para hablar de nosotros con Claude como moderador: cada uno escribe desde su teléfono y Claude contesta en
+-- la misma conversación. Al terminar, Claude deja un resumen con el acuerdo y el ejercicio de la semana, y lo vuelve a
+-- leer en las sesiones siguientes. Lo de Claude lo escribe la función `sesion` (con la llave de Anthropic, que nunca
+-- llega al teléfono); public/sesion.js es la otra mitad. Una sola sesión abierta por pareja.
+create table if not exists public.sesiones (
+  id uuid primary key default gen_random_uuid(),
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  numero int not null,
+  creado_por uuid not null references auth.users(id) on delete cascade,
+  estado text not null default 'abierta' check (estado in ('abierta', 'resumiendo', 'cerrada')),
+  pensando_desde timestamptz,          -- Claude está escribiendo (lo pone y lo quita la función `sesion`)
+  tema text check (tema is null or char_length(tema) <= 160),
+  acuerdo text check (acuerdo is null or char_length(acuerdo) <= 600),
+  ejercicio text check (ejercicio is null or char_length(ejercicio) <= 600),
+  resumen jsonb check (resumen is null or pg_column_size(resumen) <= 16000),
+  cerrada_por uuid references auth.users(id) on delete set null,
+  cerrada_en timestamptz,
+  creado_en timestamptz not null default now(),
+  unique (pareja_id, numero)
+);
+create index if not exists sesiones_pareja_idx on public.sesiones (pareja_id, creado_en desc);
+
+-- Lo que se dice en cada sesión (autor null = Claude)
+create table if not exists public.sesion_mensajes (
+  id bigint generated always as identity primary key,
+  sesion_id uuid not null references public.sesiones(id) on delete cascade,
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  autor uuid references auth.users(id) on delete cascade,
+  texto text not null check (char_length(texto) between 1 and 4000),
+  creado_en timestamptz not null default now()
+);
+create index if not exists sesion_mensajes_sesion_idx on public.sesion_mensajes (sesion_id, id);
+create index if not exists sesion_mensajes_pareja_idx on public.sesion_mensajes (pareja_id, creado_en desc);
+
+alter table public.sesiones        enable row level security;
+alter table public.sesion_mensajes enable row level security;
+-- Se leen entre los dos; se escriben solo con las funciones de abajo (y lo de Claude, con la función `sesion`)
+drop policy if exists "sesiones: leer" on public.sesiones;
+create policy "sesiones: leer" on public.sesiones for select using (public.es_mi_pareja(pareja_id));
+drop policy if exists "sesion_mensajes: leer" on public.sesion_mensajes;
+create policy "sesion_mensajes: leer" on public.sesion_mensajes for select using (public.es_mi_pareja(pareja_id));
+
+-- Empezar una sesión. Si ya hay una abierta devuelve esa: así los dos caen en la misma.
+create or replace function public.sesion_abrir() returns public.sesiones
+language plpgsql security definer set search_path = public as $$
+declare
+  p uuid;
+  s public.sesiones;
+begin
+  select id into p from public.parejas
+   where (usuario_a = auth.uid() or usuario_b = auth.uid()) and usuario_b is not null;
+  if p is null then return null; end if;
+  perform pg_advisory_xact_lock(hashtext('nosotros:sesion:' || p));
+  select * into s from public.sesiones where pareja_id = p and estado <> 'cerrada' order by creado_en desc limit 1;
+  if found then return s; end if;
+  insert into public.sesiones (pareja_id, numero, creado_por)
+  values (p, coalesce((select max(numero) from public.sesiones where pareja_id = p), 0) + 1, auth.uid())
+  returning * into s;
+  return s;
+end;
+$$;
+grant execute on function public.sesion_abrir() to authenticated;
+
+-- Escribir en la sesión (solo mientras está abierta: con el resumen en camino ya no se puede)
+create or replace function public.sesion_escribir(p_sesion uuid, p_texto text) returns public.sesion_mensajes
+language plpgsql security definer set search_path = public as $$
+declare
+  s public.sesiones;
+  m public.sesion_mensajes;
+  t text := btrim(coalesce(p_texto, ''));
+begin
+  select * into s from public.sesiones where id = p_sesion and public.es_mi_pareja(pareja_id);
+  if not found or s.estado <> 'abierta' or t = '' then return null; end if;
+  insert into public.sesion_mensajes (sesion_id, pareja_id, autor, texto)
+  values (s.id, s.pareja_id, auth.uid(), left(t, 4000))
+  returning * into m;
+  return m;
+end;
+$$;
+grant execute on function public.sesion_escribir(uuid, text) to authenticated;
+
+-- Descartar una sesión en la que todavía ninguno de los dos escribió (se abrió sin querer)
+create or replace function public.sesion_descartar(p_sesion uuid) returns boolean
+language sql security definer set search_path = public as $$
+  with d as (
+    delete from public.sesiones s
+     where s.id = p_sesion and public.es_mi_pareja(s.pareja_id) and s.estado = 'abierta'
+       and not exists (select 1 from public.sesion_mensajes m where m.sesion_id = s.id and m.autor is not null)
+    returning 1)
+  select exists (select 1 from d);
+$$;
+grant execute on function public.sesion_descartar(uuid) to authenticated;
+
+-- Solo para la función `sesion` (service role). Claude contesta de a una llamada por vez: la que toma el turno
+-- escribe "pensando" (los teléfonos muestran que está escribiendo) y lo suelta al terminar. Un turno colgado
+-- (más de 2 minutos) se puede volver a tomar.
+create or replace function public.sesion_tomar_turno(p_sesion uuid) returns boolean
+language sql security definer set search_path = public as $$
+  with t as (
+    update public.sesiones set pensando_desde = now()
+     where id = p_sesion and estado = 'abierta'
+       and (pensando_desde is null or pensando_desde < now() - interval '2 minutes')
+    returning 1)
+  select exists (select 1 from t);
+$$;
+create or replace function public.sesion_soltar_turno(p_sesion uuid) returns void
+language sql security definer set search_path = public as $$
+  update public.sesiones set pensando_desde = null where id = p_sesion and estado = 'abierta';
+$$;
+-- Terminar: pasa a "resumiendo" (ya no se escribe) mientras Claude escribe el resumen. Un cierre colgado se reintenta.
+create or replace function public.sesion_empezar_cierre(p_sesion uuid, p_quien uuid) returns boolean
+language sql security definer set search_path = public as $$
+  with t as (
+    update public.sesiones set estado = 'resumiendo', cerrada_por = p_quien, pensando_desde = now()
+     where id = p_sesion
+       and (estado = 'abierta' or (estado = 'resumiendo' and pensando_desde < now() - interval '3 minutes'))
+    returning 1)
+  select exists (select 1 from t);
+$$;
+revoke all on function public.sesion_tomar_turno(uuid) from public, anon, authenticated;
+revoke all on function public.sesion_soltar_turno(uuid) from public, anon, authenticated;
+revoke all on function public.sesion_empezar_cierre(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.sesion_tomar_turno(uuid) to service_role;
+grant execute on function public.sesion_soltar_turno(uuid) to service_role;
+grant execute on function public.sesion_empezar_cierre(uuid, uuid) to service_role;
+
+-- Avisos: al abrir una sesión, cuando el resumen está listo y cuando uno escribe (como mucho uno cada 10 minutos
+-- por persona, y no justo después de que esa misma persona la abrió: ese aviso ya salió).
+create or replace function public.registrar_sesion() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.creado_por, 'sesion');
+  elsif old.estado <> 'cerrada' and new.estado = 'cerrada' then
+    insert into public.eventos (pareja_id, de_usuario, tipo)
+    values (new.pareja_id, coalesce(new.cerrada_por, new.creado_por), 'sesion_fin');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists sesiones_aviso on public.sesiones;
+create trigger sesiones_aviso after insert or update of estado on public.sesiones
+  for each row execute function public.registrar_sesion();
+
+create or replace function public.registrar_sesion_mensaje() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.autor is not null
+     and not exists (select 1 from public.sesion_mensajes m
+                      where m.sesion_id = new.sesion_id and m.autor = new.autor and m.id <> new.id
+                        and m.creado_en > now() - interval '10 minutes')
+     and not exists (select 1 from public.sesiones s
+                      where s.id = new.sesion_id and s.creado_por = new.autor and s.creado_en > now() - interval '10 minutes') then
+    insert into public.eventos (pareja_id, de_usuario, tipo) values (new.pareja_id, new.autor, 'sesion_msj');
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists sesion_mensajes_aviso on public.sesion_mensajes;
+create trigger sesion_mensajes_aviso after insert on public.sesion_mensajes
+  for each row execute function public.registrar_sesion_mensaje();
+
 -- ========== TIEMPO REAL ==========
 -- Agrega las tablas a la publicación solo si aún no están (para poder re-ejecutar).
 do $$
 declare t text;
 begin
   foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
-                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches', 'partidas', 'premios', 'notificaciones', 'focos'] loop
+                                'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches', 'partidas', 'premios', 'notificaciones', 'focos',
+                                'sesiones', 'sesion_mensajes'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

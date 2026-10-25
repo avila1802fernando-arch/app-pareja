@@ -1,0 +1,165 @@
+/* ===== Sesiones de pareja 💬 (ver sesion.js) =====
+   En Juntos, un sobre de correo aéreo (las rayas rosa y turquesa alrededor) con su estampilla y la notita de la semana.
+   Adentro, papel de carta: lo tuyo en rosa y lo de tu pareja en turquesa (un color de cada uno, como las velitas del
+   foco) y Claude en una tarjetita punteada, firmada a mano. Al terminar, el resumen llega como carta. */
+:root{
+  --sv-mia:color-mix(in srgb,var(--accent) 13%,var(--card));
+  --sv-suya:color-mix(in srgb,var(--tinta-b) 15%,var(--card));
+  --sv-claude-borde:color-mix(in srgb,var(--accent) 38%,var(--line));
+  --sv-sombra:rgba(80,20,50,.5);
+}
+@media (prefers-color-scheme:dark){:root{--sv-mia:color-mix(in srgb,var(--accent) 20%,var(--card));--sv-suya:color-mix(in srgb,var(--tinta-b) 17%,var(--card));--sv-sombra:rgba(0,0,0,.6)}}
+/* la estampilla perforada (misma máscara que las de "nuestro amor en números") */
+.sc-estampilla,.sh-num{--r:3.5px;
+  -webkit-mask:radial-gradient(var(--r),#0000 97%,#000) calc(var(--r) * -1) calc(var(--r) * -1)/calc(var(--r) * 2) calc(var(--r) * 2) round,linear-gradient(#000 0 0) 50%/calc(100% - var(--r) * 4) calc(100% - var(--r) * 4) no-repeat;
+  mask:radial-gradient(var(--r),#0000 97%,#000) calc(var(--r) * -1) calc(var(--r) * -1)/calc(var(--r) * 2) calc(var(--r) * 2) round,linear-gradient(#000 0 0) 50%/calc(100% - var(--r) * 4) calc(100% - var(--r) * 4) no-repeat}
+.sesion-card svg,.sesion-aviso svg,.sv svg:not(.ico){fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* --- tarjeta de Juntos: el sobre --- */
+.sesion-card{position:relative;padding:5px;border-radius:22px;background:var(--aereo);box-shadow:0 16px 28px -22px var(--sv-sombra)}
+.sc-sobre{position:relative;display:flex;flex-direction:column;gap:6px;padding:18px 16px 14px;border-radius:17px;background:var(--papel)}
+.sesion-card .eyebrow{margin:0;padding-right:72px}
+.sc-titulo{font-size:1.3rem;line-height:1.2;padding-right:72px;text-wrap:balance}
+.sc-sub{margin:0;padding-right:8px}
+.sc-estampilla{position:absolute;top:12px;right:12px;width:60px;height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  background:var(--card);color:var(--accent);transform:rotate(5deg)}
+.sc-estampilla::before{content:"";position:absolute;inset:8px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));pointer-events:none}
+.sc-estampilla svg{width:26px;height:26px}
+.sc-estampilla b{font-family:var(--display);font-weight:600;font-size:.74rem;color:var(--fg);font-variant-numeric:tabular-nums}
+.sc-presencia{display:flex;align-items:center;gap:7px;margin:2px 0 0;font-size:.82rem;font-weight:700;color:var(--ok)}
+.sc-presencia::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none;animation:pulso 1.6s ease-out infinite}
+.sc-botones{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+.sc-botones .sc-empezar{width:100%}
+/* la notita de la semana (también va dentro del resumen): post-it con su cinta */
+.sc-nota{position:relative;margin:12px 4px 4px;padding:15px 15px 12px;border-radius:3px 3px 16px 3px;background:var(--nota);color:var(--nota-tx);
+  transform:rotate(-.8deg);box-shadow:0 12px 18px -14px rgba(0,0,0,.5)}
+.sc-nota::before{content:"";position:absolute;top:-9px;left:50%;width:58px;height:16px;margin-left:-29px;transform:rotate(-4deg);
+  background:color-mix(in srgb,var(--tinta-b) 42%,transparent);clip-path:polygon(3% 0,97% 0,100% 25%,97% 50%,100% 75%,97% 100%,3% 100%,0 75%,3% 50%,0 25%)}
+.sc-nota .sn-titulo{margin:0 0 4px;font-family:var(--hand);font-size:1.3rem;font-weight:700;line-height:1}
+.sc-nota p{font-size:.92rem;line-height:1.45}
+.sc-nota .sn-acuerdo{margin-top:6px;font-size:.85rem}
+
+/* --- aviso del Inicio mientras hay una sesión abierta --- */
+.sesion-aviso{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 12px 12px 18px;
+  border-radius:18px;background:var(--papel);border:1px solid var(--line);overflow:hidden;box-shadow:0 14px 26px -24px var(--sv-sombra)}
+.sesion-aviso::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--aereo)}
+.sesion-aviso.nueva{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.sa-ico{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.sa-ico svg{width:23px;height:23px}
+.sesion-aviso p{margin:0;min-width:0;line-height:1.3}
+.sesion-aviso p b{display:block;font-family:var(--display);font-weight:500;font-size:1rem;text-wrap:balance}
+.sesion-aviso p small{color:var(--muted);font-size:.8rem}
+.sesion-aviso button{padding:11px 16px;font-size:.92rem}
+
+/* --- la conversación, a pantalla completa --- */
+.sv{position:fixed;inset:0;z-index:19;display:flex;flex-direction:column;background:var(--papel);color:var(--fg);animation:sv-entra var(--t-largo) var(--salida)}
+/* con el teclado abierto (iPhone): solo lo que queda a la vista (ver ajustarVentana en sesion.js) */
+.sv.vv{top:var(--sv-arriba,0);bottom:auto;height:var(--sv-alto,100%)}
+.sv.sale{animation:sv-sale var(--t-medio) var(--entrada) forwards}
+body.con-sesion{overflow:hidden}
+body.con-sesion .tabs,body.con-sesion .campana,body.con-sesion .fondo{visibility:hidden}
+.sv-cab{--ancho:max(12px,calc((100% - 760px) / 2));position:relative;z-index:1;flex:none;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;
+  padding:max(10px,env(safe-area-inset-top)) max(var(--ancho),env(safe-area-inset-right)) 12px max(var(--ancho),env(safe-area-inset-left));background:var(--card)}
+.sv-cab::after{content:"";position:absolute;left:0;right:0;top:100%;height:6px;background:var(--aereo)}
+.sv-atras{width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--blush);color:var(--accent);box-shadow:none}
+.sv-atras svg{width:22px;height:22px}
+.sv-titulos{min-width:0}
+.sv-titulo{font-size:1.18rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-estado{display:flex;align-items:center;gap:6px;margin:1px 0 0;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-estado.aqui{color:var(--ok);font-weight:700}
+.sv-estado.aqui::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.sv-terminar{min-height:44px;padding:9px 14px;font-size:.88rem}
+
+.sv-lista{--ancho:max(14px,calc((100% - 760px) / 2));flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;list-style:none;margin:0;
+  padding:26px max(var(--ancho),env(safe-area-inset-right)) 14px max(var(--ancho),env(safe-area-inset-left));display:flex;flex-direction:column;gap:3px}
+.sv-intro{align-self:center;display:flex;align-items:flex-start;gap:8px;max-width:400px;margin:0 auto 8px;padding:10px 14px;border-radius:14px;
+  border:1.5px dashed var(--line);color:var(--muted);font-size:.82rem;line-height:1.45}
+.sv-intro .ico{width:18px;height:18px;margin-top:1px;color:var(--accent)}
+.sv-dia{align-self:center;margin:16px 0 6px;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sv-centro{align-self:center;margin:2px 0 6px}
+/* los mensajes */
+.sv-m{display:flex;flex-direction:column;gap:3px;max-width:min(84%,520px);margin-top:12px}
+.sv-m.seguido{margin-top:0}
+.sv-m.mio{align-self:flex-end;align-items:flex-end}
+.sv-m.suyo{align-self:flex-start;align-items:flex-start}
+.sv-m.claude{align-self:flex-start;max-width:min(92%,580px)}
+.sv-quien{display:flex;align-items:center;gap:5px;margin:0 0 0 8px;font-family:var(--hand);font-size:1.15rem;font-weight:700;line-height:1}
+.sv-m.suyo .sv-quien{color:var(--tinta-b)}
+.sv-m.claude .sv-quien{color:var(--accent)}
+.sv-quien .ico{width:15px;height:15px}
+.sv-burbuja{position:relative;padding:10px 14px 7px;border-radius:18px;font-size:1rem;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--fg)}
+.sv-burbuja b{font-weight:700}
+.sv-m.mio .sv-burbuja{background:var(--sv-mia);border-bottom-right-radius:6px}
+.sv-m.suyo .sv-burbuja{background:var(--sv-suya);border-bottom-left-radius:6px}
+.sv-m.claude .sv-burbuja{background:var(--card);border:1.5px dashed var(--sv-claude-borde);border-top-left-radius:6px;box-shadow:0 10px 18px -16px var(--sv-sombra)}
+.sv-m.mio.seguido .sv-burbuja{border-top-right-radius:8px}
+.sv-m.suyo.seguido .sv-burbuja{border-top-left-radius:8px}
+.sv-burbuja time{display:block;margin-top:3px;font-size:.7rem;line-height:1;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sv-m.nuevo{animation:sv-llega var(--t-medio) var(--salida)}
+/* escribiendo… */
+.sv-escribe .sv-burbuja{padding:14px 16px}
+.sv-puntos{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+.sv-puntos i{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.3;animation:sv-punto 1.2s ease-in-out infinite}
+.sv-puntos i:nth-child(2){animation-delay:.15s}
+.sv-puntos i:nth-child(3){animation-delay:.3s}
+
+/* abajo: lo que escribes */
+.sv-pie{--ancho:max(12px,calc((100% - 760px) / 2));flex:none;display:flex;flex-direction:column;gap:8px;
+  padding:10px max(var(--ancho),env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(var(--ancho),env(safe-area-inset-left));
+  background:var(--card);border-top:1.5px dashed var(--line)}
+.sv-pedir{align-self:center;min-height:44px}
+.sv-resumiendo{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;margin:0;font-family:var(--hand);font-size:1.25rem;color:var(--accent)}
+.sv-escribir{display:grid;grid-template-columns:minmax(0,1fr) 48px;align-items:end;gap:10px}
+.sv-escribir textarea{min-height:48px;max-height:148px;resize:none;overflow-y:auto;padding:11px 14px;border-radius:18px 18px 6px 18px;line-height:1.6}
+.sv-enviar{width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
+.sv-enviar svg{width:22px;height:22px;transform:translate(-1px,1px)}
+.sv-enviar[disabled]{opacity:.45;box-shadow:inset 0 0 0 3px var(--accent),inset 0 0 0 4.5px var(--filete)}
+
+/* --- el resumen: una carta --- */
+.sv-carta-li{align-self:stretch;margin:0 0 14px}
+.sv-carta{position:relative;display:flex;flex-direction:column;gap:14px;max-width:580px;margin:0 auto;padding:28px 20px 20px;overflow:hidden;
+  background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 20px 34px -26px var(--sv-sombra)}
+.sv-carta::before{content:"";position:absolute;left:0;right:0;top:0;height:7px;background:var(--aereo)}
+.sv-carta .eyebrow{margin:0}
+.sv-carta h3{margin:-6px 0 0;font-family:var(--display);font-weight:500;font-size:1.5rem;line-height:1.15;text-wrap:balance}
+.sv-carta p{line-height:1.6}
+.sv-c-sec{display:flex;flex-direction:column;gap:4px}
+.sv-c-et{margin:0;font-family:var(--hand);font-size:1.22rem;font-weight:700;line-height:1.1;color:var(--accent)}
+.sv-c-personas{display:grid;gap:10px}
+@media (min-width:560px){.sv-c-personas{grid-template-columns:1fr 1fr}}
+.sv-c-persona{padding:11px 13px;border-radius:14px;background:var(--sv-suya)}
+.sv-c-persona.mia{background:var(--sv-mia)}
+.sv-c-persona b{display:block;margin-bottom:2px;font-family:var(--display);font-weight:500}
+.sv-c-persona p{font-size:.94rem}
+.sv-c-acuerdo{position:relative;padding:14px 16px 14px;border:2px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--accent) 6%,var(--card))}
+/* un matasellos chiquito: acordado */
+.sv-c-acuerdo::after{content:"acordado";position:absolute;top:-13px;right:12px;padding:3px 9px;border:1.5px solid currentColor;border-radius:999px;transform:rotate(6deg);
+  background:var(--card);color:var(--accent);font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.sv-c-acuerdo,.sv-c-ejercicio{gap:6px} /* (toda <section> trae 22 px de separación) */
+.sv-c-ejercicio{margin:6px 6px 2px}
+.sv-c-pendiente{font-size:.88rem;color:var(--muted)}
+.sv-c-firma{display:flex;align-items:center;gap:6px;align-self:flex-end;margin:0;font-family:var(--hand);font-size:1.4rem;line-height:1;color:var(--accent)}
+.sv-c-firma .ico{width:18px;height:18px}
+.sv-carta.llega{animation:sv-carta .7s var(--resorte)}
+
+/* --- ventanas: terminar y sesiones anteriores --- */
+.sf-recuerdo{font-size:1.25rem;line-height:1.25;color:var(--accent);text-align:center;text-wrap:balance}
+.sv-hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.sv-hist button{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px;padding:10px 14px 10px 10px;text-align:left;
+  background:var(--blush);color:var(--fg);border:1px solid var(--line);box-shadow:none;font-weight:400}
+.sh-num{width:48px;height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--papel);color:var(--accent);
+  font-family:var(--display);font-weight:600;font-size:1.15rem;line-height:1;transform:rotate(-3deg)}
+.sh-num small{font-size:.6rem;font-family:var(--body);font-weight:800;letter-spacing:.06em;color:var(--muted)}
+.sh-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sh-txt strong{font-family:var(--display);font-weight:500;font-size:1rem;line-height:1.25}
+.sh-txt small{font-size:.8rem;line-height:1.35;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+@keyframes sv-entra{from{opacity:0;transform:translateY(16px)}}
+@keyframes sv-sale{to{opacity:0;transform:translateY(16px)}}
+@keyframes sv-llega{from{opacity:0;transform:translateY(8px) scale(.98)}}
+@keyframes sv-punto{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:.9;transform:translateY(-3px)}}
+@keyframes sv-carta{from{opacity:0;transform:translateY(28px) rotate(-2deg)}}
+@media (prefers-reduced-motion:reduce){
+  .sv,.sv.sale,.sv-m.nuevo,.sv-carta.llega{animation:none!important}
+  .sv-puntos i,.sc-presencia::before{animation:none!important;opacity:.65}
+}

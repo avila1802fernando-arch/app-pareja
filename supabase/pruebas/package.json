@@ -2,9 +2,10 @@
   "name": "recreo-pruebas-sql",
   "private": true,
   "type": "module",
-  "description": "Prueba familia.sql en un Postgres local (PGlite). No toca la base real.",
+  "description": "Prueba familia.sql y las sesiones de pareja de schema.sql en un Postgres local (PGlite). No toca la base real.",
   "scripts": {
-    "test": "node familia.mjs"
+    "test": "node familia.mjs",
+    "test:sesiones": "node sesiones.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.2.17"

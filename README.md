@@ -19,6 +19,7 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
   - **Dormir juntos 🌙**: "Me voy a dormir" le avisa al otro; si los dos están acostados se ve su nochecita (los dos tapaditos, cuánto llevan y la hora de cada uno). "Buenos días ☀️" cierra la noche y se puede contar qué se soñó. Cuenta las noches que durmieron juntos y la racha (`public/noche.js`).
   - **Concentrarnos juntos ⏳**: un rato de estudio o trabajo a la par. Uno propone (minutos, rondas, descanso y en qué va a trabajar), el otro dice «¡Vamos!» y corre el mismo reloj en los dos teléfonos, con cuenta regresiva, dos velitas que se consumen, pausa y «+5 min» para los dos, campanitas y la pantalla encendida. Suma los minutos de foco de la semana (`public/focus.js`, tabla `focos`).
 - **Juntos**
+  - **Sesión de pareja 💬**: un rato para hablar de ustedes con **Claude** como moderador. Cada uno escribe desde su teléfono y Claude contesta en la misma conversación: un tema por vez, turnos para escucharse, sin tomar partido. Se ve cuando el otro está adentro y cuando está escribiendo. Al tocar «Terminar», Claude escribe un **resumen** (cómo llegaron, lo que siente y necesita cada uno, su acuerdo y un ejercicio para la semana) que queda guardado para los dos y que Claude vuelve a leer en la sesión siguiente. El ejercicio y el acuerdo de la semana quedan en una notita en Juntos. Necesita una llave de Anthropic (paso 8) y tiene un costo pequeño (`public/sesion.js`, función `sesion`).
   - **Pregunta del día**: la misma para los dos. La respuesta del otro solo se puede leer después de responder. Racha 🔥 de días seguidos e historial.
   - **Cartas**: para leer con calma, en papel y con letra manuscrita. Se pueden **sellar hasta una fecha** (el aniversario, el día del viaje…): hasta entonces solo se ve de quién es y cuándo se abre, y llega un aviso cuando ya se puede abrir.
   - **Cuando nos veamos**: lista compartida de cosas para hacer juntos, para ir tachando.
@@ -60,8 +61,9 @@ supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede
 supabase/avisos.sql     ← la base avisa a las funciones: triggers + tarea cada 5 min (editar 2 valores y pegar)
 supabase/functions/
   _shared/push.ts       ← código común para enviar push
-  notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día y calendario
+  notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día, calendario y sesiones
   recordatorios/index.ts← recordatorios 30 min antes, cartas que ya se pueden abrir y apaga "estoy libre" vencidos
+  sesion/index.ts       ← Claude modera las sesiones de pareja (instrucciones.ts: cómo modera y el formato del resumen)
 public/vercel.json     ← encabezados para Vercel (va dentro de public: ahí lo lee)
 ```
 
@@ -198,6 +200,30 @@ Desde entonces, cada 5 minutos la función `recordatorios` manda el aviso de lo 
 **Desde el computador** también funciona: abre la misma URL en Chrome, Edge o Safari y entra con el mismo usuario. Se ve con menú a la izquierda y en dos columnas. (Las notificaciones en el computador llegan solo si el navegador está abierto.)
 5. En **Ajustes**, toca **Activar notificaciones** y acepta. iPhone también pide tener activas las notificaciones en Ajustes → Notificaciones → Nosotros.
 
+## Paso 8 · Sesiones de pareja con Claude (10 min, tiene costo)
+
+Claude se usa con una llave de la API de Anthropic. Es aparte del plan de claude.ai (Pro o Max): se paga por uso, con saldo que se carga antes. Cada sesión cuesta más o menos **entre 30 centavos y 1 dólar** (sale más barata si escriben seguido; las pausas de más de 5 minutos la encarecen un poco), así que US$5 alcanzan para unas 10 a 15 sesiones. Además, la función tiene un tope de 150 respuestas de Claude por día.
+
+1. En https://console.anthropic.com crea una cuenta y carga saldo (**Billing**). Recomendado: en **Limits** pon un límite de gasto mensual (por ejemplo, US$5).
+2. En **API Keys** → **Create Key** (nombre `nosotros`). Copia la llave: empieza con `sk-ant-` y solo se muestra una vez.
+3. Pégala en el `.env` de la carpeta del proyecto (el mismo del paso 5, que no se sube a GitHub), en una línea nueva:
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+4. Supabase → SQL Editor: vuelve a correr **todo** `supabase/schema.sql` (crea las tablas de las sesiones).
+5. Dentro de la carpeta del proyecto:
+   ```bash
+   npx supabase secrets set --env-file .env
+   npx supabase functions deploy sesion --no-verify-jwt
+   npx supabase functions deploy notificar --no-verify-jwt
+   ```
+   `sesion` revisa ella misma quién la llama (le pregunta a Supabase Auth) y que la sesión sea de su pareja: sin sesión abierta en la app no llega a hablar con Claude. La llave nunca llega al teléfono.
+6. Publica la app (`git push`, o `npx vercel deploy --prod` dentro de `public`).
+
+Para probar: en **Juntos** toca **Empezar nuestra primera sesión**. Claude saluda en unos segundos y al otro le llega el aviso.
+
+Ajustes (constantes al inicio de `supabase/functions/sesion/index.ts`): `MODELO` (Claude Opus 5.5), `ESFUERZO_CHARLA` y `ESFUERZO_RESUMEN` (cuánto piensa antes de contestar), `ESPERA_MS` (si escriben dos mensajes seguidos, Claude los contesta juntos) y `TOPE_DIARIO`. Cómo modera y cómo escribe el resumen está en `instrucciones.ts`. Si Claude rechaza algo por sus reglas de seguridad, Anthropic lo reintenta solo con otro modelo (`fallbacks: "default"`).
+
 ## Si ya tenías una versión anterior funcionando
 
 Cada vez que llega una versión nueva:
@@ -209,7 +235,9 @@ Cada vez que llega una versión nueva:
    npx supabase functions deploy cuenta --no-verify-jwt
    npx supabase functions deploy notificar --no-verify-jwt
    npx supabase functions deploy recordatorios --no-verify-jwt
+   npx supabase functions deploy sesion --no-verify-jwt
    ```
+   (`sesion` solo si ya hiciste el paso 8.)
 4. Si todavía no lo corriste, `supabase/avisos.sql` (paso 6): reemplaza a los Database Webhooks del panel y a `cron.sql` de versiones anteriores. Las funciones nuevas (señales, ánimo, pregunta del día, cartas, lista) **no necesitan avisos ni secretos nuevos**.
 
 ## Prueba
@@ -244,4 +272,8 @@ Ajustes que ya trae (constantes al inicio de cada archivo):
 | Error al compartir ánimo, responder o mandar una señal nueva | Falta volver a correr `schema.sql` completo (crea las tablas nuevas y amplía los tipos de `eventos`) |
 | No llega el aviso de "ya puedes abrir la carta" | Igual que los recordatorios: revisa `cron.job_run_details` (paso 6) |
 | `schema.sql` da error | Córrelo completo, de arriba a abajo; está hecho para repetirse sin borrar datos |
+| En Juntos no aparece la sesión de pareja | Falta correr `schema.sql` completo (paso 8) o la pareja todavía no está completa |
+| "Falta conectar a Claude" / "La llave de Claude no funciona" | La llave del paso 8: que esté en `.env`, que se haya corrido `secrets set` y que no la hayan borrado en console.anthropic.com |
+| "Se acabó el saldo de Claude" | Carga saldo en console.anthropic.com → Billing |
+| Claude no contesta | Supabase → **Edge Functions → sesion → Logs**. En la app, «Pedirle a Claude que responda» lo vuelve a intentar |
 | Vercel muestra 404 | *Root Directory* debe ser `public` |

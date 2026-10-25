@@ -369,7 +369,10 @@
       (payload) => {
         const ev = payload.new;
         if (ev.de_usuario !== user.id) {
-          toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
+          // (con la sesión de pareja abierta en pantalla ya se ve lo que escribe: sin aviso encima)
+          if (!(ev.tipo.startsWith("sesion") && document.body.classList.contains("con-sesion"))) {
+            toast((AVISOS[ev.tipo] || AVISOS.te_extrano)(otro.nombre));
+          }
           sentir(ev.tipo); sessionStorage.setItem("sentido", ev.id);
           if (ev.tipo === "respuesta") cargarPregunta();
           if (ev.tipo === "carta") cargarCartas();
@@ -520,6 +523,9 @@
     foco_empieza: (n) => `${n} se sumó: ¡a concentrarse! ⏳`,
     record: (n) => `${n} te quitó un récord 🏆 ¿Revancha?`,
     reto: (n) => `${n} te reta a un juego 😏🎮`,
+    sesion: (n) => `${n} abrió una sesión para hablar 💬`,
+    sesion_msj: (n) => `${n} escribió en su sesión 💬`,
+    sesion_fin: () => "Llegó el resumen de su sesión 💌",
   };
   const SENALES = {
     entrada: (n) => `${n} entró`,
@@ -547,6 +553,9 @@
     foco_empieza: (n) => `${n} se sumó al rato de foco ⏳`,
     record: (n) => `${n} rompió un récord 🏆`,
     reto: (n) => `${n} retó a un juego 🎮`,
+    sesion: (n) => `${n} abrió una sesión de pareja 💬`,
+    sesion_msj: (n) => `${n} escribió en la sesión 💬`,
+    sesion_fin: (n) => `${n} cerró la sesión: llegó el resumen 💌`,
   };
   // Lo que se "siente" al recibir una señal: lluvia de emojis y vibración (Android)
   const SENTIR = {

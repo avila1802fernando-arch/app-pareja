@@ -230,6 +230,21 @@ async function porEvento(ev: Evento) {
     mensaje = ev.tipo === "foco"
       ? { title: `📚 ${nombre} quiere concentrarse contigo`, body: `${plan}${tarea ? ` · ${tarea}` : ""}. Entra y dale a «¡Vamos!»`, tag: "foco", url: "/", vibrate: [60, 60, 60] }
       : { title: `⏳ ${nombre} se sumó: ¡empezó su rato de foco!`, body: `${plan} juntos, cada uno en lo suyo. ¡Ánimo! 💪`, tag: "foco", url: "/", vibrate: [80, 60, 80] };
+  } else if (ev.tipo === "sesion" || ev.tipo === "sesion_msj" || ev.tipo === "sesion_fin") {
+    // Sesiones de pareja: lo que se escriben no va en el aviso (se vería con el teléfono bloqueado)
+    if (ev.tipo === "sesion") {
+      mensaje = { title: `💬 ${nombre} abrió una sesión para hablar`, body: "Entra cuando puedas: Claude los acompaña.", tag: "sesion", url: "/#sesion", vibrate: [80, 60, 80] };
+    } else if (ev.tipo === "sesion_msj") {
+      mensaje = { title: `💬 ${nombre} te escribió en su sesión`, body: "Entra a responderle 💗", tag: "sesion", url: "/#sesion", vibrate: [60, 40, 60] };
+    } else {
+      const { data: s } = await sb.from("sesiones").select("numero, acuerdo").eq("pareja_id", ev.pareja_id)
+        .eq("estado", "cerrada").order("numero", { ascending: false }).limit(1).maybeSingle();
+      mensaje = {
+        title: `💌 Llegó el resumen de su sesión${s ? ` ${s.numero}` : ""}`,
+        body: s?.acuerdo ? `Su acuerdo: ${s.acuerdo.slice(0, 120)}` : "Léanlo con calma.",
+        tag: "sesion", url: "/#sesion",
+      };
+    }
   } else {
     mensaje = (SENALES[ev.tipo] ?? GENERICO)(nombre);
   }

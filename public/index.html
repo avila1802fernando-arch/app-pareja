@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/noche.css">
   <link rel="stylesheet" href="/focus.css">
+  <link rel="stylesheet" href="/sesion.css">
 </head>
 <body>
 <!-- Íconos propios (mismo trazo que los de la barra): reemplazan a los emojis en botones y listas -->
@@ -278,6 +279,8 @@
         <p class="eyebrow">Juntos</p>
         <h1>Más <em>cerquita</em>.</h1>
       </div>
+      <!-- Sesiones de pareja con Claude (la llena sesion.js) -->
+      <section class="sesion-card" id="sesion-card" hidden aria-labelledby="sesion-titulo"></section>
       <div class="pregunta">
         <p class="preg-meta"><span>Pregunta del día</span><span id="preg-racha"></span></p>
         <p class="preg-texto" id="preg-texto">…</p>
@@ -798,5 +801,6 @@
 <script defer src="/app.js"></script>
 <script defer src="/noche.js"></script>
 <script defer src="/focus.js"></script>
+<script defer src="/sesion.js"></script>
 </body>
 </html>

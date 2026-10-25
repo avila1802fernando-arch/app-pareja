@@ -10,8 +10,12 @@
   let marcador = {};     // juego → usuario_id → { mejor, partidas, hoy, ultima }
   let actividad = [];    // { usuario_id, juego, puntos, creado_en }
   let sinRed = false;
+  let ultimoError = "";  // lo último que respondió mal la base (para mostrarlo en pantalla)
 
   const R = () => window.recreo || {};
+  // x, o el valor de respaldo si x no existe. (Sin "??": los navegadores de algunos teléfonos, como el de un Nubia
+  // de Eli, son anteriores a Chrome 80 y no lo entienden: el archivo entero dejaba de cargar.)
+  const siNulo = (x, respaldo) => (x == null ? respaldo : x);
   const leer = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   const anotar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
   const avisar = () => window.dispatchEvent(new Event("recreo:datos"));
@@ -143,9 +147,12 @@
       Object.assign(m, nombre ? { nombre } : {}, avatar ? { avatar } : {}, color ? { color } : {}, { actualizado_en: new Date().toISOString() });
       avisar(); return m;
     }
-    const { data, error } = await sb.rpc("editar_familia", { p_nombre: nombre, p_avatar: avatar, p_color: color });
+    let data = null, error = null;
+    try { ({ data, error } = await sb.rpc("editar_familia", { p_nombre: nombre, p_avatar: avatar, p_color: color })); }
+    catch (e) { error = e; }
     const fila = Array.isArray(data) ? data[0] : data;
-    if (error || !fila || !fila.usuario_id) return null;
+    ultimoError = error ? String(error.message || error.code || error) : !fila || !fila.usuario_id ? "sin respuesta" : "";
+    if (ultimoError) return null;
     const i = miembros.findIndex((x) => x.usuario_id === fila.usuario_id);
     if (i >= 0) miembros[i] = fila;
     avisar(); return fila;
@@ -158,10 +165,10 @@
     const m = marcador[juego] || {};
     const filas = miembros.map((p) => {
       const r = m[p.usuario_id] || {};
-      return { persona: p, marca: hoy ? (r.hoy ?? null) : (r.mejor ?? null), partidas: r.partidas || 0, ultima: r.ultima || null };
+      return { persona: p, marca: siNulo(hoy ? r.hoy : r.mejor, null), partidas: r.partidas || 0, ultima: r.ultima || null };
     });
-    filas.forEach((f) => { f.puesto = f.marca == null ? null : 1 + filas.filter((o) => o.marca != null && o.marca > f.marca).length; });
-    return filas.sort((a, b) => (b.marca ?? -1) - (a.marca ?? -1) || ordenNombre(a.persona, b.persona));
+    filas.forEach((f) => { f.puesto = f.marca == null ? null : 1 + filas.filter((x) => x.marca != null && x.marca > f.marca).length; });
+    return filas.sort((a, b) => siNulo(b.marca, -1) - siNulo(a.marca, -1) || ordenNombre(a.persona, b.persona));
   }
   function medallero({ hoy = false } = {}) {
     const cuenta = new Map(miembros.map((p) => [p.usuario_id, { persona: p, oro: 0, plata: 0, bronce: 0 }]));
@@ -179,7 +186,7 @@
   }
   function mio(juego) {
     const r = (marcador[juego] || {})[uid()] || {};
-    return { mejor: r.mejor ?? null, hoy: r.hoy ?? null, partidas: r.partidas || 0 };
+    return { mejor: siNulo(r.mejor, null), hoy: siNulo(r.hoy, null), partidas: r.partidas || 0 };
   }
 
   // ---------- mientras no estabas ----------
@@ -197,7 +204,7 @@
       const t = tabla(j), yoAhora = (marcador[j] || {})[uid()];
       const miMarca = yoAhora ? yoAhora.mejor : null;
       t.forEach((f) => {
-        const id = f.persona.usuario_id, antes = (visto[j] || {})[id] ?? null;
+        const id = f.persona.usuario_id, antes = siNulo((visto[j] || {})[id], null);
         if (id === uid() || f.marca == null || (antes != null && f.marca <= antes)) return;
         const meSupero = miMarca != null && f.marca > miMarca && (antes == null || antes <= miMarca);
         const primero = f.puesto === 1;
@@ -253,6 +260,6 @@
     JUEGOS, iniciar, recargar, alDia, reintentar, entrar, editarMiembro, guardar,
     yo, miembro, miembros: () => miembros.slice(), tabla, medallero, metas, mio,
     actividad: () => actividad.slice(), novedades, marcarVisto,
-    sinRed: () => sinRed, usuarioId: uid,
+    sinRed: () => sinRed, usuarioId: uid, ultimoError: () => ultimoError,
   };
 })();

@@ -116,7 +116,17 @@
     if (!c || c.classList.contains("fuera")) return;
     setTimeout(() => { c.classList.add("fuera"); setTimeout(() => c.remove(), 500); }, Math.max(0, 1200 - performance.now()));
   }
-  function aviso(msg) { $("aviso-msg").textContent = msg; mostrar("aviso"); }
+  // El aviso lleva abajo el detalle técnico (errores anotados desde index.html y el navegador del teléfono):
+  // así una captura de pantalla alcanza para saber qué pasó
+  function aviso(msg, error) {
+    $("aviso-msg").textContent = msg;
+    const errores = (window.__errores || []).slice(-3);
+    if (error) errores.push(String((error && error.message) || error));
+    const det = $("aviso-detalle");
+    det.hidden = !errores.length;
+    det.textContent = errores.length ? `Detalle para Fernando: ${errores.join(" · ")} · ${navigator.userAgent}` : "";
+    mostrar("aviso");
+  }
   const SIN_CONEXION = "Revisa tu conexión a internet e intenta de nuevo.";
   // Si a los 10 s no apareció ninguna pantalla, se ofrece reintentar en vez de dejar la carga pegada
   setTimeout(() => {
@@ -252,11 +262,13 @@
   }
   async function cargarSesion() {
     let fila;
-    try { fila = await D.entrar({ sb, user }); } catch (e) { aviso(SIN_CONEXION); return; }
+    try { fila = await D.entrar({ sb, user }); } catch (e) { aviso(SIN_CONEXION, e); return; }
     if (!fila) { aviso("Esta cuenta no es del Recreo. Cierra sesión y entra tocando tu nombre."); return; }
-    prepararCompartido();
-    await D.iniciar();
-    if (fila.actualizado_en === fila.creado_en) abrirPersonaje(); else entrarApp();
+    try {
+      prepararCompartido();
+      await D.iniciar();
+      if (fila.actualizado_en === fila.creado_en) abrirPersonaje(); else entrarApp();
+    } catch (e) { aviso("Algo falló al abrir los juegos. Intenta de nuevo.", e); }
   }
   function entrarComoPrueba(quien, nuevo) {
     clave.usuario = quien;
@@ -318,7 +330,7 @@
       $("pj-listo").disabled = true;
       const fila = await D.editarMiembro({ nombre, avatar: estado.avatar, color: estado.color });
       $("pj-listo").disabled = false;
-      if (!fila) { $("pj-error").textContent = SIN_CONEXION; return; }
+      if (!fila) { $("pj-error").textContent = SIN_CONEXION + (D.ultimoError() ? ` (${D.ultimoError()})` : ""); return; }
       entrarApp(); lluvia("🎉", 18);
     };
     pintar();
@@ -446,6 +458,11 @@
   // ---------- arranque ----------
   // Se espera a que corran todos los scripts (la sala, los juegos y el ranking escuchan "recreo:dentro")
   function arrancar() {
+    // si un archivo no cargó (navegador muy viejo o sin red), se dice claro en vez de quedarse a medias
+    if (!window.RecreoDatos || !window.RecreoJuegos || (!PRUEBA && !window.supabase)) {
+      aviso("Este navegador no pudo abrir el Recreo. Prueba abrirlo en Google Chrome, o revisa tu conexión.");
+      return;
+    }
     if (PRUEBA) {
       $("franja-prueba").hidden = false;
       $("salir-prueba").addEventListener("click", () => location.replace(location.pathname));

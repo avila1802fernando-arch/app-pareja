@@ -112,7 +112,7 @@
     const m = D.mio(id), metas = D.metas(id);
     return { mio: m.mejor, hoyMio: m.hoy, partidasMio: m.partidas, metas, lider: metas.length ? metas[metas.length - 1] : null };
   }
-  const siguienteMeta = (metas, marca) => metas.find((m) => m.mejor > (marca ?? -1)) || null;
+  const siguienteMeta = (metas, marca) => metas.find((m) => m.mejor > (marca == null ? -1 : marca)) || null; // sin "??": navegadores viejos
 
   // ---------- las tarjetas de la pestaña Juegos ----------
   function pintarSala() {

@@ -18,6 +18,9 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preload" href="/fuentes/fredoka-v17.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fuentes/nunito-v32.woff2" as="font" type="font/woff2" crossorigin>
+  <!-- Anota los errores desde el primer momento (también si un archivo no llega a cargar): la pantalla de aviso los
+       muestra para que se pueda mandar una captura -->
+  <script>window.__errores=[];window.addEventListener("error",function(e){window.__errores.push((e.message||"Error al cargar "+((e.target&&(e.target.src||e.target.href))||""))+(e.filename?" ("+e.filename.split("/").pop()+":"+e.lineno+")":""))},true);window.addEventListener("unhandledrejection",function(e){window.__errores.push(String(e.reason&&(e.reason.message||e.reason)))});</script>
   <link rel="stylesheet" href="/estilos.css">
   <link rel="stylesheet" href="/juegos/juegos.css">
 </head>
@@ -125,6 +128,7 @@
     <p class="ojo">Un momentito</p>
     <h1>No pudimos abrir el Recreo</h1>
     <p id="aviso-msg"></p>
+    <p class="nota detalle-error" id="aviso-detalle" hidden></p>
     <button type="button" class="btn btn-primario" id="aviso-reintentar">Intentar de nuevo</button>
     <button type="button" class="btn btn-sec" id="aviso-salir">Cerrar sesión</button>
   </section>

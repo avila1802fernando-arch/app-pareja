@@ -1,0 +1,12 @@
+{
+  "name": "recreo-pruebas-sql",
+  "private": true,
+  "type": "module",
+  "description": "Prueba familia.sql en un Postgres local (PGlite). No toca la base real.",
+  "scripts": {
+    "test": "node familia.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17"
+  }
+}

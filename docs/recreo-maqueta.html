@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recreo · maqueta</title>
+<!-- Maqueta de diseño del Recreo (juegos en familia). NO es la app: es la referencia visual del plan
+     docs/plan-familia.md. Los tokens de :root son los mismos que debe usar familia/estilos.css. -->
+<style>
+@font-face{font-family:"Fredoka";font-style:normal;font-weight:500 700;font-display:swap;src:url(../public/fuentes/fredoka-v17.woff2) format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:400 800;font-display:swap;src:url(../public/fuentes/nunito-v32.woff2) format("woff2")}
+
+/* ================= TOKENS DEL RECREO (copiar tal cual a familia/estilos.css) ================= */
+:root{
+  /* superficies: crema de cuaderno, tarjetas blancas */
+  --bg:#FFF6E5;--bg-hundido:#FFEFD2;--card:#FFFFFF;--linea:#E8D7B6;--cuadricula:rgba(44,85,224,.075);
+  /* tinta */
+  --tinta:#1D2343;--tinta-2:#4E567C;--tinta-fija:#1D2343;
+  /* marca: azul (acciones) y sol (jugar) */
+  --primario:#2C55E0;--primario-hondo:#1C3BAE;--primario-suave:#DFE7FF;--sobre-primario:#FFFFFF;
+  --sol:#FFC53D;--sol-hondo:#C98A00;--sol-suave:#FFF0C2;
+  /* podio */
+  --oro:#F4B22A;--oro-claro:#FFE7A3;--plata:#C9D1DE;--plata-claro:#F1F4F9;--bronce:#E3A06A;--bronce-claro:#FBDCC2;
+  /* estados */
+  --ok:#12805A;--error:#C0392B;
+  /* el color de cada persona: anillo (--c-*) y fondo suave (--t-*) */
+  --c-azul:#3B82F6;--t-azul:#DCE8FF;--c-coral:#E8603F;--t-coral:#FFE1D9;--c-menta:#0E9C82;--t-menta:#D2F4EC;
+  --c-uva:#7A5AF0;--t-uva:#E7E0FF;--c-sol:#B07A00;--t-sol:#FFF0C2;--c-hoja:#3A9A3F;--t-hoja:#DDF2DE;
+  /* forma */
+  --r-s:12px;--r-m:16px;--r-l:22px;--r-xl:28px;
+  --sombra-arcilla:0 2px 0 rgba(29,35,67,.05),0 14px 28px -18px rgba(29,35,67,.5),inset 0 -3px 0 rgba(29,35,67,.05),inset 0 2px 0 rgba(255,255,255,.85);
+  --sombra-sticker:0 8px 16px -10px rgba(29,35,67,.55);
+  /* letra: base 17 px; "Letra grande" la sube a ×1.15 */
+  --f-titulo:"Fredoka","Nunito",system-ui,sans-serif;--f-texto:"Nunito","Segoe UI",system-ui,sans-serif;
+  --emoji:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;
+  /* movimiento */
+  --t-rapido:150ms;--t-medio:240ms;--t-largo:320ms;--salida:cubic-bezier(.2,.8,.2,1);--resorte:cubic-bezier(.34,1.56,.64,1);
+  color-scheme:light;
+}
+:root[data-tema="oscuro"]{
+  --bg:#0F1428;--bg-hundido:#232B52;--card:#1A2140;--linea:#2F3866;--cuadricula:rgba(134,162,255,.06);
+  --tinta:#F1F3FF;--tinta-2:#AAB2D8;
+  --primario:#86A2FF;--primario-hondo:#4C66D6;--primario-suave:#26305E;--sobre-primario:#0B1030;
+  --sol:#FFD35C;--sol-hondo:#B98300;--sol-suave:#3A3420;
+  --oro:#FFC746;--oro-claro:#FFE7A3;--plata:#AEB8CC;--plata-claro:#E4E9F2;--bronce:#E0A070;--bronce-claro:#F6D3B5;
+  --ok:#4CD49A;--error:#FF8A80;
+  --t-azul:#22336A;--t-coral:#4A2A2A;--t-menta:#173F3E;--t-uva:#2F2766;--t-sol:#3E3317;--t-hoja:#1E3D26;
+  --c-azul:#6EA2FF;--c-coral:#FF8A6B;--c-menta:#3DD1B4;--c-uva:#A28BFF;--c-sol:#FFC94A;--c-hoja:#6CCB70;
+  --sombra-arcilla:0 2px 0 rgba(0,0,0,.25),0 16px 30px -18px rgba(0,0,0,.8),inset 0 -3px 0 rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.05);
+  --sombra-sticker:0 8px 18px -10px rgba(0,0,0,.8);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-tema="claro"]){
+    --bg:#0F1428;--bg-hundido:#232B52;--card:#1A2140;--linea:#2F3866;--cuadricula:rgba(134,162,255,.06);
+    --tinta:#F1F3FF;--tinta-2:#AAB2D8;
+    --primario:#86A2FF;--primario-hondo:#4C66D6;--primario-suave:#26305E;--sobre-primario:#0B1030;
+    --sol:#FFD35C;--sol-hondo:#B98300;--sol-suave:#3A3420;
+    --oro:#FFC746;--oro-claro:#FFE7A3;--plata:#AEB8CC;--plata-claro:#E4E9F2;--bronce:#E0A070;--bronce-claro:#F6D3B5;
+    --ok:#4CD49A;--error:#FF8A80;
+    --t-azul:#22336A;--t-coral:#4A2A2A;--t-menta:#173F3E;--t-uva:#2F2766;--t-sol:#3E3317;--t-hoja:#1E3D26;
+    --c-azul:#6EA2FF;--c-coral:#FF8A6B;--c-menta:#3DD1B4;--c-uva:#A28BFF;--c-sol:#FFC94A;--c-hoja:#6CCB70;
+    --sombra-arcilla:0 2px 0 rgba(0,0,0,.25),0 16px 30px -18px rgba(0,0,0,.8),inset 0 -3px 0 rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.05);
+    --sombra-sticker:0 8px 18px -10px rgba(0,0,0,.8);
+    color-scheme:dark;
+  }
+}
+.c-azul{--c:var(--c-azul);--t:var(--t-azul)}.c-coral{--c:var(--c-coral);--t:var(--t-coral)}.c-menta{--c:var(--c-menta);--t:var(--t-menta)}
+.c-uva{--c:var(--c-uva);--t:var(--t-uva)}.c-sol{--c:var(--c-sol);--t:var(--t-sol)}.c-hoja{--c:var(--c-hoja);--t:var(--t-hoja)}
+
+/* ================= BASE ================= */
+*{box-sizing:border-box}
+html{font-size:17px;-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--f-texto);color:var(--tinta);line-height:1.5;background-color:var(--bg);
+  background-image:linear-gradient(var(--cuadricula) 1px,transparent 1px),linear-gradient(90deg,var(--cuadricula) 1px,transparent 1px);
+  background-size:26px 26px}
+h1,h2,h3{font-family:var(--f-titulo);font-weight:600;line-height:1.15;margin:0}
+p{margin:0}
+.ico{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.emo{font-family:var(--emoji);font-style:normal;line-height:1}
+.ojo{font:800 .78rem/1.2 var(--f-texto);letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-2)}
+.nota{font-size:.88rem;color:var(--tinta-2)}
+
+/* ================= COMPONENTES ================= */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:56px;padding:0 22px;border:0;border-radius:var(--r-m);
+  font:600 1.06rem/1 var(--f-titulo);cursor:pointer;transition:transform var(--t-rapido) var(--salida),box-shadow var(--t-rapido) var(--salida);-webkit-tap-highlight-color:transparent}
+.btn:focus-visible{outline:3px solid var(--primario);outline-offset:3px}
+.btn-primario{background:var(--primario);color:var(--sobre-primario);box-shadow:0 4px 0 var(--primario-hondo)}
+.btn-sol{background:var(--sol);color:var(--tinta-fija);box-shadow:0 4px 0 var(--sol-hondo)}
+.btn-sec{background:var(--card);color:var(--tinta);border:2px solid var(--linea);box-shadow:0 3px 0 var(--linea)}
+.btn:active{transform:translateY(3px)}
+.btn-primario:active{box-shadow:0 1px 0 var(--primario-hondo)}.btn-sol:active{box-shadow:0 1px 0 var(--sol-hondo)}.btn-sec:active{box-shadow:0 0 0 var(--linea)}
+.btn-ancho{width:100%}
+.btn-chico{min-height:48px;padding:0 18px;font-size:1rem}
+.enlace{background:none;border:0;padding:12px 4px;min-height:48px;font:700 .98rem var(--f-texto);color:var(--primario);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.tarjeta{background:var(--card);border:2px solid var(--linea);border-radius:var(--r-l);box-shadow:var(--sombra-arcilla)}
+/* el color sale de la clase c-* de la persona (en el mismo elemento o en uno de afuera); sin ella, azul */
+.av{width:48px;height:48px;border-radius:50%;background:var(--t,var(--t-azul));box-shadow:inset 0 0 0 3px var(--c,var(--c-azul));
+  display:grid;place-items:center;font-size:1.45rem;flex:none}
+.av.g{width:64px;height:64px;font-size:1.95rem}.av.xg{width:96px;height:96px;font-size:2.9rem;box-shadow:inset 0 0 0 4px var(--c,var(--c-azul))}
+.av.ch{width:36px;height:36px;font-size:1.1rem;box-shadow:inset 0 0 0 2.5px var(--c,var(--c-azul))}
+.puesto{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:700 1rem/1 var(--f-titulo);background:var(--bg-hundido);color:var(--tinta);flex:none}
+.puesto.p1{background:radial-gradient(circle at 35% 30%,var(--oro-claro),var(--oro) 70%);color:#4A3000;box-shadow:inset 0 -2px 0 rgba(0,0,0,.14),0 0 0 2.5px var(--card),0 0 0 4.5px var(--oro)}
+.puesto.p2{background:radial-gradient(circle at 35% 30%,var(--plata-claro),var(--plata) 70%);color:#2B3245;box-shadow:inset 0 -2px 0 rgba(0,0,0,.12),0 0 0 2.5px var(--card),0 0 0 4.5px var(--plata)}
+.puesto.p3{background:radial-gradient(circle at 35% 30%,var(--bronce-claro),var(--bronce) 70%);color:#4A2509;box-shadow:inset 0 -2px 0 rgba(0,0,0,.12),0 0 0 2.5px var(--card),0 0 0 4.5px var(--bronce)}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:2px solid var(--linea);background:var(--card);font:700 .95rem var(--f-texto);color:var(--tinta)}
+.chip.on{border-color:var(--primario);background:var(--primario-suave);color:var(--primario)}
+.segmento{display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:var(--r-m);background:var(--bg-hundido);border:2px solid var(--linea)}
+.segmento span{display:grid;place-items:center;min-height:44px;border-radius:12px;font:700 .98rem var(--f-texto);color:var(--tinta-2)}
+.segmento span.on{background:var(--card);color:var(--tinta);box-shadow:0 2px 0 var(--linea),0 6px 14px -10px rgba(29,35,67,.5)}
+.interruptor{position:relative;width:60px;height:36px;border-radius:999px;background:var(--bg-hundido);border:2px solid var(--linea);flex:none}
+.interruptor::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:var(--card);box-shadow:0 2px 4px rgba(29,35,67,.35)}
+.interruptor.on{background:var(--primario);border-color:var(--primario)}
+.interruptor.on::after{left:27px}
+.sticker{border:3px solid #fff;box-shadow:var(--sombra-sticker)}
+:root[data-tema="oscuro"] .sticker{border-color:#2A3360}
+@media (prefers-color-scheme:dark){:root:not([data-tema="claro"]) .sticker{border-color:#2A3360}}
+.aviso{display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:var(--r-m);background:var(--tinta);color:var(--bg);font-weight:700;box-shadow:0 14px 26px -14px rgba(0,0,0,.6)}
+
+/* arte de cada juego (stickers de 84 px) */
+.arte{position:relative;width:84px;height:84px;border-radius:22px;overflow:hidden;flex:none;transform:rotate(-4deg)}
+.arte .emo{position:absolute}
+.arte-lluvia{background:radial-gradient(circle at 30% 20%,#4B57C9,#1B1F5E 72%)}
+.arte-lluvia::before{content:"";position:absolute;inset:0;background:radial-gradient(1.4px 1.4px at 20% 70%,#fff,transparent),radial-gradient(1.2px 1.2px at 75% 30%,#fff,transparent),radial-gradient(1px 1px at 55% 85%,#fff,transparent),radial-gradient(1.3px 1.3px at 85% 75%,#fff,transparent);opacity:.9}
+.arte-vuelo{background:linear-gradient(180deg,#8FCBFF,#E4F3FF)}
+.arte-memoria{background:linear-gradient(140deg,#35CDB0,#0E9C82)}
+.arte-fusion{background:linear-gradient(140deg,#FFD15C,#FF8A5B)}
+.nube{position:absolute;background:#fff;border-radius:999px}
+.nube::before,.nube::after{content:"";position:absolute;background:#fff;border-radius:50%}
+.mini-carta{position:absolute;width:30px;height:38px;border-radius:7px;border:2px solid #fff;display:grid;place-items:center}
+.mini-ficha{position:absolute;width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.88);display:grid;place-items:center;font-size:1.05rem;box-shadow:inset 0 -2px 0 rgba(0,0,0,.08)}
+
+/* ================= LA PÁGINA DE LA MAQUETA ================= */
+.pagina{max-width:1240px;margin:0 auto;padding:28px 16px 64px}
+.cabecera{display:flex;flex-wrap:wrap;align-items:center;gap:18px 24px;margin-bottom:28px}
+.marca{display:flex;align-items:center;gap:14px}
+.marca h1{font-size:2.6rem;font-weight:700;letter-spacing:-.01em}
+.controles{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+.controles button{cursor:pointer}
+.intro{max-width:70ch;font-size:1.05rem;margin-bottom:34px}
+.intro b{font-weight:800}
+.seccion{margin:42px 0 18px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.seccion h2{font-size:1.65rem}
+.guia{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.guia>.tarjeta{padding:20px}
+.guia h3{font-size:1.15rem;margin-bottom:12px}
+.muestras{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.muestra{border-radius:14px;padding:44px 10px 8px;font-size:.75rem;line-height:1.25;border:2px solid var(--linea)}
+.muestra b{display:block;font-size:.8rem}
+.personas{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 8px;text-align:center;font-size:.82rem;font-weight:700}
+.personas .av{margin:0 auto 6px}
+.fila-comp{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.tipos p{margin-bottom:8px}
+.reglas{margin:0;padding-left:1.2em;font-size:.95rem}
+.reglas li{margin-bottom:6px}
+
+/* ---------- teléfonos ---------- */
+.pantallas{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:30px 22px;justify-items:center}
+.pantalla{display:flex;flex-direction:column;gap:10px;align-items:center;width:100%;max-width:360px}
+.pantalla>p{font:700 .95rem var(--f-texto);text-align:center}
+.pantalla>p small{display:block;font-weight:600;color:var(--tinta-2);font-size:.82rem}
+.telefono{position:relative;width:100%;max-width:360px;height:760px;border-radius:44px;overflow:hidden;
+  border:10px solid #141936;box-shadow:0 30px 60px -30px rgba(20,25,54,.7),0 0 0 1px rgba(255,255,255,.08) inset;
+  background-color:var(--bg);background-image:linear-gradient(var(--cuadricula) 1px,transparent 1px),linear-gradient(90deg,var(--cuadricula) 1px,transparent 1px);background-size:26px 26px}
+.estado{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font:700 .78rem var(--f-texto);color:var(--tinta)}
+.estado i{width:84px;height:22px;border-radius:999px;background:#141936}
+.contenido{position:absolute;top:34px;left:0;right:0;bottom:0;overflow:hidden;padding:12px 16px 0}
+.contenido.con-barra{bottom:76px}
+.barra{position:absolute;left:0;right:0;bottom:0;height:76px;padding-bottom:8px;background:var(--card);border-top:2px solid var(--linea);display:grid;grid-template-columns:repeat(3,1fr)}
+.barra span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:800 .8rem var(--f-texto);color:var(--tinta-2)}
+.barra .caja{width:60px;height:32px;border-radius:999px;display:grid;place-items:center}
+.barra .on{color:var(--primario)}
+.barra .on .caja{background:var(--primario-suave)}
+
+/* pantalla 1: ¿quién va a jugar? */
+.entrada{display:flex;flex-direction:column;gap:14px;height:100%}
+.entrada .logo-g{display:flex;flex-direction:column;align-items:center;gap:8px;margin:18px 0 6px;text-align:center}
+.entrada .logo-g h2{font-size:2.5rem;font-weight:700}
+.quien{display:flex;align-items:center;gap:14px;padding:14px 16px;min-height:88px;width:100%;text-align:left;cursor:pointer;color:var(--tinta)}
+.quien strong{font:600 1.45rem/1.1 var(--f-titulo);display:block}
+.quien small{color:var(--tinta-2);font-weight:700;font-size:.9rem}
+.quien .ico{margin-left:auto;color:var(--tinta-2)}
+
+/* pantalla 2: los juegos */
+.saludo{display:flex;align-items:center;gap:12px;margin:2px 0 14px}
+.saludo h2{font-size:1.6rem}
+.saludo .boton-redondo{margin-left:auto}
+.boton-redondo{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:2px solid var(--linea);color:var(--tinta);box-shadow:0 3px 0 var(--linea);flex:none}
+.novedades{position:relative;padding:14px 16px 10px;margin-bottom:14px;background:var(--sol-suave);border-color:color-mix(in srgb,var(--sol) 60%,var(--linea));transform:rotate(-.6deg)}
+.novedades ul{list-style:none;margin:8px 0 2px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:.95rem;font-weight:600}
+.novedades li{display:flex;gap:8px;align-items:flex-start}
+.novedades .enlace{padding:6px 0;min-height:40px}
+.juego{display:grid;grid-template-columns:84px minmax(0,1fr);gap:4px 14px;padding:14px;margin-bottom:12px}
+.juego h3{font-size:1.2rem}
+.juego .lema{font-size:.86rem;color:var(--tinta-2);line-height:1.35}
+.juego .marcas{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding-top:10px;border-top:2px dashed var(--linea)}
+.juego .lider{display:flex;align-items:center;gap:8px;min-width:0}
+.juego .lider b{font:600 1rem var(--f-titulo);display:block;white-space:nowrap}
+.juego .lider small{display:block;font-size:.8rem;color:var(--tinta-2);font-weight:700;white-space:nowrap}
+.corona{width:22px;height:22px;fill:var(--oro);stroke:#8A5A00;stroke-width:1.3;stroke-linejoin:round;flex:none}
+
+/* pantalla 3: ranking */
+.ranking h2{font-size:1.7rem;margin:2px 0 12px}
+.podio{display:grid;grid-template-columns:1fr 1.1fr 1fr;align-items:end;gap:6px;padding:14px 12px 0;margin:12px 0 14px;overflow:hidden}
+.podio .col{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.podio .col b{font:600 .98rem var(--f-titulo)}
+.podio .medallas{font-size:.76rem;font-weight:800;color:var(--tinta-2);white-space:nowrap}
+.escalon{width:100%;border-radius:14px 14px 0 0;display:grid;place-items:center;font:700 1.5rem var(--f-titulo);color:var(--tinta-fija)}
+.escalon.e1{height:86px;background:linear-gradient(var(--oro-claro),var(--oro))}
+.escalon.e2{height:62px;background:linear-gradient(var(--plata-claro),var(--plata))}
+.escalon.e3{height:46px;background:linear-gradient(var(--bronce-claro),var(--bronce))}
+.tabla{padding:14px 12px 8px}
+.tabla-titulo{display:flex;align-items:center;gap:10px;padding:0 4px 8px}
+.tabla-titulo .arte{width:40px;height:40px;border-radius:12px;transform:none;border-width:2px}
+.tabla-titulo h3{font-size:1.1rem}
+.fila{display:grid;grid-template-columns:36px 44px minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px;border-radius:16px}
+.fila .av{width:44px;height:44px;font-size:1.3rem}
+.fila b{font:600 1.04rem var(--f-titulo);display:block}
+.fila small{font-size:.8rem;color:var(--tinta-2);font-weight:700}
+.fila .pts{font:600 1.15rem var(--f-titulo);font-variant-numeric:tabular-nums;text-align:right}
+.fila.yo{background:color-mix(in srgb,var(--c) 13%,var(--card));box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--c) 55%,transparent)}
+.etiqueta-yo{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--c);color:#fff;font:800 .7rem/1.5 var(--f-texto);vertical-align:2px}
+
+/* pantallas 4 y 6: dentro de un juego */
+.jv{position:absolute;inset:34px 0 0;display:flex;flex-direction:column;gap:8px;padding:8px 12px 12px}
+.jv-barra{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;align-items:center;gap:8px}
+.jv-barra h3{text-align:center;font-size:1.12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jv-hud{display:grid;grid-template-columns:repeat(4,1fr);padding:8px 6px;border-radius:18px;background:#141936;color:#fff;font-family:var(--f-titulo);text-align:center}
+.jv-hud span{display:block;font:800 .66rem var(--f-texto);letter-spacing:.12em;text-transform:uppercase;opacity:.75}
+.jv-hud b{font-size:1.2rem;font-weight:600;font-variant-numeric:tabular-nums}
+.jv-campo{position:relative;flex:1;border-radius:26px;overflow:hidden;border:3px solid var(--card);box-shadow:var(--sombra-arcilla)}
+.cielo-noche{background:radial-gradient(120% 80% at 50% 0%,#3A44A8,#151845 60%,#090B26)}
+.cielo-noche::before{content:"";position:absolute;inset:0;opacity:.85;background:
+  radial-gradient(1.5px 1.5px at 12% 18%,#fff,transparent),radial-gradient(1.2px 1.2px at 32% 40%,#fff,transparent),radial-gradient(1.6px 1.6px at 70% 12%,#fff,transparent),
+  radial-gradient(1.1px 1.1px at 86% 46%,#fff,transparent),radial-gradient(1.3px 1.3px at 48% 70%,#fff,transparent),radial-gradient(1.2px 1.2px at 18% 84%,#fff,transparent),
+  radial-gradient(1.4px 1.4px at 80% 88%,#fff,transparent),radial-gradient(1px 1px at 60% 30%,#fff,transparent)}
+.ficha-caida{position:absolute;width:52px;height:52px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:1.6rem;box-shadow:0 4px 10px rgba(0,0,0,.35),inset 0 0 0 3px var(--anillo,#F5B82E)}
+.ficha-caida.mala{background:#3A3F47;--anillo:#E2E8F0}
+.ficha-caida.cuidar{outline:2.5px dashed #FF9F6B;outline-offset:5px}
+/* centrada si cabe; si no cabe, se desplaza desde arriba (nunca se corta el título) */
+.capa{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px;text-align:center;overflow:auto;
+  background:color-mix(in srgb,var(--card) 90%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.capa>:first-child{margin-top:auto}
+.capa>:last-child{margin-bottom:auto}
+.capa h3{font-size:1.5rem}
+.reglas-juego{list-style:none;margin:2px 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;width:100%;text-align:left}
+.reglas-juego li{display:flex;align-items:center;gap:8px;font-size:.9rem;font-weight:700;line-height:1.2}
+.reglas-juego li .emo{font-size:1.35rem;width:1.7rem;text-align:center;flex:none}
+.reglas-juego li.malo{color:var(--error)}
+.metas{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.metas span{padding:6px 12px;border-radius:999px;background:var(--bg-hundido);border:2px solid var(--linea);font-size:.84rem;font-weight:700;color:var(--tinta-2)}
+.metas span b{color:var(--tinta);font-family:var(--f-titulo);font-weight:600}
+.metas span.lider{border-color:var(--oro)}
+.rango{font:700 1.7rem/1.05 var(--f-titulo);color:var(--primario)}
+.puntaje{display:flex;align-items:baseline;gap:6px;font-family:var(--f-titulo)}
+.puntaje b{font-size:3rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.puntaje small{font-size:1rem;font-weight:600;color:var(--tinta-2)}
+.insignia{padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,var(--oro-claro),var(--oro));color:#4A3000;font:800 .92rem var(--f-texto);box-shadow:0 10px 22px -12px rgba(244,178,42,.9)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%}
+.stats div{padding:8px 4px;border-radius:14px;background:var(--bg-hundido);border:2px solid var(--linea)}
+.stats b{display:block;font:600 1.15rem var(--f-titulo)}
+.stats span{font:800 .66rem var(--f-texto);letter-spacing:.06em;text-transform:uppercase;color:var(--tinta-2)}
+.tablero-memoria{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:16px;background:linear-gradient(165deg,#E3FAF4,#FFF6E5)}
+.tablero-memoria i{border-radius:12px;background:linear-gradient(150deg,#35CDB0,#0B7F6A);border:3px solid #fff}
+
+/* pantalla 5: yo */
+.yo-cab{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 0 16px;margin:6px 0 14px;overflow:hidden;text-align:center}
+.yo-cab .cinta{width:100%;padding:10px 0 8px;background:var(--c);color:#fff;font:800 .82rem/1 var(--f-texto);letter-spacing:.16em;text-transform:uppercase}
+.yo-cab .cinta b{display:block;font:700 1.5rem/1.1 var(--f-titulo);letter-spacing:0;text-transform:none;margin-top:3px}
+.yo-cab h2{font-size:2rem}
+.personajes{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0 14px}
+.personajes span{aspect-ratio:1;border-radius:14px;display:grid;place-items:center;font-size:1.45rem;background:var(--card);border:2px solid var(--linea)}
+.personajes span.on{border-color:var(--c);background:var(--t);box-shadow:0 0 0 2px var(--c)}
+.colores{display:flex;gap:10px;margin:8px 0 16px}
+.colores span{width:40px;height:40px;border-radius:50%;background:var(--c);border:3px solid var(--card);box-shadow:0 0 0 2px var(--linea)}
+.colores span.on{box-shadow:0 0 0 3px var(--tinta)}
+.ajuste{display:flex;align-items:center;gap:14px;padding:12px 4px;border-bottom:2px solid var(--linea)}
+.ajuste div{flex:1;min-width:0}
+.ajuste b{display:block;font-weight:800}
+.ajuste small{display:block;color:var(--tinta-2);font-size:.86rem;line-height:1.3}
+.grande{font-size:19.5px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-juegos" viewBox="0 0 24 24"><path d="M7 7.5h10a5 5 0 0 1 4.9 6l-.8 3.6a2.4 2.4 0 0 1-4.1 1.1L14.6 16H9.4L7 18.2a2.4 2.4 0 0 1-4.1-1.1l-.8-3.6a5 5 0 0 1 4.9-6Z"/><path d="M8 10.5v3M6.5 12h3"/><circle cx="15.5" cy="11.2" r=".6"/><circle cx="17.3" cy="13" r=".6"/></symbol>
+  <symbol id="i-ranking" viewBox="0 0 24 24"><path d="M9 20.5V9.5h6v11M3 20.5v-7h6M15 20.5V13h6v7.5M2.5 20.5h19"/><path d="m12 3 .9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3Z"/></symbol>
+  <symbol id="i-yo" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c.9-4 4-6 8-6s7.1 2 8 6"/></symbol>
+  <symbol id="i-jugar" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></symbol>
+  <symbol id="i-flecha" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-sonido" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-compartir" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
+  <symbol id="i-otra" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1L19.5 9M19.5 4.5V9H15M19.5 12a7.5 7.5 0 0 1-13 5.1L4.5 15M4.5 19.5V15H9"/></symbol>
+  <symbol id="i-instalar" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M12 7v7M9 11.5l3 3 3-3M10 18.5h4"/></symbol>
+  <symbol id="i-salir" viewBox="0 0 24 24"><path d="M14.5 4.5h3a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3M10 16.5 14.5 12 10 7.5M14.5 12H4"/></symbol>
+  <symbol id="i-corona" viewBox="0 0 24 24"><path d="M3.5 8.5 8 12l4-6.5 4 6.5 4.5-3.5-1.8 9.5H5.3L3.5 8.5Z"/></symbol>
+  <symbol id="logo" viewBox="0 0 64 64"><g transform="rotate(-6 32 32)"><rect x="5" y="5" width="25" height="25" rx="8" fill="#E8603F"/><rect x="34" y="5" width="25" height="25" rx="8" fill="#2C55E0"/><rect x="5" y="34" width="25" height="25" rx="8" fill="#0E9C82"/><rect x="34" y="34" width="25" height="25" rx="8" fill="#FFC53D"/>
+    <path d="m17.5 10.5 1.9 3.9 4.3.6-3.1 3 .7 4.2-3.8-2-3.8 2 .7-4.2-3.1-3 4.3-.6Z" fill="#fff"/>
+    <path d="M39 18.5 53.5 12 47.5 25l-2.6-5.2Z" fill="#fff"/><path d="m44.9 19.8 8.6-7.8" stroke="#2C55E0" stroke-width="1.6" stroke-linecap="round"/>
+    <rect x="11" y="39" width="10" height="14" rx="2.5" fill="#fff"/><rect x="16.5" y="41" width="9" height="13" rx="2.5" fill="#fff" stroke="#0E9C82" stroke-width="1.6"/>
+    <circle cx="42.5" cy="50" r="4.2" fill="#fff"/><circle cx="51" cy="51" r="4.2" fill="#fff"/><path d="M42.5 46c1-4.5 4-7 8.5-7.5M51 47c-.3-3.5-.8-6.2-.2-8.4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></g></symbol>
+</svg>
+
+<div class="pagina">
+  <header class="cabecera">
+    <div class="marca">
+      <svg width="64" height="64" aria-hidden="true"><use href="#logo"/></svg>
+      <div><p class="ojo">Maqueta de diseño</p><h1>Recreo</h1></div>
+    </div>
+    <div class="controles" role="group" aria-label="Ver la maqueta en">
+      <button type="button" class="chip on" data-tema="">Como el teléfono</button>
+      <button type="button" class="chip" data-tema="claro">Claro</button>
+      <button type="button" class="chip" data-tema="oscuro">Oscuro</button>
+    </div>
+  </header>
+  <p class="intro">La app de juegos para <b>Eli</b> y <b>Maritza</b>: los mismos cuatro juegos de Nosotros con otra cara y <b>sin nada romántico</b>, en su propia dirección web, con un ranking donde aparecen los cuatro (también Fernando y Martina). La idea visual es un <b>cuaderno cuadriculado del recreo</b>: hojas de cuadritos, stickers con borde blanco, un color para cada persona y botones gorditos que se hunden al tocarlos. Letra de 17 px (19,5 px con «Letra grande»), botones de 56 px y contraste AA o más en claro y oscuro.</p>
+
+  <div class="seccion"><h2>1 · Identidad</h2><span class="nota">Todo esto ya está en los tokens de arriba del archivo.</span></div>
+  <div class="guia">
+    <section class="tarjeta">
+      <h3>Colores</h3>
+      <div class="muestras">
+        <div class="muestra" style="background:var(--bg)"><b>Fondo</b>--bg</div>
+        <div class="muestra" style="background:var(--card)"><b>Tarjeta</b>--card</div>
+        <div class="muestra" style="background:var(--bg-hundido)"><b>Hundido</b>--bg-hundido</div>
+        <div class="muestra" style="background:var(--primario);color:var(--sobre-primario)"><b>Acciones</b>--primario</div>
+        <div class="muestra" style="background:var(--sol);color:var(--tinta-fija)"><b>Jugar</b>--sol</div>
+        <div class="muestra" style="background:var(--tinta);color:var(--bg)"><b>Tinta</b>--tinta</div>
+        <div class="muestra" style="background:var(--oro);color:#4A3000"><b>Oro</b>1º lugar</div>
+        <div class="muestra" style="background:var(--plata);color:#2B3245"><b>Plata</b>2º lugar</div>
+        <div class="muestra" style="background:var(--bronce);color:#4A2509"><b>Bronce</b>3º lugar</div>
+      </div>
+      <p class="nota" style="margin-top:12px">Nada de rosado ni rojo de amor: esos son de Nosotros.</p>
+    </section>
+    <section class="tarjeta">
+      <h3>Un color y un personaje por persona</h3>
+      <div class="personas">
+        <div><span class="av g c-uva emo">🦋</span>Eli · uva</div>
+        <div><span class="av g c-coral emo">🌺</span>Maritza · coral</div>
+        <div><span class="av g c-azul emo">🦊</span>Fernando · azul</div>
+        <div><span class="av g c-menta emo">🐧</span>Martina · menta</div>
+        <div><span class="av g c-sol emo">🦜</span>sol</div>
+        <div><span class="av g c-hoja emo">🐢</span>hoja</div>
+      </div>
+      <p class="nota" style="margin-top:12px">El color nunca va solo: siempre con nombre, personaje y número de puesto.</p>
+    </section>
+    <section class="tarjeta tipos">
+      <h3>Letras</h3>
+      <p style="font:700 2rem/1.1 var(--f-titulo)">Fredoka 700 · títulos</p>
+      <p style="font:600 1.3rem/1.2 var(--f-titulo)">Fredoka 600 · botones y puntajes 1.240</p>
+      <p style="font-size:1rem">Nunito 17 px · el texto de siempre, para leer sin lentes.</p>
+      <p class="nota">Nunito 15 px · notas y datos secundarios (nunca menos de 13 px).</p>
+      <p class="nota" style="margin-top:6px">Sin Fraunces ni letra manuscrita: esas son de las cartas de Nosotros. Las dos fuentes ya están en <code>public/fuentes/</code> y se copian.</p>
+    </section>
+    <section class="tarjeta">
+      <h3>Botones y piezas</h3>
+      <div class="fila-comp"><span class="btn btn-sol"><svg class="ico"><use href="#i-jugar"/></svg>Jugar</span><span class="btn btn-primario">Entrar</span><span class="btn btn-sec">Practicar</span></div>
+      <div class="fila-comp"><span class="puesto p1">1</span><span class="puesto p2">2</span><span class="puesto p3">3</span><span class="puesto">4</span><span class="chip on">De siempre</span><span class="chip">De hoy</span></div>
+      <div class="fila-comp"><span class="interruptor on" aria-hidden="true"></span><span class="interruptor" aria-hidden="true"></span><span class="aviso">¡Partida guardada!</span></div>
+      <p class="nota">Al tocarlos, los botones bajan 3 px (sin mover nada alrededor). Todo lo que se toca mide 48 px o más.</p>
+    </section>
+    <section class="tarjeta">
+      <h3>Los cuatro juegos</h3>
+      <div class="fila-comp" style="gap:14px">
+        <span class="arte arte-lluvia sticker"><i class="emo" style="left:12px;top:12px;font-size:1.3rem">⭐</i><i class="emo" style="left:38px;top:26px;font-size:1.6rem">🌠</i><i class="emo" style="left:10px;top:50px;font-size:1.2rem">👽</i><i class="emo" style="left:52px;top:56px;font-size:1rem">☄️</i></span>
+        <span class="arte arte-vuelo sticker"><span class="nube" style="left:8px;top:54px;width:34px;height:12px"></span><span class="nube" style="left:48px;top:18px;width:26px;height:10px"></span><svg viewBox="0 0 48 48" style="position:absolute;left:18px;top:20px;width:46px;height:46px"><path d="M4 22 44 6 30 42l-8-14Z" fill="#fff" stroke="#E8603F" stroke-width="2.4" stroke-linejoin="round"/><path d="m22 28 22-22" stroke="#E8603F" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+        <span class="arte arte-memoria sticker"><span class="mini-carta" style="left:12px;top:16px;background:repeating-linear-gradient(45deg,#0B7F6A 0 5px,#109F86 5px 10px);transform:rotate(-8deg)"></span><span class="mini-carta emo" style="left:40px;top:28px;background:#fff;font-size:1.25rem;transform:rotate(7deg)">🐢</span></span>
+        <span class="arte arte-fusion sticker"><span class="mini-ficha emo" style="left:10px;top:10px">🍒</span><span class="mini-ficha emo" style="left:44px;top:10px">🍓</span><span class="mini-ficha emo" style="left:10px;top:44px">🍇</span><span class="mini-ficha emo" style="left:44px;top:44px">🍉</span></span>
+      </div>
+      <ul class="reglas">
+        <li><b>Lluvia de estrellas</b> (era Atrapa los corazones)</li>
+        <li><b>Avioncito de papel</b> (era Vuelo hasta ti)</li>
+        <li><b>Memoria del Ecuador</b> (era Memoria de nosotros)</li>
+        <li><b>Fusión de frutas</b> (era Fusión de corazones)</li>
+      </ul>
+    </section>
+    <section class="tarjeta">
+      <h3>Reglas que no se rompen</h3>
+      <ul class="reglas">
+        <li>Ni corazones, ni besos, ni «pareja»: lo revisa <code>paridad.mjs</code> (está en el plan).</li>
+        <li>Mismo puntaje que en Nosotros, así el ranking de los cuatro es justo.</li>
+        <li>Íconos de la app en SVG con trazo de 2,2; los emojis solo dentro de los juegos y como personaje.</li>
+        <li>Una sola animación importante por pantalla; con «reducir movimiento» no hay confeti.</li>
+        <li>Textos cortos y neutros («¡Primer lugar!», no «campeón/a»).</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="seccion"><h2>2 · Pantallas</h2><span class="nota">Teléfono de 360 px. Datos de ejemplo iguales en todas.</span></div>
+  <div class="pantallas">
+
+    <!-- 1 · Entrada -->
+    <div class="pantalla">
+      <div class="telefono">
+        <div class="estado"><span>9:41</span><i></i><span>●●●</span></div>
+        <div class="contenido">
+          <div class="entrada">
+            <div class="logo-g">
+              <svg width="92" height="92" aria-hidden="true"><use href="#logo"/></svg>
+              <h2>Recreo</h2>
+              <p class="ojo">Juegos en familia</p>
+            </div>
+            <h3 style="font-size:1.35rem">¿Quién va a jugar?</h3>
+            <div class="quien tarjeta"><span class="av g c-uva emo">🦋</span><span><strong>Eli</strong><small>Toca para entrar</small></span><svg class="ico"><use href="#i-flecha"/></svg></div>
+            <div class="quien tarjeta"><span class="av g c-coral emo">🌺</span><span><strong>Maritza</strong><small>Toca para entrar</small></span><svg class="ico"><use href="#i-flecha"/></svg></div>
+            <p class="nota" style="text-align:center">La primera vez eliges una contraseña. Después, el teléfono se acuerda de ti.</p>
+            <button type="button" class="enlace" style="align-self:center">¿Eres Fernando o Martina?</button>
+          </div>
+        </div>
+      </div>
+      <p>¿Quién va a jugar?<small>Tocas tu nombre: nada de escribir usuarios.</small></p>
+    </div>
+
+    <!-- 2 · Juegos -->
+    <div class="pantalla">
+      <div class="telefono">
+        <div class="estado"><span>9:41</span><i></i><span>●●●</span></div>
+        <div class="contenido con-barra">
+          <div class="saludo">
+            <span class="av g c-uva emo">🦋</span>
+            <div><h2>¡Hola, Eli!</h2><p class="nota">¿Qué jugamos hoy?</p></div>
+            <span class="boton-redondo" aria-label="Sonido"><svg class="ico"><use href="#i-sonido"/></svg></span>
+          </div>
+          <section class="novedades tarjeta">
+            <p class="ojo">Mientras no estabas</p>
+            <ul>
+              <li><span class="emo">😮</span><span>Maritza te pasó en Memoria: 1.120 pts</span></li>
+              <li><span class="emo">👑</span><span>Martina es primer lugar en Avioncito</span></li>
+            </ul>
+            <button type="button" class="enlace">Ver el ranking</button>
+          </section>
+          <article class="juego tarjeta">
+            <span class="arte arte-lluvia sticker" style="grid-row:span 2"><i class="emo" style="left:12px;top:12px;font-size:1.3rem">⭐</i><i class="emo" style="left:38px;top:26px;font-size:1.6rem">🌠</i><i class="emo" style="left:10px;top:50px;font-size:1.2rem">👽</i><i class="emo" style="left:52px;top:56px;font-size:1rem">☄️</i></span>
+            <h3>Lluvia de estrellas</h3>
+            <p class="lema">Atrapa estrellas, rescata marcianitos y esquiva los meteoritos.</p>
+            <div class="marcas">
+              <span class="lider"><svg class="corona" viewBox="0 0 24 24"><use href="#i-corona"/></svg><span><b>Martina · 2.340</b><small>Tú: 1.800 · 3º lugar</small></span></span>
+              <span class="btn btn-sol btn-chico"><svg class="ico"><use href="#i-jugar"/></svg>Jugar</span>
+            </div>
+          </article>
+          <article class="juego tarjeta">
+            <span class="arte arte-vuelo sticker" style="grid-row:span 2"><span class="nube" style="left:8px;top:54px;width:34px;height:12px"></span><span class="nube" style="left:48px;top:18px;width:26px;height:10px"></span><svg viewBox="0 0 48 48" style="position:absolute;left:18px;top:20px;width:46px;height:46px"><path d="M4 22 44 6 30 42l-8-14Z" fill="#fff" stroke="#E8603F" stroke-width="2.4" stroke-linejoin="round"/><path d="m22 28 22-22" stroke="#E8603F" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+            <h3>Avioncito de papel</h3>
+            <p class="lema">Vuela lo más lejos que puedas sin chocar con las nubes.</p>
+            <div class="marcas">
+              <span class="lider"><svg class="corona" viewBox="0 0 24 24"><use href="#i-corona"/></svg><span><b>Martina · 3.200 km</b><small>Tú: todavía no juegas</small></span></span>
+              <span class="btn btn-sol btn-chico"><svg class="ico"><use href="#i-jugar"/></svg>Jugar</span>
+            </div>
+          </article>
+          <article class="juego tarjeta">
+            <span class="arte arte-memoria sticker" style="grid-row:span 2"><span class="mini-carta" style="left:12px;top:16px;background:repeating-linear-gradient(45deg,#0B7F6A 0 5px,#109F86 5px 10px);transform:rotate(-8deg)"></span><span class="mini-carta emo" style="left:40px;top:28px;background:#fff;font-size:1.25rem;transform:rotate(7deg)">🐢</span></span>
+            <h3>Memoria del Ecuador</h3>
+            <p class="lema">Encuentra los pares: animales, volcanes y sabores.</p>
+          </article>
+        </div>
+        <nav class="barra" aria-label="Secciones"><span class="on"><span class="caja"><svg class="ico"><use href="#i-juegos"/></svg></span>Juegos</span><span><span class="caja"><svg class="ico"><use href="#i-ranking"/></svg></span>Ranking</span><span><span class="caja"><svg class="ico"><use href="#i-yo"/></svg></span>Yo</span></nav>
+      </div>
+      <p>Juegos<small>Lo nuevo arriba; cada juego dice quién va primero y en qué puesto vas tú.</small></p>
+    </div>
+
+    <!-- 3 · Ranking -->
+    <div class="pantalla">
+      <div class="telefono">
+        <div class="estado"><span>9:41</span><i></i><span>●●●</span></div>
+        <div class="contenido con-barra ranking">
+          <h2>Ranking</h2>
+          <div class="segmento" role="group" aria-label="Ranking"><span class="on">De siempre</span><span>De hoy</span></div>
+          <section class="tarjeta" style="margin-top:14px;padding:14px 12px 0">
+            <p class="ojo" style="padding:0 4px">Medallero · los cuatro juegos</p>
+            <div class="podio" style="padding:10px 0 0;margin:0">
+              <div class="col"><span class="av g c-azul emo">🦊</span><b>Fernando</b><span class="medallas">🥇1 🥈2 🥉1</span><div class="escalon e2">2</div></div>
+              <div class="col"><svg class="corona" viewBox="0 0 24 24" style="width:28px;height:28px;margin-bottom:-4px"><use href="#i-corona"/></svg><span class="av g c-menta emo">🐧</span><b>Martina</b><span class="medallas">🥇2 🥉1</span><div class="escalon e1">1</div></div>
+              <div class="col"><span class="av g c-coral emo">🌺</span><b>Maritza</b><span class="medallas">🥇1 🥉1</span><div class="escalon e3">3</div></div>
+            </div>
+          </section>
+          <section class="tabla tarjeta" style="margin-top:14px">
+            <div class="tabla-titulo"><span class="arte arte-memoria sticker"><span class="mini-carta emo" style="left:7px;top:4px;width:22px;height:28px;background:#fff;font-size:.9rem">🐢</span></span><h3>Memoria del Ecuador</h3></div>
+            <div class="fila c-coral"><span class="puesto p1">1</span><span class="av c-coral emo">🌺</span><span><b>Maritza</b><small>9 partidas · hace 2 h</small></span><span class="pts">1.120</span></div>
+            <div class="fila yo c-uva"><span class="puesto p2">2</span><span class="av c-uva emo">🦋</span><span><b>Eli<span class="etiqueta-yo">Tú</span></b><small>14 partidas · ayer</small></span><span class="pts">980</span></div>
+            <div class="fila c-azul"><span class="puesto p3">3</span><span class="av c-azul emo">🦊</span><span><b>Fernando</b><small>6 partidas · el 20 oct</small></span><span class="pts">900</span></div>
+            <div class="fila c-menta"><span class="puesto">4</span><span class="av c-menta emo">🐧</span><span><b>Martina</b><small>3 partidas · el 18 oct</small></span><span class="pts">640</span></div>
+          </section>
+        </div>
+        <nav class="barra" aria-label="Secciones"><span><span class="caja"><svg class="ico"><use href="#i-juegos"/></svg></span>Juegos</span><span class="on"><span class="caja"><svg class="ico"><use href="#i-ranking"/></svg></span>Ranking</span><span><span class="caja"><svg class="ico"><use href="#i-yo"/></svg></span>Yo</span></nav>
+      </div>
+      <p>Ranking<small>Medallero de los cuatro juegos y, debajo, una tabla por juego. «De hoy» le da a todos una oportunidad nueva cada día.</small></p>
+    </div>
+
+    <!-- 4 · Fin de partida -->
+    <div class="pantalla">
+      <div class="telefono">
+        <div class="estado"><span>9:41</span><i></i><span>●●●</span></div>
+        <div class="jv">
+          <div class="jv-barra"><span class="boton-redondo" aria-label="Salir"><svg class="ico"><use href="#i-cerrar"/></svg></span><h3>Memoria del Ecuador</h3><span class="boton-redondo" aria-label="Sonido"><svg class="ico"><use href="#i-sonido"/></svg></span></div>
+          <div class="jv-hud"><div><span>Puntos</span><b>1.240</b></div><div><span>Ronda</span><b>3/3</b></div><div><span>Tiempo</span><b>0</b></div><div><span>Racha</span><b>—</b></div></div>
+          <div class="jv-campo">
+            <div class="tablero-memoria"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="capa">
+              <p class="ojo">Fin de la partida</p>
+              <p class="rango">¡Memoria de elefante!</p>
+              <div class="puntaje"><b>1.240</b><small>puntos</small></div>
+              <p class="insignia">👑 ¡Primer lugar! Pasaste a Maritza</p>
+              <p style="max-width:30ch;font-size:.98rem">Que el resto vaya preparando la revancha.</p>
+              <div class="stats"><div><b>10</b><span>pares</span></div><div><b>2</b><span>errores</span></div><div><b>3/3</b><span>rondas</span></div></div>
+              <span class="btn btn-sol btn-ancho"><svg class="ico"><use href="#i-otra"/></svg>Otra vez</span>
+              <span class="btn btn-sec btn-ancho"><svg class="ico"><use href="#i-compartir"/></svg>Retar por WhatsApp</span>
+              <button type="button" class="enlace">Volver a los juegos</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p>Fin de la partida<small>Siempre dice algo bueno: récord personal, un puesto más, o cuánto falta para el siguiente.</small></p>
+    </div>
+
+    <!-- 5 · Yo (con Letra grande) -->
+    <div class="pantalla">
+      <div class="telefono">
+        <div class="estado"><span>9:41</span><i></i><span>●●●</span></div>
+        <div class="contenido con-barra grande">
+          <section class="yo-cab tarjeta c-coral">
+            <div class="cinta">Hola, me llamo<b>Maritza</b></div>
+            <span class="av xg c-coral emo">🌺</span>
+          </section>
+          <p class="ojo">Tu personaje</p>
+          <div class="personajes c-coral"><span class="emo on">🌺</span><span class="emo">🦋</span><span class="emo">🐢</span><span class="emo">🦜</span><span class="emo">🦙</span><span class="emo">🐼</span><span class="emo">🐱</span><span class="emo">🐶</span><span class="emo">🦉</span><span class="emo">🐝</span><span class="emo">🍍</span><span class="emo">🚀</span></div>
+          <p class="ojo">Tu color</p>
+          <div class="colores"><span class="c-coral on"></span><span class="c-azul"></span><span class="c-menta"></span><span class="c-uva"></span><span class="c-sol"></span><span class="c-hoja"></span></div>
+          <div class="ajuste"><div><b>Letra grande</b><small>Todo el texto más grande</small></div><span class="interruptor on" aria-hidden="true"></span></div>
+          <div class="ajuste"><div><b>Sonido</b><small>Los tonos de los juegos</small></div><span class="interruptor on" aria-hidden="true"></span></div>
+        </div>
+        <nav class="barra" aria-label="Secciones"><span><span class="caja"><svg class="ico"><use href="#i-juegos"/></svg></span>Juegos</span><span><span class="caja"><svg class="ico"><use href="#i-ranking"/></svg></span>Ranking</span><span class="on"><span class="caja"><svg class="ico"><use href="#i-yo"/></svg></span>Yo</span></nav>
+      </div>
+      <p>Yo · con «Letra grande»<small>Una etiqueta de nombre de cuaderno. Debajo siguen «Poner en la pantalla», contraseña y cerrar sesión.</small></p>
+    </div>
+
+    <!-- 6 · Cómo se juega -->
+    <div class="pantalla">
+      <div class="telefono">
+        <div class="estado"><span>9:41</span><i></i><span>●●●</span></div>
+        <div class="jv">
+          <div class="jv-barra"><span class="boton-redondo" aria-label="Salir"><svg class="ico"><use href="#i-cerrar"/></svg></span><h3>Lluvia de estrellas</h3><span class="boton-redondo" aria-label="Sonido"><svg class="ico"><use href="#i-sonido"/></svg></span></div>
+          <div class="jv-hud"><div><span>Puntos</span><b>0</b></div><div><span>Racha</span><b>x1</b></div><div><span>Vidas</span><b>★★★</b></div><div><span>Tiempo</span><b>60</b></div></div>
+          <div class="jv-campo cielo-noche">
+            <span class="ficha-caida emo" style="left:22px;top:30px">⭐</span>
+            <span class="ficha-caida mala emo" style="right:30px;top:64px">☄️</span>
+            <span class="ficha-caida cuidar emo" style="left:120px;top:110px;--anillo:#FF9F6B">👽</span>
+            <div class="capa">
+              <p class="ojo">Cómo se juega</p>
+              <h3>¿Te animas, Eli?</h3>
+              <ul class="reglas-juego">
+                <li><span class="emo">⭐</span>+10 puntos</li><li><span class="emo">🌠</span>+50, muy rápida</li>
+                <li><span class="emo">⏰</span>+2 segundos</li><li><span class="emo">❄️</span>cámara lenta</li>
+                <li class="malo"><span class="emo">👽</span>si cae, pierdes vida</li><li class="malo"><span class="emo">☄️</span>no lo toques</li>
+              </ul>
+              <div class="metas"><span class="lider">👑 Martina <b>2.340</b></span><span>Siguiente: Fernando <b>2.100</b></span><span>Tú <b>1.800</b></span></div>
+              <span class="btn btn-sol btn-ancho"><svg class="ico"><use href="#i-jugar"/></svg>¡A jugar!</span>
+              <span class="btn btn-sec btn-ancho">Practicar (no cuenta)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p>Cómo se juega<small>Las reglas en 6 dibujitos, la meta siguiente y una práctica que no se guarda (ideal para Maritza).</small></p>
+    </div>
+
+  </div>
+</div>
+<script>
+  // Solo para la maqueta: ver en claro u oscuro
+  document.querySelectorAll("[data-tema]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.tema) document.documentElement.dataset.tema = b.dataset.tema; else delete document.documentElement.dataset.tema;
+    document.querySelectorAll("[data-tema]").forEach((x) => x.classList.toggle("on", x === b));
+  }));
+</script>
+</body>
+</html>

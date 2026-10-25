@@ -55,7 +55,7 @@ npx vercel link --yes --project recreo-familia
 npx vercel deploy --prod --yes
 ```
 
-Dirección publicada: _(anotar aquí después de publicar)_
+Dirección publicada: **https://recreo-familia.vercel.app** (proyecto `recreo-familia` en Vercel, desde el 2026-10-24). Para volver a publicar después de un cambio, basta el último comando desde `familia/`.
 
 ## Si alguien olvida su contraseña
 

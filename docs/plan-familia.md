@@ -1,6 +1,6 @@
 # Plan · «Recreo», los juegos en familia de Eli y Maritza
 
-> **Estado (2026-10-24):** construido en la rama `recreo` (fases 0 a 7). Los adjuntos ya están en su lugar final: `supabase/familia.sql`, `supabase/pruebas/`, `supabase/functions/familia-cuenta/` y `familia/herramientas/paridad.mjs`. Falta la fase 8: publicar, con el permiso de Fernando.
+> **Estado (2026-10-24):** construido en la rama `recreo` (fases 0 a 7). Los adjuntos ya están en su lugar final: `supabase/familia.sql`, `supabase/pruebas/`, `supabase/functions/familia-cuenta/` y `familia/herramientas/paridad.mjs`. Publicado el 2026-10-24 con el permiso de Fernando: https://recreo-familia.vercel.app.
 
 > **Para la IA que lo construya.** Lee el plan completo antes de tocar nada. Mandan las **reglas de oro** (§1) y el **orden de trabajo** (§15). Si algo del plan choca con el código real, gana el código: avísale a Fernando antes de improvisar.
 >

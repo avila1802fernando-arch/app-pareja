@@ -28,9 +28,9 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
   - **Vales de amor 🎟️**: "un abrazo de 10 minutos", "tú eliges la película"… para canjear cuando se vean; a quien lo regaló le llega un aviso al canjearlo.
   - **Nuestros momentos**: el álbum con las fotos del día de los dos.
 - **Juegos** 🎮 · Cuatro minijuegos para jugar cada uno en su teléfono, con el **récord de cada uno** en cada juego y la corona 👑 para quien va ganando (`public/juegos/`):
-  - **Atrapa los corazones**: 60 segundos y 6 niveles tocando corazones (la postal "edición revancha", ahora para los dos). Cada corazón dice algo bonito con el nombre de quien juega.
+  - **Atrapa los corazones**: 90 segundos y 6 niveles tocando corazones (la postal "edición revancha", ahora para los dos). Cada corazón dice algo bonito con el nombre de quien juega.
   - **Vuelo hasta ti**: un corazón con alas vuela los km que los separan (los reales si activaron la ubicación) esquivando nubes de tormenta.
-  - **Memoria de nosotros**: tres rondas contra el reloj para encontrar parejas (el girasol, las cartas, la misma luna…).
+  - **Memoria de nosotros**: cuatro rondas contra el reloj para encontrar parejas (el girasol, las cartas, la misma luna…).
   - **Fusión de corazones**: como el 2048, de «me gustas» hasta «el primer abrazo» 🫂.
   - **Marcador del amor**: cuántos récords tiene cada uno. Si le quitas un récord al otro, le llega un aviso 🏆; al terminar se le puede **retar** 😏.
   - **Premio secreto** 💌: cada uno esconde un mensaje que el otro solo puede leer cuando le quita un récord.

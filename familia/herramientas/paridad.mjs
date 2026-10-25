@@ -15,8 +15,8 @@ const leer = (f) => { try { return readFileSync(f, "utf8"); } catch { return nul
 // ---------- 1. paridad ----------
 const PARIDAD = {
   "public/juegos/corazones.js → familia/juegos/lluvia.js": [
-    "const GAME_TIME = 60, ESCAPE_LIMIT = 6;",
-    "{ at: 0,", "{ at: 10,", "{ at: 20,", "{ at: 30,", "{ at: 40,", "{ at: 50,",
+    "const GAME_TIME = 90, ESCAPE_LIMIT = 6;",
+    "{ at: 0,", "{ at: 15,", "{ at: 30,", "{ at: 45,", "{ at: 60,", "{ at: 75,",
     "score: 0, lives: 3, combo: 0, maxCombo: 0, timeLeft: GAME_TIME, elapsed: 0, level: 1,",
     "spawnAcc: 0, countdown: 3.4,",
     "const mult = () => Math.min(1 + Math.floor(S.combo / 8), 5);",
@@ -59,7 +59,7 @@ const PARIDAD = {
     "puntos: S.km,",
   ],
   "public/juegos/memoria.js → familia/juegos/memoria.js": [
-    "const RONDAS = [{ cols: 3, filas: 4, seg: 45, ver: 1.6 }, { cols: 4, filas: 4, seg: 60, ver: 2.1 }, { cols: 4, filas: 5, seg: 75, ver: 2.6 }];",
+    "const RONDAS = [{ cols: 3, filas: 4, seg: 45, ver: 1.6 }, { cols: 4, filas: 4, seg: 60, ver: 2.1 }, { cols: 4, filas: 5, seg: 75, ver: 2.6 }, { cols: 4, filas: 6, seg: 90, ver: 3.1 }];",
     "const pts = 100 + 50 * Math.min(S.racha - 1, 9);",
     "S.puntos = Math.max(0, S.puntos - 10);",
     "bono = Math.ceil(S.tiempo) * 15 + (perfecta ? 300 : 0);",

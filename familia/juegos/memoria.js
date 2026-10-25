@@ -1,12 +1,13 @@
 // Memoria del Ecuador 🐢
-// Tres rondas contra el reloj para encontrar los pares: la tortuga de Galápagos, el Cotopaxi, el cacao… y cada
+// Cuatro rondas contra el reloj para encontrar los pares: la tortuga de Galápagos, el Cotopaxi, el cacao… y cada
 // par trae un dato del Ecuador. Al empezar cada ronda hay un momento para memorizar. Los pares seguidos valen
 // más, el tiempo que sobra suma y una ronda sin errores regala 300 puntos. El dorso lleva tu personaje.
 // Mismas reglas y puntaje que la Memoria de la otra app.
 (() => {
   "use strict";
   if (!window.RecreoJuegos) return;
-  const RONDAS = [{ cols: 3, filas: 4, seg: 45, ver: 1.6 }, { cols: 4, filas: 4, seg: 60, ver: 2.1 }, { cols: 4, filas: 5, seg: 75, ver: 2.6 }];
+  // 4 rondas desde el 2026-10-25 (antes 3): la última, de 24 cartas. Igual en las dos apps (el puntaje se compara).
+  const RONDAS = [{ cols: 3, filas: 4, seg: 45, ver: 1.6 }, { cols: 4, filas: 4, seg: 60, ver: 2.1 }, { cols: 4, filas: 5, seg: 75, ver: 2.6 }, { cols: 4, filas: 6, seg: 90, ver: 3.1 }];
   // [emoji, nombre en la carta, el dato que se dice al encontrar el par]
   const CARTAS = [
     ["🐢", "Tortuga gigante", "Las de Galápagos pueden vivir más de 100 años"],
@@ -30,7 +31,7 @@
   RecreoJuegos.registrar({
     id: "memoria",
     nombre: "Memoria del Ecuador",
-    lema: "Encuentra los pares: animales, volcanes y sabores. Tres rondas contra el reloj.",
+    lema: "Encuentra los pares: animales, volcanes y sabores. Cuatro rondas contra el reloj.",
     tono: ["#14B8A6", "#FFC53D", "#0B6E62"],
     emoji: "🐢",
     arte: '<span class="mini-carta" style="left:12px;top:16px;background:repeating-linear-gradient(45deg,#0B7F6A 0 5px,#109F86 5px 10px);transform:rotate(-8deg)"></span><span class="mini-carta emo" style="left:40px;top:28px;background:#fff;font-size:1.25rem;transform:rotate(7deg)">🐢</span>',
@@ -43,7 +44,7 @@
     botonJugar: "Empezar 🃏",
     rango(p, res) {
       const r = res.rondas || 0;
-      return { nombre: r >= 3 ? "¡Memoria de elefante! 🐘" : r === 2 ? "¡Muy buena memoria!" : r === 1 ? "Buen comienzo" : "Pensando en otra cosa 😅" };
+      return { nombre: r >= 4 ? "¡Memoria de elefante! 🐘" : r === 3 ? "¡Muy buena memoria!" : r === 2 ? "Buena memoria" : r === 1 ? "Buen comienzo" : "Pensando en otra cosa 😅" };
     },
     crear,
   });
@@ -170,13 +171,13 @@
         puntos: S.puntos,
         rondas: S.rondas,
         prefijo: porTiempo ? `Se acabó el tiempo en la ronda ${S.ronda + 1}.` : "",
-        stats: [[S.pares, "pares"], [S.errores, "errores"], [`${S.rondas}/3`, "rondas"]],
+        stats: [[S.pares, "pares"], [S.errores, "errores"], [`${S.rondas}/${RONDAS.length}`, "rondas"]],
         detalle: { rondas: S.rondas, errores: S.errores, racha: S.mejorRacha },
       });
     }
     function hud() {
       api.hud("puntos", fmt(S.puntos));
-      api.hud("ronda", `${S.ronda + 1}/3`);
+      api.hud("ronda", `${S.ronda + 1}/${RONDAS.length}`);
       api.hud("tiempo", String(Math.ceil(Math.max(0, S.tiempo))), S.tiempo < 10 && S.fase === "juego");
       api.hud("racha", S.racha >= 2 ? `🔥 ${S.racha}` : "—", S.racha >= 3);
     }

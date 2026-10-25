@@ -1,19 +1,19 @@
 // Atrapa los corazones 💗 — ahora para los dos
 // Nació como una postal de Fernando para Martina ("edición revancha"): ahora lo juegan los dos y cada uno
-// persigue el récord del otro. 60 segundos y 6 niveles: corazones que caen, cupidos que no pueden caer,
+// persigue el récord del otro. 90 segundos y 6 niveles (uno cada 15 s): corazones que caen, cupidos que no pueden caer,
 // corazones rotos que no hay que tocar, estrellas fugaces, cartas que regalan tiempo y copos que lo ponen
 // en cámara lenta. 8 seguidos suben el multiplicador (hasta x5) y cada corazón te dice algo bonito.
 (() => {
   "use strict";
   if (!window.NosotrosJuegos) return;
-  const GAME_TIME = 60, ESCAPE_LIMIT = 6;
+  const GAME_TIME = 90, ESCAPE_LIMIT = 6; // 90 s desde el 2026-10-25 (antes 60): igual en el Recreo
   const LEVELS = [
     { at: 0, name: "Calentamiento", tip: "Fácil... por ahora" },
-    { at: 10, name: "Corazones rotos", tip: "No toques los 💔" },
-    { at: 20, name: "Cupido", tip: "Si un 💘 cae, pierdes una vida" },
-    { at: 30, name: "Mareo", tip: "Ahora se mueven de lado" },
-    { at: 40, name: "Fantasmas", tip: "Aparecen y desaparecen" },
-    { at: 50, name: "Tormenta de amor", tip: "Suerte. La vas a necesitar" },
+    { at: 15, name: "Corazones rotos", tip: "No toques los 💔" },
+    { at: 30, name: "Cupido", tip: "Si un 💘 cae, pierdes una vida" },
+    { at: 45, name: "Mareo", tip: "Ahora se mueven de lado" },
+    { at: 60, name: "Fantasmas", tip: "Aparecen y desaparecen" },
+    { at: 75, name: "Tormenta de amor", tip: "Suerte. La vas a necesitar" },
   ];
   // rosa y turquesa (un color de cada uno) y, en los niveles difíciles, de noche
   const BG = [["#fff6f9", "#ffe0ea"], ["#f0fdfa", "#c9f5ec"], ["#fff1f6", "#ffd0df"], ["#ecfdfa", "#b3eee3"], ["#3b1d4a", "#1d1033"], ["#2a0f2e", "#12061a"]];
@@ -53,7 +53,7 @@
   NosotrosJuegos.registrar({
     id: "corazones",
     nombre: "Atrapa los corazones",
-    lema: "60 segundos de corazones, cupidos y caos. Tócalos antes de que caigan.",
+    lema: "90 segundos de corazones, cupidos y caos. Tócalos antes de que caigan.",
     tono: ["#ff6f9c", "#2dd4bf", "#b8285a"],
     icono: '<svg viewBox="0 0 24 24"><path d="M12 20c-4.3-3.1-7.2-5.8-7.2-8.9A3.7 3.7 0 0 1 12 9.3a3.7 3.7 0 0 1 7.2 1.8c0 3.1-2.9 5.8-7.2 8.9Z"/><path d="M7.5 3.2v2.4M12 2.2v3.4M16.5 3.2v2.4"/></svg>',
     unidad: "puntos",
@@ -64,8 +64,8 @@
     detalle: "8 seguidos suben el multiplicador (hasta x5). Tocar donde no hay nada resta 5 y corta la racha. Si se te escapan 6 corazones, pierdes una vida.",
     extra: (api, cont) => pintarLogros(api, cont),
     rango(p) {
-      const nombre = p >= 3500 ? `Leyenda del ${diaTxt}` : p >= 2500 ? "Cupido oficial" : p >= 1900 ? "Casi Cupido"
-        : p >= 1200 ? "Rompecorazones" : p >= 500 ? "Aprendiz de Cupido" : "Corazón de práctica";
+      const nombre = p >= 5200 ? `Leyenda del ${diaTxt}` : p >= 3700 ? "Cupido oficial" : p >= 2800 ? "Casi Cupido"
+        : p >= 1800 ? "Rompecorazones" : p >= 750 ? "Aprendiz de Cupido" : "Corazón de práctica";
       return { nombre };
     },
     crear,

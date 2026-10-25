@@ -1,11 +1,12 @@
 // Memoria de nosotros 🃏
-// Tres rondas contra el reloj para encontrar las parejas de lo que más quieren: el girasol, las cartas,
+// Cuatro rondas contra el reloj para encontrar las parejas de lo que más quieren: el girasol, las cartas,
 // el vuelo, la misma luna… Al empezar cada ronda hay un momento para memorizar. Las parejas seguidas valen
 // más, el tiempo que sobra suma y una ronda sin errores regala 300 puntos. El dorso lleva sus iniciales.
 (() => {
   "use strict";
   if (!window.NosotrosJuegos) return;
-  const RONDAS = [{ cols: 3, filas: 4, seg: 45, ver: 1.6 }, { cols: 4, filas: 4, seg: 60, ver: 2.1 }, { cols: 4, filas: 5, seg: 75, ver: 2.6 }];
+  // 4 rondas desde el 2026-10-25 (antes 3): la última, de 24 cartas. Igual en las dos apps (el puntaje se compara).
+  const RONDAS = [{ cols: 3, filas: 4, seg: 45, ver: 1.6 }, { cols: 4, filas: 4, seg: 60, ver: 2.1 }, { cols: 4, filas: 5, seg: 75, ver: 2.6 }, { cols: 4, filas: 6, seg: 90, ver: 3.1 }];
   // [emoji, nombre en la carta, lo que se dice al encontrar la pareja]
   const CARTAS = [
     ["🌻", "Nuestro girasol", "Crece un poquito cada día, como lo nuestro"],
@@ -29,7 +30,7 @@
   NosotrosJuegos.registrar({
     id: "memoria",
     nombre: "Memoria de nosotros",
-    lema: "Encuentra las parejas de lo que más quieren: tres rondas contra el reloj.",
+    lema: "Encuentra las parejas de lo que más quieren: cuatro rondas contra el reloj.",
     tono: ["#b794f6", "#ff9ab8", "#7c4dcc"],
     icono: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="10" height="14" rx="2.2"/><path d="M15 7.2l3.6.6a2 2 0 0 1 1.6 2.3l-1.6 9.2a2 2 0 0 1-2.3 1.6l-4-.7"/><path d="M8 14c-1.5-1-2.4-1.9-2.4-2.9a1.2 1.2 0 0 1 2.4-.4 1.2 1.2 0 0 1 2.4.4c0 1-.9 1.9-2.4 2.9Z"/></svg>',
     unidad: "puntos",
@@ -41,7 +42,7 @@
     botonJugar: "Empezar 🃏",
     rango(p, res) {
       const r = res.rondas || 0;
-      return { nombre: r >= 3 ? "Memoria enamorada 🧠💞" : r === 2 ? "Corazón atento" : r === 1 ? "Buena memoria, mejor corazón" : "Pensando en otra cosa… 😏" };
+      return { nombre: r >= 4 ? "Memoria enamorada 🧠💞" : r === 3 ? "Corazón atento" : r === 2 ? "Buena memoria, mejor corazón" : r === 1 ? "Calentando la memoria" : "Pensando en otra cosa… 😏" };
     },
     crear,
   });
@@ -168,13 +169,13 @@
         puntos: S.puntos,
         rondas: S.rondas,
         prefijo: porTiempo ? `Se acabó el tiempo en la ronda ${S.ronda + 1}.` : "",
-        stats: [[S.parejas, "parejas"], [S.errores, "errores"], [`${S.rondas}/3`, "rondas"]],
+        stats: [[S.parejas, "parejas"], [S.errores, "errores"], [`${S.rondas}/${RONDAS.length}`, "rondas"]],
         detalle: { rondas: S.rondas, errores: S.errores, racha: S.mejorRacha },
       });
     }
     function hud() {
       api.hud("puntos", fmt(S.puntos));
-      api.hud("ronda", `${S.ronda + 1}/3`);
+      api.hud("ronda", `${S.ronda + 1}/${RONDAS.length}`);
       api.hud("tiempo", String(Math.ceil(Math.max(0, S.tiempo))), S.tiempo < 10 && S.fase === "juego");
       api.hud("racha", S.racha >= 2 ? `🔥 ${S.racha}` : "—", S.racha >= 3);
     }

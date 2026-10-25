@@ -1,19 +1,19 @@
 // Lluvia de estrellas 🌠
-// 60 segundos y 6 niveles de noche: estrellas que caen, marcianitos que no pueden caer, meteoritos que no hay que
+// 90 segundos y 6 niveles de noche (uno cada 15 s): estrellas que caen, marcianitos que no pueden caer, meteoritos que no hay que
 // tocar, estrellas fugaces, relojes que regalan tiempo y copos que lo ponen en cámara lenta. 8 seguidas suben el
 // multiplicador (hasta x5). Mismas reglas y puntaje que el juego de atrapar de la otra app (los nombres internos de
 // los tipos — "heart", "broken", "cupid"… — se dejaron iguales a propósito: así se compara exacto con el original).
 (() => {
   "use strict";
   if (!window.RecreoJuegos) return;
-  const GAME_TIME = 60, ESCAPE_LIMIT = 6;
+  const GAME_TIME = 90, ESCAPE_LIMIT = 6; // 90 s desde el 2026-10-25 (antes 60): igual en la otra app
   const LEVELS = [
     { at: 0, name: "Calentamiento", tip: "Fácil… por ahora" },
-    { at: 10, name: "Meteoritos", tip: "No toques los ☄️" },
-    { at: 20, name: "Rescate", tip: "Si un 👽 cae, pierdes una vida" },
-    { at: 30, name: "Mareo", tip: "Ahora se mueven de lado" },
-    { at: 40, name: "Estrellas tímidas", tip: "Aparecen y desaparecen" },
-    { at: 50, name: "Tormenta solar", tip: "Suerte. La vas a necesitar" },
+    { at: 15, name: "Meteoritos", tip: "No toques los ☄️" },
+    { at: 30, name: "Rescate", tip: "Si un 👽 cae, pierdes una vida" },
+    { at: 45, name: "Mareo", tip: "Ahora se mueven de lado" },
+    { at: 60, name: "Estrellas tímidas", tip: "Aparecen y desaparecen" },
+    { at: 75, name: "Tormenta solar", tip: "Suerte. La vas a necesitar" },
   ];
   // de noche desde el principio, cada nivel un poco más oscuro
   const BG = [["#2b3a8f", "#4a3fa0"], ["#26337f", "#3f358f"], ["#202b70", "#352c7e"], ["#1a2361", "#2b236c"], ["#141a4e", "#0e1138"], ["#0d1036", "#05061a"]];
@@ -52,7 +52,7 @@
   RecreoJuegos.registrar({
     id: "lluvia",
     nombre: "Lluvia de estrellas",
-    lema: "60 segundos de estrellas, marcianitos y meteoritos. Atrápalas antes de que caigan.",
+    lema: "90 segundos de estrellas, marcianitos y meteoritos. Atrápalas antes de que caigan.",
     tono: ["#4B57C9", "#FFC53D", "#1F2A8A"],
     emoji: "🌠",
     arte: '<i class="emo" style="left:12px;top:12px;font-size:1.3rem">⭐</i><i class="emo" style="left:38px;top:26px;font-size:1.6rem">🌠</i><i class="emo" style="left:10px;top:50px;font-size:1.2rem">👽</i><i class="emo" style="left:52px;top:56px;font-size:1rem">☄️</i>',
@@ -64,8 +64,8 @@
     detalle: "8 seguidas suben el multiplicador (hasta x5). Tocar donde no hay nada resta 5 y corta la racha. Si se te escapan 6 estrellas, pierdes una vida.",
     extra: (api, cont) => pintarLogros(api, cont),
     rango(p) {
-      const nombre = p >= 3500 ? "Leyenda de las estrellas" : p >= 2500 ? "Nivel cometa" : p >= 1900 ? "Casi en órbita"
-        : p >= 1200 ? "Despegando" : p >= 500 ? "Aprendiz de astronauta" : "Mirando el cielo";
+      const nombre = p >= 5200 ? "Leyenda de las estrellas" : p >= 3700 ? "Nivel cometa" : p >= 2800 ? "Casi en órbita"
+        : p >= 1800 ? "Despegando" : p >= 750 ? "Aprendiz de astronauta" : "Mirando el cielo";
       return { nombre };
     },
     botonJugar: "¡A jugar!",

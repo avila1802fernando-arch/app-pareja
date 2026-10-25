@@ -103,7 +103,7 @@ button{cursor:pointer}
 .boton-redondo:active{transform:translateY(2px);box-shadow:0 1px 0 var(--linea)}
 .campo{display:flex;flex-direction:column;gap:6px}
 .campo label{font-weight:800}
-.campo input{min-height:52px;padding:0 14px;border-radius:var(--r-m);border:2px solid var(--linea);background:var(--card);font-size:1.05rem}
+.campo input{width:100%;min-width:0;min-height:52px;padding:0 14px;border-radius:var(--r-m);border:2px solid var(--linea);background:var(--card);font-size:1.05rem}
 .campo input:focus{outline:none;border-color:var(--primario);box-shadow:0 0 0 3px var(--primario-suave)}
 .campo-clave{position:relative}
 .campo-clave input{width:100%;padding-right:56px}
@@ -220,8 +220,8 @@ body.con-barra #app{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 .yo-cab .cinta{width:100%;padding:10px 0 8px;background:var(--c);color:#fff;font:800 .82rem/1 var(--f-texto);letter-spacing:.16em;text-transform:uppercase}
 .yo-cab .cinta b{display:block;font:700 1.5rem/1.15 var(--f-titulo);letter-spacing:0;text-transform:none;margin-top:4px}
 .seccion-yo{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
-.fila-nombre{display:flex;gap:8px;align-items:flex-end}
-.fila-nombre .campo{flex:1}
+.fila-nombre{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:6px}
+.fila-nombre .campo{flex:1 1 200px;min-width:0}
 .acciones-yo{display:flex;flex-direction:column;gap:10px;margin-top:18px}
 
 @media (min-width:760px){

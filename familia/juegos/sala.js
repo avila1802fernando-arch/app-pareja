@@ -132,7 +132,7 @@
     const marcas = nodo("span", "j-marcas"), lider = nodo("span", "j-lider"), txt = nodo("span");
     let linea1, linea2;
     if (!primero) { linea1 = "Nadie ha jugado todavía"; linea2 = "¡Estrénalo!"; }
-    else if (primero.persona.usuario_id === yo().id) { linea1 = `Tú · ${j.marca(primero.marca)}`; linea2 = "👑 ¡Vas primero!"; }
+    else if (primero.persona.usuario_id === yo().id) { linea1 = `Tú · ${j.marca(primero.marca)}`; linea2 = "¡Vas primero!"; }
     else {
       linea1 = `${primero.persona.nombre} · ${j.marca(primero.marca)}`;
       linea2 = mia.marca == null ? "Tú: todavía no juegas" : `Tú: ${j.marca(mia.marca)} · ${mia.puesto}º lugar`;

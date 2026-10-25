@@ -260,9 +260,9 @@
   }
   function entrarComoPrueba(quien, nuevo) {
     clave.usuario = quien;
+    prepararCompartido(); // antes de los datos de prueba: con esto saben qué día es hoy
     D.entrar({ prueba: true, quien, nuevo }).then(() => {
       user = { id: D.usuarioId(), email: `${quien}@prueba` };
-      prepararCompartido();
       D.iniciar();
       const yo = D.yo();
       if (yo.actualizado_en === yo.creado_en) abrirPersonaje(); else entrarApp();

@@ -70,6 +70,23 @@ ok((await db.query("select estado, acuerdo from public.sesiones where id = $1", 
 ok(!!(await falla("fer", "select public.sesion_tomar_turno($1)", [s1.id])), "el turno de Claude solo lo puede tomar la función `sesion`");
 ok(!!(await falla("mar", "select public.sesion_empezar_cierre($1, $2)", [s1.id, uid("mar")])), "y el cierre, también");
 
+// ---- vistos (los ✓✓) ----
+const ids = (await db.query("select id from public.sesion_mensajes where sesion_id = $1 order by id", [s1.id])).rows.map((r) => Number(r.id));
+const visto = (quien, hasta) => uno(quien, "select * from public.sesion_visto($1, $2)", [s1.id, hasta]);
+ok(Number((await visto("mar", ids[0])).hasta) === ids[0], "Martina vio el primer mensaje de Fernando");
+ok((await como("fer", "select hasta from public.sesion_vistos where usuario_id = $1", [uid("mar")])).rows.length === 1,
+  "Fernando ve hasta dónde leyó Martina");
+ok((await visto("mar", ids[0])).hasta === null, "repetir el mismo visto no cambia nada (no hay aviso de más)");
+await visto("mar", ids[2]);
+await visto("mar", ids[1]); // un teléfono atrasado avisa uno viejo
+ok(Number((await db.query("select hasta from public.sesion_vistos where usuario_id = $1", [uid("mar")])).rows[0].hasta) === ids[2],
+  "un visto nunca retrocede");
+ok(Number((await visto("fer", 999999)).hasta) === ids[2], "un visto de un mensaje que no existe se queda en el último de la sesión");
+ok((await uno("intruso", "select * from public.sesion_visto($1, $2)", [s1.id, ids[2]])).hasta === null, "otra persona no puede marcar vistos");
+ok((await como("intruso", "select * from public.sesion_vistos")).rows.length === 0, "ni ver los de ellos");
+ok(!!(await falla("fer", "insert into public.sesion_vistos (sesion_id, usuario_id, pareja_id, hasta) values ($1, $2, $3, 1)", [s1.id, uid("mar"), p])),
+  "nadie puede marcar vistos a nombre del otro");
+
 // ---- el turno de Claude ----
 const tomar = async () => (await uno("funcion", "select public.sesion_tomar_turno($1) t", [s1.id])).t;
 ok(await tomar() === true, "la función toma el turno (Claude está escribiendo)");
@@ -106,7 +123,7 @@ ok((await uno("intruso", "select public.sesion_descartar($1) d", [s3.id])).d ===
 
 // ---- tiempo real ----
 const pub = (await db.query("select tablename from pg_publication_tables where pubname = 'supabase_realtime' and tablename like 'sesion%' order by 1")).rows;
-ok(pub.map((r) => r.tablename).join() === "sesion_mensajes,sesiones", "las dos tablas llegan en tiempo real");
+ok(pub.map((r) => r.tablename).join() === "sesion_mensajes,sesion_vistos,sesiones", "las tres tablas llegan en tiempo real");
 
 console.log(fallas ? `\n${fallas} prueba(s) fallaron` : "\nTodo bien ✓");
 process.exit(fallas ? 1 : 0);

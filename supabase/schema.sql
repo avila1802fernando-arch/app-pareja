@@ -1355,6 +1355,42 @@ drop trigger if exists sesion_mensajes_aviso on public.sesion_mensajes;
 create trigger sesion_mensajes_aviso after insert on public.sesion_mensajes
   for each row execute function public.registrar_sesion_mensaje();
 
+-- Vistos (los ✓✓): hasta qué mensaje leyó cada uno en cada sesión. Se leen entre los dos y cada uno marca solo los
+-- suyos, con sesion_visto(). Nunca retrocede: si un teléfono atrasado avisa un visto viejo, no cambia nada.
+create table if not exists public.sesion_vistos (
+  sesion_id uuid not null references public.sesiones(id) on delete cascade,
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  pareja_id uuid not null references public.parejas(id) on delete cascade,
+  hasta bigint not null,
+  visto_en timestamptz not null default now(),
+  primary key (sesion_id, usuario_id)
+);
+alter table public.sesion_vistos enable row level security;
+drop policy if exists "sesion_vistos: leer" on public.sesion_vistos;
+create policy "sesion_vistos: leer" on public.sesion_vistos for select using (public.es_mi_pareja(pareja_id));
+
+create or replace function public.sesion_visto(p_sesion uuid, p_hasta bigint) returns public.sesion_vistos
+language plpgsql security definer set search_path = public as $$
+declare
+  s public.sesiones;
+  ultimo bigint;
+  v public.sesion_vistos;
+begin
+  select * into s from public.sesiones where id = p_sesion and public.es_mi_pareja(pareja_id);
+  if not found then return null; end if;
+  -- solo hasta un mensaje que exista en esta sesión
+  select max(id) into ultimo from public.sesion_mensajes where sesion_id = s.id and id <= p_hasta;
+  if ultimo is null then return null; end if;
+  insert into public.sesion_vistos (sesion_id, usuario_id, pareja_id, hasta)
+  values (s.id, auth.uid(), s.pareja_id, ultimo)
+  on conflict (sesion_id, usuario_id) do update set hasta = excluded.hasta, visto_en = now()
+    where public.sesion_vistos.hasta < excluded.hasta
+  returning * into v;
+  return v;
+end;
+$$;
+grant execute on function public.sesion_visto(uuid, bigint) to authenticated;
+
 -- ========== TIEMPO REAL ==========
 -- Agrega las tablas a la publicación solo si aún no están (para poder re-ejecutar).
 do $$
@@ -1362,7 +1398,7 @@ declare t text;
 begin
   foreach t in array array['perfiles', 'parejas', 'eventos', 'disponibilidad', 'animos', 'respuestas', 'cartas', 'deseos', 'horarios', 'eventos_cal',
                                 'momentos', 'riegos', 'vales', 'notitas', 'canciones', 'noches', 'partidas', 'premios', 'notificaciones', 'focos',
-                                'sesiones', 'sesion_mensajes'] loop
+                                'sesiones', 'sesion_mensajes', 'sesion_vistos'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

@@ -2,8 +2,9 @@
 // Un rato para hablar de nosotros con Claude como moderador: cada uno escribe desde su teléfono y Claude contesta en
 // la misma conversación. Al terminar, Claude deja un resumen (con el acuerdo y el ejercicio de la semana) que queda
 // guardado para los dos y que vuelve a leer en la sesión siguiente.
-// Las sesiones viven en las tablas sesiones y sesion_mensajes (funciones sesion_* de schema.sql). Lo de Claude lo
-// escribe la función de Supabase `sesion`, que guarda la llave de Anthropic: nunca llega al teléfono.
+// Las sesiones viven en las tablas sesiones, sesion_mensajes y sesion_vistos (los ✓✓; funciones sesion_* de
+// schema.sql). Lo de Claude lo escribe la función de Supabase `sesion`, que guarda la llave de Anthropic: nunca llega
+// al teléfono. El micrófono dicta con el reconocimiento de voz del navegador.
 // app.js deja lo que hace falta en window.nosotros y avisa con "nosotros:dentro".
 (() => {
   "use strict";
@@ -27,6 +28,16 @@
     charla: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4.5h10a2 2 0 0 1 2 2V12a2 2 0 0 1-2 2H9l-3.5 3v-3h-1a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z"/><path d="M16.5 8.5h3a2 2 0 0 1 2 2V16a2 2 0 0 1-2 2h-1v3L15 18h-4a2 2 0 0 1-1.9-1.4"/><path d="M9.5 11.4c-1.3-.9-2.1-1.7-2.1-2.6a1 1 0 0 1 2.1-.4 1 1 0 0 1 2.1.4c0 .9-.8 1.7-2.1 2.6Z"/></svg>',
     pluma: '<svg class="ico" aria-hidden="true"><use href="#i-lapiz"/></svg>',
     candado: '<svg class="ico" aria-hidden="true"><use href="#i-candado"/></svg>',
+    mic: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>',
+    // ✓ enviado · ✓✓ visto (el segundo palito aparece cuando tu pareja lo vio)
+    check: '<svg viewBox="0 0 20 14" aria-hidden="true"><path d="M1.5 7.4 5 10.9 11.8 3.6"/><path class="dos" d="m8 10.2.7.7 7.8-7.3"/></svg>',
+  };
+  // Dictado: el reconocimiento de voz del navegador (Chrome lo hace con Google, Safari con Apple: lo mismo que el
+  // micrófono del teclado). Si el teléfono no lo tiene, no aparece el botón y queda el micrófono del teclado.
+  const Reconocimiento = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  const IDIOMA_POR_ZONA = {
+    "America/Guayaquil": "es-EC", "America/Santiago": "es-CL", "America/Bogota": "es-CO", "America/Lima": "es-PE",
+    "America/Mexico_City": "es-MX", "America/Argentina/Buenos_Aires": "es-AR", "America/Caracas": "es-VE", "Europe/Madrid": "es-ES",
   };
 
   let X = null, el = null, canal = null, vivo = null, desfase = 0, yaLlevo = false;
@@ -37,6 +48,8 @@
   let suyo = { sesion: null, escribe: false }; // mi pareja: en qué sesión está mirando y si está escribiendo
   let yoEscribo = false, escribeTimer = null, pedirTimer = null, esperaTimer = null;
   let esperandoDesde = 0, enviando = false, volverA = null, pegadoAbajo = true;
+  let vistoSuyo = 0, vistoMio = 0, vistoTimer = null; // hasta qué mensaje vio cada uno (los ✓✓)
+  let dictado = null, micRoto = false;                // el micrófono mientras escucha
 
   // ---------- utilidades ----------
   const nodo = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -115,9 +128,11 @@
       <footer class="sv-pie">
         <button type="button" class="ghost sv-pedir" hidden>Pedirle a Claude que responda</button>
         <p class="sv-resumiendo" hidden><span class="sv-puntos" aria-hidden="true"><i></i><i></i><i></i></span>Claude está escribiendo su resumen…</p>
+        <p class="sv-escucha" hidden><span class="sv-ondas" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Te escucho… toca el micrófono para terminar</p>
         <form class="sv-escribir">
           <label class="sr" for="sv-texto">Tu mensaje</label>
           <textarea id="sv-texto" rows="1" maxlength="4000" placeholder="Escribe lo que sientes…" autocomplete="off"></textarea>
+          <button type="button" class="sv-mic" aria-label="Dictar con la voz" aria-pressed="false" hidden>${ICONOS.mic}</button>
           <button type="submit" class="sv-enviar" aria-label="Enviar" disabled>${ICONOS.enviar}</button>
         </form>
       </footer>
@@ -128,7 +143,9 @@
       v, atras: q(".sv-atras"), titulo: q(".sv-titulo"), estado: q(".sv-estado"), terminar: q(".sv-terminar"),
       lista: q(".sv-lista"), pie: q(".sv-pie"), pedir: q(".sv-pedir"), resumiendo: q(".sv-resumiendo"),
       form: q(".sv-escribir"), texto: q("#sv-texto"), enviar: q(".sv-enviar"), anuncio: q(".sv-anuncio"),
+      mic: q(".sv-mic"), escucha: q(".sv-escucha"),
     });
+    el.mic.hidden = !Reconocimiento();
     // "escribiendo…" de Claude y de mi pareja: siempre al final de la conversación
     const escribe = (cls, nombre) => {
       const li = nodo("li", `sv-m ${cls} sv-escribe`); li.hidden = true;
@@ -144,7 +161,10 @@
     el.terminar.addEventListener("click", abrirFin);
     el.pedir.addEventListener("click", pedirAClaude);
     el.form.addEventListener("submit", enviar);
+    el.mic.addEventListener("click", () => { if (dictado) pararDictado(); else empezarDictado(); });
     el.texto.addEventListener("input", () => {
+      // si escribes con el teclado mientras dictas, gana lo que escribes (el dictado se detiene)
+      if (dictado) cortarDictado();
       ajustarAlto(); el.enviar.disabled = enviando || !el.texto.value.trim();
       if (el.texto.value.trim()) escribiendo(); else dejarDeEscribir();
     });
@@ -243,6 +263,7 @@
     el.terminar.hidden = s.estado !== "abierta";
     el.pie.hidden = s.estado === "cerrada";
     el.form.hidden = s.estado !== "abierta";
+    if (s.estado !== "abierta" && dictado) pararDictado();
     el.resumiendo.hidden = s.estado !== "resumiendo";
     el.v.classList.toggle("cerrada", s.estado === "cerrada");
     pintarEscribiendo(); actualizarPedir();
@@ -291,8 +312,38 @@
     b.append(nodo("span", "sr", `${quien(m.autor)}: `));
     conFormato(b, m.texto);
     const t = nodo("time", null, X.hora(m.creado_en, X.miTz())); t.dateTime = m.creado_en;
+    if (tipo === "mio") {
+      const visto = m.id <= vistoSuyo, c = nodo("span", "sv-check");
+      c.innerHTML = ICONOS.check; c.setAttribute("role", "img");
+      c.setAttribute("aria-label", visto ? `Visto por ${nom()}` : "Enviado");
+      li.classList.toggle("visto", visto); t.append(c);
+    }
     b.append(t); li.append(b);
     return li;
+  }
+  // Los ✓✓ de mis mensajes cuando mi pareja los vio
+  function pintarVistos() {
+    if (!el || !mirando) return;
+    el.lista.querySelectorAll(".sv-m.mio[data-id]").forEach((li) => {
+      const visto = Number(li.dataset.id) <= vistoSuyo;
+      if (li.classList.contains("visto") === visto) return;
+      li.classList.toggle("visto", visto);
+      const c = li.querySelector(".sv-check");
+      if (c) c.setAttribute("aria-label", visto ? `Visto por ${nom()}` : "Enviado");
+    });
+  }
+  // Aviso que ya vi todo lo que hay (solo con la conversación a la vista y el teléfono en la mano)
+  function marcarVisto() {
+    clearTimeout(vistoTimer);
+    vistoTimer = setTimeout(async () => {
+      if (!el || el.v.hidden || document.hidden || !mirando) return;
+      const ult = mensajes[mensajes.length - 1];
+      if (!ult || ult.id <= vistoMio) return;
+      const antes = vistoMio;
+      vistoMio = ult.id; // para no repetirlo mientras va
+      const { error } = await X.sb.rpc("sesion_visto", { p_sesion: mirando.id, p_hasta: ult.id });
+      if (error) vistoMio = antes; // se vuelve a intentar con el próximo mensaje o al volver a la app
+    }, 700);
   }
 
   // El resumen llega como carta: su acuerdo con borde de sello y el ejercicio en una notita
@@ -382,7 +433,7 @@
     if (!s || !el) return;
     const otra = !mirando || mirando.id !== id;
     mirando = s; anotarVista(s.id);
-    if (otra) { mensajes = []; verCharla = false; }
+    if (otra) { mensajes = []; verCharla = false; vistoSuyo = 0; vistoMio = 0; }
     if (el.v.hidden) {
       volverA = document.activeElement;
       el.v.hidden = false; el.v.classList.remove("sale");
@@ -401,7 +452,7 @@
   }
   function ocultarVista() {
     if (!el || el.v.hidden || el.v.classList.contains("sale")) return;
-    dejarDeEscribir();
+    cortarDictado(); dejarDeEscribir(); clearTimeout(vistoTimer);
     const fin = () => { el.v.hidden = true; el.v.classList.remove("sale", "vv"); };
     document.body.classList.remove("con-sesion");
     if (X.pocoMovimiento()) fin(); else { el.v.classList.add("sale"); setTimeout(fin, 260); }
@@ -456,6 +507,7 @@
 
   async function enviar(e) {
     e.preventDefault();
+    cortarDictado(); // se manda lo que está escrito ahora; lo que el dictado entienda después ya no se mete
     const t = el.texto.value.trim();
     if (!t || enviando || !mirando || mirando.estado !== "abierta") return;
     const id = mirando.id;
@@ -522,6 +574,87 @@
     el.hist.showModal();
   }
 
+  // ---------- dictar con la voz ----------
+  const ERRORES_DICTADO = {
+    "not-allowed": "Para dictar, permite el micrófono para la app en los ajustes del teléfono. Mientras, usa el micrófono del teclado 🎤",
+    "service-not-allowed": "Este teléfono no deja dictar desde la app: usa el micrófono del teclado 🎤",
+    "language-not-supported": "Aquí no se puede dictar en español: usa el micrófono del teclado 🎤",
+    "audio-capture": "No encontramos el micrófono del teléfono",
+    network: "Para dictar hace falta internet",
+  };
+  const juntar = (a, b) => { const x = a.replace(/\s+$/, ""), y = b.trim(); return !x ? y : !y ? x : `${x} ${y}`; };
+  function empezarDictado() {
+    const R = Reconocimiento();
+    if (!R || dictado || micRoto || !mirando || mirando.estado !== "abierta") return;
+    let rec;
+    try { rec = new R(); } catch (e) { return; }
+    const nav = navigator.language || "";
+    rec.lang = IDIOMA_POR_ZONA[X.miTz()] || (nav.toLowerCase().startsWith("es") ? nav : "es-419");
+    rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    // lo que ya estaba escrito queda adelante; lo que se dicta se va sumando (lo provisional, en vivo)
+    const d = dictado = { rec, base: el.texto.value, sigue: true, callado: 0 };
+    rec.onresult = (e) => {
+      if (dictado !== d) return;
+      let final = "", provisional = "";
+      for (let i = 0; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += t; else provisional += t;
+      }
+      d.callado = 0;
+      el.texto.value = juntar(juntar(d.base, final), provisional);
+      ajustarAlto(); el.texto.scrollTop = el.texto.scrollHeight;
+      el.enviar.disabled = enviando || !el.texto.value.trim();
+      escribiendo();
+    };
+    rec.onerror = (e) => {
+      if (dictado !== d) return;
+      if (e.error === "no-speech") { d.callado++; return; }
+      if (e.error === "aborted") return;
+      d.sigue = false;
+      if (e.error === "service-not-allowed" || e.error === "language-not-supported") { micRoto = true; el.mic.hidden = true; }
+      X.toast(ERRORES_DICTADO[e.error] || "No se pudo dictar. Prueba con el micrófono del teclado 🎤");
+    };
+    rec.onend = () => {
+      if (dictado !== d) return;
+      // el teléfono deja de escuchar solo después de una pausa: si no lo detuviste, sigue (con lo dicho ya en el texto)
+      if (d.sigue && d.callado < 2) {
+        d.base = el.texto.value;
+        try { rec.start(); return; } catch (x) {}
+      }
+      dictado = null; pintarMic();
+    };
+    try { rec.start(); } catch (e) { dictado = null; return; }
+    pintarMic(); X.vibrar([20]);
+    try {
+      if (!localStorage.getItem("dictado-visto")) {
+        localStorage.setItem("dictado-visto", "1");
+        X.toast("Te escucho 🎤 El dictado lo hace tu teléfono, igual que el micrófono del teclado");
+      }
+    } catch (e) {}
+  }
+  // Tocar el micrófono otra vez: deja de escuchar, pero espera lo último que alcanzó a entender
+  function pararDictado() {
+    if (!dictado || !dictado.sigue) return;
+    dictado.sigue = false; pintarMic();
+    try { dictado.rec.stop(); } catch (e) { dictado = null; pintarMic(); }
+  }
+  // Al enviar, al escribir con el teclado o al salir: corta en seco (lo que entienda después ya no se mete)
+  function cortarDictado() {
+    if (!dictado) return;
+    const d = dictado; dictado = null;
+    try { d.rec.abort(); } catch (e) {}
+    pintarMic();
+  }
+  function pintarMic() {
+    if (!el) return;
+    const on = !!dictado && dictado.sigue;
+    el.mic.classList.toggle("escuchando", on);
+    el.mic.setAttribute("aria-pressed", String(on));
+    el.mic.setAttribute("aria-label", on ? "Dejar de dictar" : "Dictar con la voz");
+    el.escucha.hidden = !on;
+    el.texto.placeholder = on ? "Te escucho…" : "Escribe lo que sientes…";
+  }
+
   // ---------- escribiendo… (presencia) ----------
   function escribiendo() {
     clearTimeout(escribeTimer); escribeTimer = setTimeout(dejarDeEscribir, 4000);
@@ -569,7 +702,7 @@
       el.lista.insertBefore(li, el.escribeSuyo);
       if (cerca || m.autor === yo()) bajar();
     }
-    pintarEscribiendo(); actualizarPedir();
+    pintarEscribiendo(); actualizarPedir(); marcarVisto();
   }
   function llegoElResumen() {
     verCharla = false; pintarLista();
@@ -593,12 +726,24 @@
     pintarCard(); pintarAviso();
   }
   async function cargarMensajes(id) {
-    const { data, error } = await X.sb.from("sesion_mensajes").select("id, sesion_id, autor, texto, creado_en")
-      .eq("sesion_id", id).order("id").limit(1000);
+    const [{ data, error }, { data: vistos }] = await Promise.all([
+      X.sb.from("sesion_mensajes").select("id, sesion_id, autor, texto, creado_en").eq("sesion_id", id).order("id").limit(1000),
+      X.sb.from("sesion_vistos").select("usuario_id, hasta").eq("sesion_id", id),
+    ]);
     if (error || !mirando || mirando.id !== id) return;
     mensajes = data || [];
+    (vistos || []).forEach((v) => {
+      if (v.usuario_id === yo()) vistoMio = Math.max(vistoMio, v.hasta); else vistoSuyo = Math.max(vistoSuyo, v.hasta);
+    });
     pintarLista(); pintarVista();
     if (mirando.estado === "cerrada") el.lista.scrollTop = 0; else bajar(false);
+    marcarVisto();
+  }
+  // Mi pareja vio mis mensajes (o un teléfono mío avisó lo que vi desde otro aparato)
+  function llegoVisto(v) {
+    if (!v || !mirando || v.sesion_id !== mirando.id) return;
+    if (v.usuario_id === yo()) { vistoMio = Math.max(vistoMio, v.hasta); return; }
+    if (v.hasta > vistoSuyo) { vistoSuyo = v.hasta; pintarVistos(); }
   }
   async function sincronizarHora() {
     const t0 = Date.now(), { data, error } = await X.sb.rpc("ahora"), t1 = Date.now();
@@ -615,6 +760,8 @@
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "sesiones" }, () => cargar())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "sesion_mensajes", filter: `pareja_id=eq.${p}` },
         (x) => { if (x.new && x.new.id) agregarMensaje(x.new); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "sesion_vistos", filter: `pareja_id=eq.${p}` },
+        (x) => llegoVisto(x.new))
       .subscribe();
     if (vivo) X.sb.removeChannel(vivo);
     vivo = X.sb.channel(`sesion-vivo-${p}`, { config: { presence: { key: X.user.id } } })
@@ -642,7 +789,7 @@
   document.addEventListener("visibilitychange", () => {
     if (!X || !el) return;
     marcarPresencia();
-    if (document.hidden) { dejarDeEscribir(); return; }
+    if (document.hidden) { cortarDictado(); dejarDeEscribir(); return; }
     cargar();
     if (mirando) cargarMensajes(mirando.id);
   });

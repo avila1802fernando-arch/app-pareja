@@ -1,5 +1,5 @@
 // Edge Function "familia-cuenta" — las cuentas del Recreo (juegos en familia)
-// (Borrador del plan: va en supabase/functions/familia-cuenta/index.ts. La función `cuenta` de Nosotros no se toca.)
+// (La función `cuenta` de Nosotros no se toca: esta es aparte.)
 //
 // Igual que `cuenta`: usuario y contraseña, sin correo. Supabase Auth necesita un email, así que se usa uno
 // interno usuario@familia.invalid. OJO: NUNCA @nosotros.invalid, que es el de la pareja: con ese dominio

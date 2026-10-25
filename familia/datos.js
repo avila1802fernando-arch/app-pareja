@@ -223,21 +223,20 @@
       { usuario_id: "eli", nombre: "Eli", avatar: "🦋", color: "uva" },
       { usuario_id: "maritza", nombre: "Maritza", avatar: "🌺", color: "coral" },
       { usuario_id: "fernando", nombre: "Fernando", avatar: "🦊", color: "azul" },
-      { usuario_id: "martina", nombre: "Martina", avatar: "🐧", color: "menta" },
     ].map((m) => ({ ...m, creado_en: hace(200), actualizado_en: hace(100) }));
     const p = (id, juego, puntos, h) => ({ usuario_id: id, juego, puntos, creado_en: hace(h) });
     const partidas = [
-      p("martina", "lluvia", 2340, 30), p("fernando", "lluvia", 2100, 50), p("eli", "lluvia", 1800, 26), p("maritza", "lluvia", 950, 70),
-      p("martina", "vuelo", 3200, 5), p("fernando", "vuelo", 2700, 90), p("maritza", "vuelo", 1400, 3),
-      p("maritza", "memoria", 1120, 2), p("eli", "memoria", 980, 24), p("fernando", "memoria", 900, 96), p("martina", "memoria", 640, 150),
-      p("fernando", "fusion", 4380, 8), p("eli", "fusion", 2150, 1), p("martina", "fusion", 1960, 40), p("maritza", "fusion", 1200, 1.5),
+      p("fernando", "lluvia", 2100, 50), p("eli", "lluvia", 1800, 26), p("maritza", "lluvia", 950, 70),
+      p("fernando", "vuelo", 2700, 90), p("maritza", "vuelo", 1400, 3),
+      p("maritza", "memoria", 1120, 2), p("eli", "memoria", 980, 24), p("fernando", "memoria", 900, 96),
+      p("fernando", "fusion", 4380, 8), p("eli", "fusion", 2150, 1), p("maritza", "fusion", 1200, 1.5),
     ].sort((a, b) => a.creado_en < b.creado_en ? -1 : 1);
     marcador = {}; actividad = [];
     partidas.forEach((x) => sumar(x.usuario_id, x.juego, x.puntos, x.creado_en));
     user = { id: miembros.some((m) => m.usuario_id === quien) ? quien : "eli", email: `${quien}@prueba` };
     if (nuevo) { const m = yo(); m.actualizado_en = m.creado_en; } // para ver "Elige tu personaje"
     // que haya algo en "Mientras no estabas": lo visto antes de que Maritza jugara Memoria
-    if (!leer(claveVisto())) { const v = mejores(); v.memoria.maritza = 600; v.vuelo.martina = 2500; anotar(claveVisto(), v); }
+    if (!leer(claveVisto())) { const v = mejores(); v.memoria.maritza = 600; v.vuelo.fernando = 2000; anotar(claveVisto(), v); }
   }
 
   // ---------- arranque ----------

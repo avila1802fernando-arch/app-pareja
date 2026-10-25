@@ -8,6 +8,7 @@ window.RECREO_CONFIG = {
     { usuario: "eli", nombre: "Eli", avatar: "🦋", color: "uva" },
     { usuario: "maritza", nombre: "Maritza", avatar: "🌺", color: "coral" },
   ],
-  // Entran con su cuenta de siempre (usuario@nosotros.invalid)
-  YA_TIENEN_CUENTA: ["fernando", "martina"],
+  // Entra con su cuenta de siempre (usuario@nosotros.invalid). Martina no: está oculta en el Recreo
+  // (supabase/familia.sql) y no puede entrar.
+  YA_TIENEN_CUENTA: ["fernando"],
 };

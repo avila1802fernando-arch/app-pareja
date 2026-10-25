@@ -28,6 +28,9 @@ create table if not exists public.familia_partidas (
   detalle jsonb check (detalle is null or pg_column_size(detalle) <= 2000),
   creado_en timestamptz not null default now()
 );
+-- Oculto: no sale en el Recreo (ni en el ranking, ni en las partidas) y no puede entrar. Martina está oculta
+-- porque Fernando lo pidió el 2026-10-25 (ver el final del archivo).
+alter table public.familia_miembros add column if not exists oculto boolean not null default false;
 create index if not exists familia_partidas_recientes_idx on public.familia_partidas (creado_en desc);
 create index if not exists familia_partidas_mejor_idx on public.familia_partidas (usuario_id, juego, puntos desc);
 
@@ -38,16 +41,23 @@ alter table public.familia_partidas enable row level security;
 -- ¿Soy del Recreo? (sin pasar por RLS, para usarla dentro de las políticas)
 create or replace function public.es_familia() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.familia_miembros where usuario_id = auth.uid());
+  select exists (select 1 from public.familia_miembros where usuario_id = auth.uid() and not oculto);
+$$;
+
+-- ¿Esta persona está oculta? (también sin pasar por RLS: la familia no ve las filas ocultas)
+create or replace function public.familia_oculto(u uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.familia_miembros where usuario_id = u and oculto);
 $$;
 
 -- Los del Recreo se ven entre ellos. Nombre, personaje y color se cambian con editar_familia().
 drop policy if exists "familia: verse" on public.familia_miembros;
-create policy "familia: verse" on public.familia_miembros for select using (public.es_familia());
+create policy "familia: verse" on public.familia_miembros for select using (public.es_familia() and not oculto);
 
 -- Partidas: las ven todos los del Recreo; cada uno guarda solo las suyas (no se editan ni se borran)
 drop policy if exists "familia: ver partidas" on public.familia_partidas;
-create policy "familia: ver partidas" on public.familia_partidas for select using (public.es_familia());
+create policy "familia: ver partidas" on public.familia_partidas
+  for select using (public.es_familia() and not public.familia_oculto(usuario_id));
 drop policy if exists "familia: jugar" on public.familia_partidas;
 create policy "familia: jugar" on public.familia_partidas
   for insert with check (usuario_id = auth.uid() and public.es_familia());
@@ -65,7 +75,10 @@ begin
   select email into correo from auth.users where id = auth.uid() and email_confirmed_at is not null;
   if correo is null then return null; end if;
   select * into fila from public.familia_miembros where usuario_id = auth.uid();
-  if found then return fila; end if;
+  if found then
+    if fila.oculto then return null; end if; -- oculta: no entra
+    return fila;
+  end if;
   if not (correo like '%@familia.invalid'
           or (correo like '%@nosotros.invalid' and exists (
                 select 1 from public.parejas
@@ -112,7 +125,7 @@ language sql stable security definer set search_path = public as $$
         from public.partidas p
        where p.juego in ('corazones', 'vuelo', 'memoria', 'fusion')
     ) t
-   where exists (select 1 from public.familia_miembros m where m.usuario_id = t.usuario_id);
+   where exists (select 1 from public.familia_miembros m where m.usuario_id = t.usuario_id and not m.oculto);
 $$;
 revoke all on function public.familia_todas() from public, anon, authenticated;
 
@@ -155,6 +168,11 @@ select u.id, left(initcap(split_part(u.email, '@', 1)), 20),
    and exists (select 1 from public.parejas x
                 where (x.usuario_a = u.id or x.usuario_b = u.id) and x.usuario_b is not null)
 on conflict (usuario_id) do nothing;
+
+-- Martina no se ve en el Recreo: ni sus récords ni su nombre (lo pidió Fernando el 2026-10-25).
+-- Para que vuelva a aparecer: quitar estas líneas y correr  update public.familia_miembros set oculto = false ...
+update public.familia_miembros set oculto = true
+ where usuario_id in (select id from auth.users where email = 'martina@nosotros.invalid') and not oculto;
 
 -- ========== TIEMPO REAL ==========
 -- Una partida nueva o un personaje cambiado se ven al instante (RLS: solo les llega a los del Recreo)

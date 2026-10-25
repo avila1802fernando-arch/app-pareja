@@ -30,6 +30,8 @@ ok(true, "familia.sql corre dos veces seguidas sin error");
 
 const sembrados = (await db.query("select nombre, avatar, color from public.familia_miembros order by nombre")).rows;
 ok(sembrados.length === 2, `al principio solo están Fernando y Martina (${sembrados.map((r) => r.nombre).join(", ")})`);
+const ocultos = (await db.query("select nombre from public.familia_miembros where oculto")).rows.map((r) => r.nombre);
+ok(ocultos.length === 1 && ocultos[0] === "Martina", "Martina queda oculta en el Recreo");
 ok(sembrados.some((r) => r.nombre === "Fernando" && r.avatar === "🦊"), "Fernando sale con su usuario, no con el apodo 'Tu amorcito'");
 
 // Maritza todavía no entró: no ve nada
@@ -54,7 +56,11 @@ ok(await nadie("sinconf"), "una cuenta sin confirmar NO entra");
 ok(!!(await falla("anon", "select * from public.entrar_familia()")), "sin sesión no se puede llamar entrar_familia");
 
 // Ver y jugar
-ok((await como("eli", "select * from public.familia_miembros")).rows.length === 4, "Eli ve a los 4 del Recreo");
+ok((await como("eli", "select * from public.familia_miembros")).rows.length === 3, "Eli ve a 3 del Recreo (no a Martina)");
+ok((await como("mar", "select * from public.entrar_familia()")).rows.every((f) => f.usuario_id == null), "Martina NO puede entrar al Recreo");
+ok((await como("mar", "select * from public.ranking_familia(now())")).rows.length === 0, "Martina no ve el ranking");
+await db.query("insert into public.familia_partidas (usuario_id, juego, puntos) values ($1, 'memoria', 7777)", [uid("mar")]);
+ok(!(await como("eli", "select * from public.familia_partidas")).rows.some((f) => f.usuario_id === uid("mar")), "Eli no ve partidas de Martina (tampoco en tiempo real)");
 await como("eli", "insert into public.familia_partidas (usuario_id, juego, puntos) values ($1, 'lluvia', 1800)", [uid("eli")]);
 ok(true, "Eli guarda su partida");
 ok(!!(await falla("eli", "insert into public.familia_partidas (usuario_id, juego, puntos) values ($1, 'lluvia', 9999)", [uid("mam")])),
@@ -79,7 +85,7 @@ const rk = (await como("eli", "select * from public.ranking_familia(now() - inte
 const de = (k, j) => rk.find((r) => r.usuario_id === uid(k) && r.juego === j);
 ok(de("fer", "lluvia") && de("fer", "lluvia").mejor === 2100 && de("fer", "lluvia").partidas === 2, "Fernando: corazones de Nosotros cuenta como lluvia (mejor 2100, 2 partidas)");
 ok(de("fer", "lluvia").mejor_hoy === 1500, "su mejor de hoy es 1500 (la de hace 1 hora)");
-ok(de("mar", "lluvia").mejor === 2340 && de("mar", "vuelo").mejor === 3200, "Martina: 2340 en lluvia y 3200 en vuelo");
+ok(!rk.some((r) => r.usuario_id === uid("mar")), "los récords de Martina NO salen en el ranking");
 ok(de("eli", "lluvia").mejor === 1800, "Eli: 1800 en lluvia");
 ok(!rk.some((r) => r.juego === "otro_juego" || r.juego === "corazones"), "solo los 4 juegos, con los nombres del Recreo");
 ok(!rk.some((r) => r.usuario_id === uid("suelta")), "la cuenta suelta (5000 pts) no aparece");
@@ -87,8 +93,9 @@ ok(!("detalle" in (rk[0] || {})), "el ranking no trae el detalle de las partidas
 ok((await como("suelta", "select * from public.ranking_familia(now())")).rows.length === 0, "quien no es del Recreo no ve el ranking");
 ok(!!(await falla("anon", "select * from public.ranking_familia(now())")), "sin sesión no hay ranking");
 
-const act = (await como("mam", "select * from public.actividad_familia(5)")).rows;
-ok(act.length === 5 && +new Date(act[0].creado_en) >= +new Date(act[1].creado_en), "actividad: las 5 más nuevas, de la más reciente a la más vieja");
+const act = (await como("mam", "select * from public.actividad_familia(3)")).rows;
+ok(act.length === 3 && +new Date(act[0].creado_en) >= +new Date(act[1].creado_en), "actividad: las 3 más nuevas, de la más reciente a la más vieja");
+ok(!(await como("mam", "select * from public.actividad_familia(50)")).rows.some((r) => r.usuario_id === uid("mar")), "actividad sin Martina");
 ok(!act.some((r) => r.usuario_id === uid("suelta")), "actividad sin la cuenta suelta");
 
 // Editar
@@ -103,7 +110,7 @@ ok((await db.query("select nombre from public.familia_miembros where usuario_id 
 
 // Borrar una cuenta de la familia no toca nada de Nosotros
 await db.exec(`delete from auth.users where id = '${uid("eli")}'`);
-ok((await db.query("select count(*)::int n from public.familia_partidas")).rows[0].n === 0, "borrar a Eli borra sus partidas del Recreo");
+ok((await db.query("select count(*)::int n from public.familia_partidas where usuario_id = $1", [uid("eli")])).rows[0].n === 0, "borrar a Eli borra sus partidas del Recreo");
 ok((await db.query("select count(*)::int n from public.partidas")).rows[0].n === 7, "y las partidas de Nosotros siguen intactas");
 
 console.log(fallas ? `\n${fallas} PRUEBA(S) FALLARON` : "\nTodo bien ✓");

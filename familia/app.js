@@ -412,7 +412,7 @@
     if (error) { toast("No se pudo cambiar. " + SIN_CONEXION); return; }
     $("nueva-clave").value = ""; toast("Contraseña cambiada 🔐");
   });
-  // Cerrar sesión solo en este teléfono: con el alcance por defecto se cerraría en todos (y Fernando y Martina
+  // Cerrar sesión solo en este teléfono: con el alcance por defecto se cerraría en todos (y Fernando
   // también usan su cuenta en la otra app)
   async function cerrarSesion() {
     if (PRUEBA) { location.replace(location.pathname); return; }

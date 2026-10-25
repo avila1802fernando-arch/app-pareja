@@ -1,10 +1,10 @@
 # Recreo · juegos en familia
 
-App aparte (no se publica junto con la otra) para que **Eli** y **Maritza** jueguen los cuatro juegos sin nada romántico, con un ranking donde salen también Fernando y Martina. El plan completo, con las decisiones, está en `docs/plan-familia.md`; la maqueta, en `docs/recreo-maqueta.html`.
+App aparte (no se publica junto con la otra) para que **Eli** y **Maritza** jueguen los cuatro juegos sin nada romántico, con un ranking donde sale también Fernando (Martina está oculta: no se ven sus récords). El plan completo, con las decisiones, está en `docs/plan-familia.md`; la maqueta, en `docs/recreo-maqueta.html`.
 
 - **Juegos**: Lluvia de estrellas, Avioncito de papel, Memoria del Ecuador y Fusión de frutas. Tienen las mismas reglas de puntaje que los de la otra app, así que los récords se pueden comparar.
 - **Base**: el mismo proyecto de Supabase, con tablas propias (`supabase/familia.sql`). Eli y Maritza no pueden leer nada de la otra app.
-- **Cuentas**: `eli` y `maritza` (correo interno `usuario@familia.invalid`), creadas desde el Recreo por la función `familia-cuenta`. Fernando y Martina pueden entrar con su cuenta de siempre.
+- **Cuentas**: `eli` y `maritza` (correo interno `usuario@familia.invalid`), creadas desde el Recreo por la función `familia-cuenta`. Fernando puede entrar con su cuenta de siempre; Martina está oculta y no puede entrar.
 - **Costo**: cero.
 
 ## Probar en el computador (sin tocar la base real)

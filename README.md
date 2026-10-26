@@ -27,7 +27,8 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
   - **Frasco de razones 🫙**: "te quiero porque…". El otro no puede leerlas hasta sacarlas del frasco (lo asegura la base de datos).
   - **Vales de amor 🎟️**: "un abrazo de 10 minutos", "tú eliges la película"… para canjear cuando se vean; a quien lo regaló le llega un aviso al canjearlo.
   - **Nuestros momentos**: el álbum con las fotos del día de los dos.
-- **Juegos** 🎮 · Cuatro minijuegos para jugar cada uno en su teléfono, con el **récord de cada uno** en cada juego y la corona 👑 para quien va ganando (`public/juegos/`):
+- **Juegos** 🎮 · Cuatro minijuegos para jugar cada uno en su teléfono, con el **récord de cada uno** en cada juego y la corona 👑 para quien va ganando, y una batalla naval para jugar los dos a la vez (`public/juegos/`):
+  - **Batalla naval en vivo** ⚓: cada uno acomoda su flota en secreto y se turnan para disparar (si aciertas, vuelves a disparar). Se puede apostar algo ("Quien pierde canta una canción…"), se ve si el otro tiene la batalla abierta y, si no, se le manda un aviso 🔔. Las flotas son secretas de verdad: los disparos los resuelve la base (`supabase/batalla.sql`). También se puede practicar contra la compu 🤖.
   - **Atrapa los corazones**: 90 segundos y 6 niveles tocando corazones (la postal "edición revancha", ahora para los dos). Cada corazón dice algo bonito con el nombre de quien juega.
   - **Vuelo hasta ti**: un corazón con alas vuela los km que los separan (los reales si activaron la ubicación) esquivando nubes de tormenta.
   - **Memoria de nosotros**: cuatro rondas contra el reloj para encontrar parejas (el girasol, las cartas, la misma luna…).
@@ -56,9 +57,10 @@ Para que nada se vea de plantilla, todo sale de la papelería de cartas entre Ec
 public/                 ← la app (HTML, CSS, JS, íconos, service worker)
   config.js             ← TUS claves públicas (editar)
   preguntas.js          ← las preguntas del día (puedes agregar las tuyas)
-  juegos/               ← la sala de juegos (sala.js) y cada minijuego (corazones, vuelo, memoria, fusion)
+  juegos/               ← la sala de juegos (sala.js), cada minijuego (corazones, vuelo, memoria, fusion) y la batalla naval (batalla.js, batalla-motor.js)
 supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede repetir)
 supabase/avisos.sql     ← la base avisa a las funciones: triggers + tarea cada 5 min (editar 2 valores y pegar)
+supabase/batalla.sql    ← la batalla naval en vivo: flotas secretas, turnos y avisos (pegar después de avisos.sql)
 supabase/functions/
   _shared/push.ts       ← código común para enviar push
   notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día, calendario y sesiones
@@ -179,6 +181,7 @@ Un solo script, `supabase/avisos.sql`, deja todo cableado: un trigger en `evento
    - `TU_REF` por el *Reference ID* del proyecto (Project Settings → General)
    - `TU_WEBHOOK_SECRET` por la misma clave del paso 5
 3. Pega el archivo en **SQL Editor** → **Run**. Se puede volver a correr: si lo corres sin cambiar esas dos líneas, se queda con los valores que ya había.
+4. Para la **batalla naval** ⚓: pega también `supabase/batalla.sql` → **Run** (después de `avisos.sql`, así el reto y el "¡Avisarle!" llegan como push). Se puede volver a correr.
 
 No crees **Database Webhooks** en el panel: hacen lo mismo y cada aviso llegaría doble (si ya los tenías de una versión anterior, `avisos.sql` los quita).
 
@@ -239,6 +242,7 @@ Cada vez que llega una versión nueva:
    ```
    (`sesion` solo si ya hiciste el paso 8.)
 4. Si todavía no lo corriste, `supabase/avisos.sql` (paso 6): reemplaza a los Database Webhooks del panel y a `cron.sql` de versiones anteriores. Las funciones nuevas (señales, ánimo, pregunta del día, cartas, lista) **no necesitan avisos ni secretos nuevos**.
+5. Para la batalla naval: corre `supabase/batalla.sql` (una vez; se puede repetir) y vuelve a publicar `notificar`.
 
 ## Prueba
 
@@ -248,6 +252,8 @@ Cada vez que llega una versión nueva:
 - Uno toca **Abrazo** 🤗: al otro le llega la push con vibración; si tenía la app abierta, llueven abrazos por la pantalla.
 - Uno escribe una carta **sellada** para dentro de 10 minutos: el otro ve "🔒 Carta sellada de X · se abre…" y, cuando llega la hora (con un margen de hasta 5 minutos), le llega "Ya puedes abrir la carta de X".
 - Agreguen el viaje que tengan planeado en **Calendario** con tipo *Viaje*: el corazón del Inicio empieza a contar los días.
+- **Batalla naval**: uno reta al otro desde Juegos. Al otro le llega "⚓ X te reta a una batalla naval"; cuando los dos acomodan su flota, empieza y los disparos se ven al instante en los dos teléfonos.
+- Para probar la batalla en el computador sin sesión (no toca la base): en la consola, `NosotrosJuegos.probar("batalla")` en una pestaña y `NosotrosJuegos.probar("batalla", { soy: "otro" })` en otra. Las pruebas automáticas: `cd supabase/pruebas && npm install && npm run test:batalla`.
 
 Ajustes que ya trae (constantes al inicio de cada archivo):
 - `MINUTOS_SIN_REPETIR = 15` en `notificar/index.ts`: si la misma persona entra varias veces en 15 minutos, solo se avisa la primera.

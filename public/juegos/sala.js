@@ -2,7 +2,8 @@
 // Minijuegos para jugar cada uno en su teléfono. Cada juego guarda el récord de cada uno (tabla `partidas`),
 // la corona 👑 la tiene quien va ganando, al terminar se puede retar al otro y, si le quitas un récord,
 // te ganas su premio secreto 💌 (tabla `premios`). Los juegos viven en corazones.js, vuelo.js, memoria.js
-// y fusion.js, y se anotan con NosotrosJuegos.registrar().
+// y fusion.js, y se anotan con NosotrosJuegos.registrar(). La Batalla naval ⚓ (en vivo, los dos a la vez) vive
+// aparte en batalla.js: se baja después de la sala y su tarjeta va primera en la lista.
 // app.js deja lo que hace falta en window.nosotros, avisa con "nosotros:dentro" y, cada vez que se abre
 // la pestaña, con "nosotros:juegos".
 (() => {
@@ -320,6 +321,7 @@
     S.aviso.hidden = !sinBase || prueba;
     S.lista.innerHTML = "";
     JUEGOS.forEach((j) => S.lista.append(cartaJuego(j)));
+    S.bCarta = null; pintarBatalla();
     pintarPremio(); pintarRecientes(); pintarFamilia();
     if (X.renderAvatares) X.renderAvatares();
   }
@@ -734,6 +736,44 @@
     if (X.estallido) X.estallido(V.retar, "😏", 6);
   }
 
+  // ---------- Batalla naval ⚓ (batalla.js, con su motor y su hoja de estilos) ----------
+  let batalla = null, conBatalla = false;
+  function bajarBatalla() {
+    if (batalla) return batalla;
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "/juegos/batalla.css"; document.head.append(css);
+    batalla = new Promise((listo) => {
+      ["batalla-motor", "batalla"].forEach((j, i, todos) => {
+        const s = document.createElement("script");
+        s.src = `/juegos/${j}.js`; s.async = false;
+        if (i === todos.length - 1) s.onload = s.onerror = listo;
+        document.body.append(s);
+      });
+    }).then(() => { if (!window.Batalla) { batalla = null; css.remove(); } }); // sin red: se reintenta la próxima vez
+    return batalla;
+  }
+  function conectarBatalla() {
+    if (!window.Batalla || !X || !X.pareja || !X.otro || !X.otro.id) return;
+    window.Batalla.iniciar({
+      sb: prueba ? null : X.sb, prueba, yo: yo(), otro: elOtro(), parejaId: X.pareja.id, toast, vibrar,
+      lluvia: (e, n) => { if (X && X.lluvia) X.lluvia(e, n); },
+      renderAvatares: () => { if (X && X.renderAvatares) X.renderAvatares(); },
+      alCambiar: pintarBatalla,
+    });
+    conBatalla = true;
+    pintarBatalla();
+  }
+  // La tarjeta se cambia sola cuando algo pasa en la batalla (sin redibujar el resto de la sala)
+  function pintarBatalla() {
+    if (!S || !conBatalla || !window.Batalla) return;
+    const n = window.Batalla.tarjeta();
+    if (!n) return;
+    const tenia = !!S.bCarta && document.activeElement === S.bCarta;
+    if (S.bCarta && S.bCarta.parentNode === S.lista) S.bCarta.replaceWith(n); else S.lista.prepend(n);
+    S.bCarta = n;
+    if (tenia) n.focus({ preventScroll: true });
+  }
+
   // ---------- registro, arranque y modo de prueba ----------
   function registrar(def) {
     JUEGOS.push(def);
@@ -741,11 +781,14 @@
   }
 
   // Solo para probar en el computador sin iniciar sesión: NosotrosJuegos.probar("vuelo", { marcador: { vuelo: [1200, 1800] } })
+  // La batalla, en dos pestañas: probar("batalla") en una y probar("batalla", { soy: "otro" }) en la otra (el lado de tu pareja)
   function probar(id, op = {}) {
     prueba = true;
     const hoy = new Date().toISOString().slice(0, 10);
+    const fer = { id: "yo", nombre: op.yo || "Fernando" }, mar = { id: "otro", nombre: op.otro || "Martina" };
+    const y = op.soy === "otro" ? mar : fer, o = op.soy === "otro" ? fer : mar;
     X = {
-      user: { id: "yo" }, perfil: { nombre: op.yo || "Fernando" }, otro: { id: "otro", nombre: op.otro || "Martina" }, pareja: { id: "prueba" },
+      user: { id: y.id }, perfil: { nombre: y.nombre }, otro: o, pareja: { id: "prueba" },
       toast: null, lluvia: null, estallido: null, renderAvatares: () => {},
       miTz: () => "America/Guayaquil", suTz: () => "America/Santiago", diaHoy: () => hoy, claveDia: (iso) => String(iso).slice(0, 10),
       ago: () => "hace un momento",
@@ -759,7 +802,8 @@
     premio = { esperando: !!op.premio, mio: null, mios: [], ganados: [] };
     familia = op.familia || [];
     montarSala(); pintarSala();
-    if (id) { const def = JUEGOS.find((j) => j.id === id); if (def) abrir(def); }
+    bajarBatalla().then(() => { conectarBatalla(); if (id === "batalla" && window.Batalla) window.Batalla.abrir("vivo"); });
+    if (id && id !== "batalla") { const def = JUEGOS.find((j) => j.id === id); if (def) abrir(def); }
     return "ok";
   }
 
@@ -781,6 +825,7 @@
     montarSala();
     suscribir();
     cargar().then(() => { pintarSala(); marcarPunto(); });
+    bajarBatalla().then(conectarBatalla);
   }
 
   window.NosotrosJuegos = { registrar, probar };
@@ -795,6 +840,7 @@
     if (!X || prueba) return;
     if (!canal || canal.state === "closed" || canal.state === "errored") suscribir();
     cargar().then(() => { pintarSala(); marcarPunto(); });
+    if (conBatalla && window.Batalla) window.Batalla.alDia();
   });
   // "Atrás" (botón o gesto de Android) en plena partida la pausa en vez de tirarla; si no se está jugando, cierra
   window.addEventListener("popstate", () => {

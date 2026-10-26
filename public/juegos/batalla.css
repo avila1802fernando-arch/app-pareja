@@ -1,0 +1,157 @@
+/* ===== Batalla naval ⚓ (ver juegos/batalla.js) =====
+   El marco es el de los demás juegos (.jv); adentro, el mar en turquesa y el fuego en rosa (un color de cada uno),
+   y los barcos en gris pizarra con ojos de buey. El tablero es puro CSS: sin imágenes ni canvas.
+   Lo que se anima al llegar (un disparo, el turno) recibe --d: así no vuelve a empezar cuando la pantalla se redibuja. */
+.bn,.bn-carta{--j-a:#2bb8c9;--j-b:#ff7aa2;--j-c:#11707c;--fuego:#e5395f;--chispa:#ffa043}
+.bn{--mar:#dcf3f1;--mar-hondo:#b6e1dd;--casco:#3b6474;--casco-luz:#a7d2db;--espuma:#4fa9a3;--mira:#e5395f}
+@media (prefers-color-scheme:dark){
+  .bn,.bn-carta{--fuego:#ff6b8a;--chispa:#ffb35c}
+  .bn{--mar:#133f42;--mar-hondo:#0b2a2d;--casco:#a9cdd7;--casco-luz:#35606f;--espuma:#6cc7bf;--mira:#ff6b8a}
+}
+
+/* ---------- la tarjeta en la sala ---------- */
+.bn-carta.toca{border-color:var(--j-b);animation:bn-llama 2.2s ease-in-out infinite}
+@keyframes bn-llama{50%{border-color:var(--j-a)}}
+.bn-vivo{display:inline-flex;align-items:center;gap:5px;vertical-align:3px;padding:3px 8px 3px 7px;border-radius:999px;font-family:var(--body);
+  font-size:.58rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;line-height:1;color:var(--j-tx);
+  background:color-mix(in srgb,var(--j-a) 16%,var(--card));border:1px solid color-mix(in srgb,var(--j-a) 45%,var(--line))}
+.bn-vivo::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
+.bn-vivo.encendido{color:#fff;background:var(--fuego);border-color:var(--fuego)}
+.bn-vivo.encendido::before{opacity:1;background:#fff;animation:bn-parpadeo 1.3s ease-in-out infinite}
+@keyframes bn-parpadeo{50%{opacity:.25}}
+.bn-estado-carta{display:flex;flex-direction:column;gap:2px;margin-top:8px;padding:8px 12px;border-radius:12px;
+  background:color-mix(in srgb,var(--j-a) 9%,var(--card));border:1.5px dashed color-mix(in srgb,var(--j-a) 45%,var(--line))}
+.bn-estado-carta b{font-family:var(--j-num);font-weight:600;font-size:.98rem;line-height:1.2}
+.bn-estado-carta small{font-size:.76rem;color:var(--muted);line-height:1.3;overflow-wrap:anywhere}
+.bn-carta.toca .bn-estado-carta{border-style:solid;border-color:color-mix(in srgb,var(--j-b) 65%,var(--line));background:color-mix(in srgb,var(--j-b) 13%,var(--card))}
+
+/* ---------- la pantalla ---------- */
+.bn-cuerpo{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:14px 10px 16px;border-radius:26px;background:var(--j-capa);border:3px solid var(--card);text-align:center;
+  box-shadow:var(--j-clay),0 0 0 1.5px color-mix(in srgb,var(--j-a) 45%,transparent)}
+.bn-cuerpo>*{flex:none;max-width:100%}
+.bn-cuerpo>:first-child{margin-top:auto}
+.bn-cuerpo>:last-child{margin-bottom:auto}
+.bn[data-fase=juego] .bn-cuerpo{gap:8px;padding-top:10px}
+.bn-cuerpo .small-note{margin:0;max-width:40ch}
+.bn-cargando{margin:0;font-family:var(--hand);font-size:1.5rem;color:var(--j-tx)}
+.bn-texto{margin:0;font-size:.88rem;color:var(--muted);line-height:1.45;max-width:36ch}
+.bn-ayuda{margin:0;font-size:.82rem;color:var(--muted);line-height:1.4;max-width:38ch;min-height:2.8em}
+.bn-presente{margin:0;font-size:.8rem;font-weight:800;color:var(--ok)}
+.bn button.ghost{border-color:color-mix(in srgb,var(--j-c) 40%,var(--line));color:var(--j-tx);background:var(--card)}
+.bn .bn-principal{min-width:220px}
+.bn-fuego:not([disabled]){background:linear-gradient(135deg,var(--chispa),var(--fuego));box-shadow:inset 0 -4px 0 rgba(0,0,0,.16),0 14px 26px -14px var(--fuego)}
+
+/* la apuesta: "Quien pierde…" en una notita */
+.bn-caja{width:100%;max-width:360px;display:flex;flex-direction:column;gap:6px;text-align:left}
+.bn-apuesta{font-family:var(--hand);font-size:1.3rem;min-height:0}
+.bn-ideas{display:flex;flex-wrap:wrap;gap:6px}
+.bn-idea{padding:7px 11px;min-height:36px;border-radius:999px;background:var(--card);color:var(--fg);border:1.5px solid var(--line);box-shadow:none;
+  font-size:.76rem;font-weight:700;line-height:1.2;text-align:left}
+.bn-idea:active{transform:scale(.97)}
+.bn-apuesta-ver{margin:0;padding:8px 14px 7px;border-radius:3px 3px 14px 3px;background:var(--nota);color:var(--nota-tx);font-family:var(--hand);font-size:1.3rem;line-height:1.15;
+  transform:rotate(-1.2deg);box-shadow:0 10px 18px -14px rgba(0,0,0,.55);max-width:32ch;overflow-wrap:anywhere}
+.bn-apuesta-ver.deuda{background:linear-gradient(135deg,#ffe08a,var(--j-oro));color:#4a2a00;font-size:1.4rem}
+
+/* practicando con la compu, cuando la batalla de verdad te espera */
+.bn-volver{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 10px;width:100%;max-width:400px;padding:8px 10px;border-radius:14px;
+  background:color-mix(in srgb,var(--j-b) 14%,var(--card));border:1.5px solid color-mix(in srgb,var(--j-b) 50%,var(--line));font-size:.82rem;font-weight:700}
+.bn .bn-volver button{padding:7px 14px;min-height:36px}
+
+/* ---------- los dos, el turno y qué tablero se ve ---------- */
+.bn-duelo{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:6px;width:100%;max-width:400px}
+.bn-lado{display:flex;align-items:center;gap:7px;min-width:0;padding:5px 10px 5px 5px;border-radius:999px;background:var(--card);border:1.5px solid var(--line);text-align:left;
+  transition:border-color var(--t-medio) var(--salida),box-shadow var(--t-medio) var(--salida)}
+.bn-lado:last-child{flex-direction:row-reverse;text-align:right;padding:5px 5px 5px 10px}
+.bn-lado.toca{border-color:var(--j-b);box-shadow:0 0 0 3px color-mix(in srgb,var(--j-b) 25%,transparent)}
+.bn-lado .avatar{width:30px;height:30px}
+.bn-lado.en-linea .avatar{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ok)}
+.bn-lado-txt{display:flex;flex-direction:column;min-width:0;line-height:1.1}
+.bn-lado-txt b{font-family:var(--j-num);font-weight:600;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bn-lado-txt small{font-size:.66rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bn-vs{font-family:var(--hand);font-size:1.4rem;color:var(--accent);line-height:1}
+.bn-robot{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:1rem;background:var(--blush);border:2px solid var(--card)}
+.bn-turno{margin:0;padding:7px 16px;border-radius:999px;font-family:var(--j-num);font-weight:600;font-size:1rem;line-height:1.2;color:var(--muted);
+  background:var(--card);border:1.5px dashed var(--line)}
+.bn-turno.mio{color:#fff;background:linear-gradient(135deg,var(--j-b),var(--fuego));border:1.5px solid transparent;box-shadow:0 10px 20px -12px var(--fuego)}
+.bn-turno.pop{animation:bn-pop .6s var(--resorte) both;animation-delay:var(--d,0ms)}
+@keyframes bn-pop{from{transform:scale(.6);opacity:0}}
+.bn-fuera{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;font-size:.8rem;color:var(--muted);max-width:400px}
+.bn .bn-avisar{padding:8px 14px;min-height:40px;font-size:.84rem}
+.bn-vistas{display:inline-flex;gap:3px;padding:3px;border-radius:999px;background:var(--card);border:1.5px solid var(--line)}
+.bn-vistas button{padding:8px 14px;min-height:40px;border-radius:999px;background:none;color:var(--muted);box-shadow:none;font-size:.84rem;font-weight:700}
+.bn-vistas button.on{background:var(--j-c);color:#fff}
+.bn-mensaje{margin:0;min-height:1.3em;font-family:var(--hand);font-size:1.38rem;line-height:1.12;color:var(--j-tx);max-width:30ch;text-wrap:balance}
+
+/* ---------- el tablero: 10 × 10, con letras arriba y números al costado ---------- */
+.bn-grilla{display:grid;grid-template-columns:1.1rem repeat(10,minmax(0,1fr));gap:2px;width:100%;max-width:400px;padding:6px 7px 7px 3px;border-radius:16px;
+  background:var(--mar-hondo);box-shadow:inset 0 2px 8px rgba(0,30,40,.14);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.bn-su{background:color-mix(in srgb,var(--j-b) 30%,var(--mar-hondo))}
+.bn-rotulo{display:grid;place-items:center;min-height:.95rem;font-family:var(--j-num);font-size:.6rem;font-weight:600;line-height:1;
+  color:color-mix(in srgb,var(--j-c) 70%,var(--muted))}
+.bn-celda{position:relative;width:100%;aspect-ratio:1;min-height:0;padding:0;border:0;border-radius:4px;background:var(--mar);color:inherit;box-shadow:none;
+  font-size:0;cursor:default;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:background-color var(--t-rapido) var(--salida)}
+.bn-celda:active{transform:none;box-shadow:none}
+.bn-celda:focus-visible{outline:3px solid var(--j-c);outline-offset:1px;z-index:3}
+.bn-celda:not([aria-disabled]){cursor:pointer}
+@media (hover:hover){.bn-su .bn-celda:not([aria-disabled]):hover{background:color-mix(in srgb,var(--mira) 18%,var(--mar))}}
+.bn-su .bn-celda:not([aria-disabled]):active{background:color-mix(in srgb,var(--mira) 32%,var(--mar))}
+@supports not (aspect-ratio:1){.bn-celda{height:0;padding-bottom:100%}}
+
+/* los barcos: el casco es continuo (::before tapa el hueco con la celda siguiente) y cada celda tiene su ojo de buey */
+.bn-celda.barco{background:var(--casco)}
+.bn-celda.barco.h.ini{border-radius:999px 4px 4px 999px}
+.bn-celda.barco.h.fin{border-radius:4px 999px 999px 4px}
+.bn-celda.barco.v.ini{border-radius:999px 999px 4px 4px}
+.bn-celda.barco.v.fin{border-radius:4px 4px 999px 999px}
+.bn-celda.barco:not(.fin)::before{content:"";position:absolute;background:inherit;pointer-events:none}
+.bn-celda.barco.h:not(.fin)::before{top:0;bottom:0;right:-3px;width:4px}
+.bn-celda.barco.v:not(.fin)::before{left:0;right:0;bottom:-3px;height:4px}
+.bn-celda.barco::after{content:"";position:absolute;top:34%;left:34%;width:32%;height:32%;border-radius:50%;background:var(--casco-luz);box-shadow:inset 0 1px 1px rgba(0,0,0,.3)}
+.bn-celda.barco.sel{background:var(--j-b)}
+.bn-celda.barco.sel::after{background:#fff}
+.bn-celda.barco.revelado{background:color-mix(in srgb,var(--casco) 42%,var(--mar))}
+.bn-celda.barco.revelado::after{opacity:.5}
+.bn-celda.barco.hundido{background:color-mix(in srgb,var(--fuego) 48%,var(--casco))}
+
+/* los disparos: agua (espuma), tocado (fuego) y hundido */
+.bn-celda.agua::after{content:"";position:absolute;top:36%;left:36%;width:28%;height:28%;border-radius:50%;background:var(--espuma);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--espuma) 28%,transparent)}
+.bn-celda.tocado:not(.barco){background:color-mix(in srgb,var(--fuego) 24%,var(--mar))}
+.bn-celda.tocado::after{content:"";position:absolute;top:20%;left:20%;width:60%;height:60%;border-radius:50%;box-shadow:0 0 6px var(--fuego);
+  background:radial-gradient(circle,#fff 0 14%,var(--chispa) 15% 42%,var(--fuego) 43%)}
+.bn-celda.hundido.tocado::after{top:27%;left:27%;width:46%;height:46%;box-shadow:none;background:radial-gradient(circle,var(--chispa) 0 32%,var(--fuego) 33%)}
+.bn-celda.nuevo::after{animation:bn-impacto .55s var(--resorte) both;animation-delay:var(--d,0ms)}
+.bn-celda.agua.nuevo{animation:bn-onda .9s var(--salida) both;animation-delay:var(--d,0ms)}
+.bn-celda.tocado.nuevo{animation:bn-temblor .4s ease-in-out both;animation-delay:var(--d,0ms)}
+@keyframes bn-impacto{from{transform:scale(0);opacity:0}}
+@keyframes bn-onda{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--espuma) 75%,transparent)}to{box-shadow:0 0 0 12px transparent}}
+@keyframes bn-temblor{25%{transform:translateX(-2px)}50%{transform:translateX(2px)}75%{transform:translateX(-1px)}}
+
+/* apuntando: una mira que late */
+.bn-celda.apunta{z-index:2;background:color-mix(in srgb,var(--mira) 24%,var(--mar));box-shadow:inset 0 0 0 2px var(--mira);
+  animation:bn-mira 1.2s ease-in-out infinite;animation-delay:var(--d,0ms)}
+.bn-celda.apunta::before,.bn-celda.apunta::after{content:"";position:absolute;border-radius:1px;background:var(--mira)}
+.bn-celda.apunta::before{left:50%;top:14%;bottom:14%;width:2px;margin-left:-1px}
+.bn-celda.apunta::after{top:50%;left:14%;right:14%;height:2px;margin-top:-1px}
+@keyframes bn-mira{50%{box-shadow:inset 0 0 0 2px var(--mira),0 0 0 3px color-mix(in srgb,var(--mira) 35%,transparent)}}
+
+/* ---------- los barcos, en fila (para elegir y para ver cuáles quedan) ---------- */
+.bn-mini{display:inline-block;flex:none;width:calc(var(--n) * 8px - 2px);height:8px;border-radius:4px;
+  background:repeating-linear-gradient(90deg,var(--casco) 0 6px,transparent 6px 8px)}
+.bn-barcos,.bn-flota{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:400px}
+.bn-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;min-height:38px;border-radius:999px;background:var(--card);color:var(--fg);
+  border:1.5px solid var(--line);box-shadow:none;font-size:.78rem;font-weight:700}
+.bn-chip.on{border-color:var(--j-b);background:color-mix(in srgb,var(--j-b) 14%,var(--card))}
+.bn-chip.on .bn-mini{background:repeating-linear-gradient(90deg,var(--j-b) 0 6px,transparent 6px 8px)}
+.bn-fila{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.bn-flota{list-style:none;margin:0;padding:0;gap:5px}
+.bn-flota li{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);
+  font-size:.7rem;font-weight:700;color:var(--fg)}
+.bn-flota li.hundido{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--fuego);text-decoration-thickness:2px;
+  background:color-mix(in srgb,var(--fuego) 8%,var(--card))}
+.bn-flota li.hundido .bn-mini{opacity:.7;background:repeating-linear-gradient(90deg,var(--fuego) 0 6px,transparent 6px 8px)}
+
+@media (prefers-reduced-motion:reduce){
+  .bn *,.bn-carta,.bn-carta *{animation:none!important;transition:none!important}
+}

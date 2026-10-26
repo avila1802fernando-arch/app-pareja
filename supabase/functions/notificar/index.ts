@@ -2,6 +2,7 @@
 // La llaman los triggers de supabase/avisos.sql (mismo formato que un Database Webhook):
 //   - `eventos` (INSERT): entrada, "te extraño", "estoy libre", abrazo, beso, a dormir… → push a la otra persona
 //   - `eventos_cal` (INSERT / UPDATE / DELETE): cambios del calendario → push a la otra persona
+//   - `batallas` (batalla.sql): el reto de batalla naval, el comienzo y el "¡Avisarle!" → push a la otra persona
 //
 // Secretos y utilidades compartidas: ver ../_shared/push.ts
 
@@ -51,6 +52,10 @@ const sb = clienteAdmin();
 
 type Pareja = { usuario_a: string; usuario_b: string | null };
 type Evento = { id: number; pareja_id: string; de_usuario: string; tipo: string; creado_en: string };
+type Batalla = {
+  id: string; pareja_id: string; creado_por: string; rival: string; estado: string;
+  listos: string[] | null; turno: string | null; apuesta: string | null;
+};
 type EventoCal = {
   id: string; pareja_id: string; creado_por: string; actualizado_por: string | null;
   titulo: string; tipo: string; inicio: string; fin: string | null; nota: string | null;
@@ -63,6 +68,7 @@ Deno.serve(async (req) => {
   const payload = await req.json();
   if (payload.table === "eventos" && payload.type === "INSERT") return porEvento(payload.record as Evento);
   if (payload.table === "eventos_cal") return porCalendario(payload);
+  if (payload.table === "batallas") return porBatalla(payload);
   return ok("ignorado");
 });
 
@@ -273,5 +279,46 @@ async function porCalendario(payload: { type: string; record: EventoCal | null; 
     url: "/#calendario",
   };
   const enviadas = await enviarPush(sb, otroId, mensaje);
+  return new Response(JSON.stringify({ enviadas }), { headers: { "content-type": "application/json" } });
+}
+
+// ----- batallas: el reto de batalla naval, el comienzo y el "¡Avisarle!" -----
+// INSERT: al que retaron. UPDATE de "colocando" a "jugando": a quien acomodó primero (puede haber salido de la app
+// mientras esperaba). AVISO (batalla_avisar): de parte de `de`, para que el otro vuelva a la batalla.
+async function porBatalla(payload: { type: string; record: Batalla | null; old_record: Batalla | null; de?: string }) {
+  const b = payload.record;
+  if (!b) return ok("sin batalla");
+  const otroDe = (id: string) => (id === b.creado_por ? b.rival : b.creado_por);
+  let para: string, mensaje: Mensaje;
+  if (payload.type === "INSERT") {
+    para = b.rival;
+    const nombre = await nombreDe(b.creado_por);
+    mensaje = {
+      title: `⚓ ${nombre} te reta a una batalla naval`,
+      // la apuesta no va en el aviso (se vería con el teléfono bloqueado): se lee en la app
+      body: b.apuesta ? "Hay una apuesta en juego 😏 Entra a Juegos a verla y acomoda tu flota." : "Entra a Juegos y acomoda tu flota.",
+      tag: "batalla", url: "/#juegos", vibrate: [80, 60, 80, 60, 200], ttl: 12 * 3600,
+    };
+  } else if (payload.type === "UPDATE" && payload.old_record?.estado === "colocando" && b.estado === "jugando") {
+    const primero = b.listos?.[0];
+    if (!primero) return ok("sin destinatario");
+    para = primero;
+    const nombre = await nombreDe(otroDe(para));
+    mensaje = {
+      title: `⚓ ${nombre} ya acomodó su flota`,
+      body: b.turno === para ? "¡Empieza la batalla y disparas tú primero! 🎯" : `Empieza la batalla: dispara ${nombre} primero.`,
+      tag: "batalla", url: "/#juegos", vibrate: [80, 60, 80], ttl: 3 * 3600,
+    };
+  } else if (payload.type === "AVISO" && payload.de && [b.creado_por, b.rival].includes(payload.de)) {
+    para = otroDe(payload.de);
+    const nombre = await nombreDe(payload.de);
+    const body = b.estado === "jugando"
+      ? (b.turno === para ? "¡Te toca disparar! 🎯" : `Vuelve a la batalla: ${nombre} te está esperando.`)
+      : (b.listos ?? []).includes(para) ? `${nombre} ya casi termina de acomodar su flota: vuelve para empezar.` : "Acomoda tu flota y a jugar ⚓";
+    mensaje = { title: `⚓ ${nombre} te espera en la batalla naval`, body, tag: "batalla", url: "/#juegos", vibrate: [120, 60, 120], ttl: 3600 };
+  } else {
+    return ok("ignorado");
+  }
+  const enviadas = await enviarPush(sb, para, mensaje);
   return new Response(JSON.stringify({ enviadas }), { headers: { "content-type": "application/json" } });
 }

@@ -247,6 +247,44 @@ body.con-juego .tabs{visibility:hidden}
   .fu-celda{background:rgba(255,255,255,.07)}
 }
 
+/* ===== Sensación de juego 🎮 =====
+   Botones y tarjetas que se aprietan como gelatina, las tarjetas que entran en cascada, un brillo que cruza los
+   íconos y el puntaje que salta. Todo con transform y opacity (lo que el teléfono anima sin trabarse) y nada corre
+   mientras se juega, salvo el saltito del marcador (sala.js). --d adelanta la cascada si la sala se redibuja a mitad.
+   (backwards y no both: al terminar, la animación no se queda con el transform y el apretar sigue funcionando) */
+.j-carta,.jv-jugar,.jv-boton{touch-action:manipulation}
+.j-lista.entrando>.j-carta{animation:j-entra .5s var(--resorte) backwards;animation-delay:calc(var(--d,0ms) + var(--i,0) * 60ms)}
+.j-lista.entrando>.j-carta:nth-child(2){--i:1}.j-lista.entrando>.j-carta:nth-child(3){--i:2}.j-lista.entrando>.j-carta:nth-child(4){--i:3}
+.j-lista.entrando>.j-carta:nth-child(5){--i:4}.j-lista.entrando>.j-carta:nth-child(6){--i:5}.j-lista.entrando>.j-carta:nth-child(n+7){--i:6}
+@keyframes j-entra{from{opacity:0;transform:translateY(18px) scale(.94)}}
+.j-carta:active{transform:scale(.965,.95);transition-duration:90ms}
+.j-jugar{transition:transform 120ms var(--salida),box-shadow 120ms var(--salida)}
+.j-carta:active .j-jugar{transform:translateY(2px);box-shadow:inset 0 0 0 3px var(--j-c),inset 0 0 0 4.5px rgba(255,255,255,.5),0 1px 0 color-mix(in srgb,var(--j-c) 65%,#000)}
+/* un brillo cruza el ícono (al entrar, al pasar el mouse y al tocar) */
+.j-icono::after{content:"";position:absolute;inset:-25%;pointer-events:none;transform:translateX(-130%);
+  background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.6) 50%,transparent 62%)}
+.j-lista.entrando .j-icono::after{animation:j-brillo .9s var(--salida) both;animation-delay:calc(var(--d,0ms) + var(--i,0) * 60ms + 250ms)}
+.j-carta:active .j-icono::after{animation:j-brillo .55s var(--salida)}
+@media (hover:hover){.j-carta:hover .j-icono::after{animation:j-brillo .8s var(--salida)}}
+@keyframes j-brillo{from{transform:translateX(-130%)}to{transform:translateX(130%)}}
+
+/* los botones de jugar: con brillo arriba y que se hunden al apretar */
+.jv-jugar{position:relative;isolation:isolate;transition:transform 160ms var(--resorte)}
+.jv-jugar::before{content:"";position:absolute;inset:0 0 52% 0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(rgba(255,255,255,.3),rgba(255,255,255,0))}
+.jv-jugar:active:not([disabled]){transform:scale(.94);transition-duration:80ms}
+.jv-boton{transition:transform 160ms var(--resorte)}
+.jv-boton:active{transform:scale(.88)}
+.jv-hud .val.caliente{text-shadow:0 0 12px rgba(255,140,180,.8)}
+
+/* el final de la partida aparece por partes */
+.jv-fin:not([hidden])>*{animation:j-entra .45s var(--resorte) backwards}
+.jv-fin:not([hidden])>:nth-child(2){animation-delay:60ms}.jv-fin:not([hidden])>:nth-child(3){animation-delay:120ms}
+.jv-fin:not([hidden])>:nth-child(4){animation-delay:180ms}.jv-fin:not([hidden])>:nth-child(5){animation-delay:230ms}
+.jv-fin:not([hidden])>:nth-child(6){animation-delay:280ms}.jv-fin:not([hidden])>:nth-child(n+7){animation-delay:330ms}
+.jv-puntaje span{display:inline-block;font-variant-numeric:tabular-nums}
+
 @media (prefers-reduced-motion:reduce){
   .j-jugador .j-corona,.j-candado{animation:none}
+  .j-lista.entrando>.j-carta,.j-icono::after,.jv-fin:not([hidden])>*{animation:none!important}
 }

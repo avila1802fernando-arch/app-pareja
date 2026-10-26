@@ -47,7 +47,8 @@
   const fmt = (n) => Number(n || 0).toLocaleString("es");
   const leer = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const anotar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-  const poco = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reducir = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const poco = () => reducir.matches;
   const vibrar = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
   const yo = () => ({ id: X && X.user ? X.user.id : "yo", nombre: (X && X.perfil && X.perfil.nombre) || "Tú" });
   const elOtro = () => ({ id: X && X.otro ? X.otro.id : null, nombre: (X && X.otro && X.otro.nombre) || "tu pareja" });
@@ -299,6 +300,27 @@
     });
   }
 
+  // El puntaje final sube contando (como en las máquinas de juegos)
+  function contar(el, n) {
+    const yo = (el._cuenta = {});
+    if (poco() || n < 10) { el.textContent = fmt(n); return; }
+    const t0 = performance.now(), dur = Math.min(900, 350 + n / 15);
+    const paso = (t) => {
+      if (el._cuenta !== yo) return;
+      const p = Math.min(1, (t - t0) / dur);
+      el.textContent = fmt(Math.round(n * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(paso);
+    };
+    el.textContent = "0";
+    requestAnimationFrame(paso);
+  }
+  // Las tarjetas entran en cascada al abrir la pestaña; si la sala se redibuja a mitad, siguen donde iban
+  function cascada() {
+    const t = Date.now() - (S.entraEn || 0), en = t < 1100 && !poco();
+    S.lista.classList.toggle("entrando", en);
+    if (en) S.lista.style.setProperty("--d", `${-t}ms`);
+  }
+
   function pintarSala() {
     if (!S || !X) return;
     const o = elOtro();
@@ -320,6 +342,7 @@
       : "Cada juego guarda el récord de cada uno. Quítale uno a tu pareja y gánate su premio secreto 💌";
     S.aviso.hidden = !sinBase || prueba;
     S.lista.innerHTML = "";
+    cascada();
     JUEGOS.forEach((j) => S.lista.append(cartaJuego(j)));
     S.vivas = {}; pintarEnVivo();
     pintarPremio(); pintarRecientes(); pintarFamilia();
@@ -551,7 +574,15 @@
       hud(k, v, caliente) {
         const e = V.hudVal[k]; if (!e) return;
         const t = String(v);
-        if (e.textContent !== t) e.textContent = t;
+        if (e.textContent !== t) {
+          // si sube de golpe (no algo que cambia en cada cuadro, como los km), da un saltito
+          const n = parseInt(t.replace(/[^\d]/g, ""), 10) || 0, ahora = performance.now();
+          const salta = n > (e._n || 0) && ahora - (e._t || 0) > 250;
+          e.textContent = t; e._n = n; e._t = ahora;
+          if (salta && !poco() && e.animate && (!e._pop || e._pop.playState === "finished")) {
+            e._pop = e.animate([{ transform: "scale(1.3)" }, { transform: "scale(1)" }], { duration: 260, easing: "cubic-bezier(.34,1.56,.64,1)" });
+          }
+        }
         e.classList.toggle("caliente", !!caliente);
       },
       terminar: (res) => terminar(res),
@@ -676,7 +707,7 @@
     const frase = [res.prefijo, fraseRival(def, puntos, antes, leGana, empata)].filter(Boolean).join(" ");
 
     V.fRango.textContent = rango.nombre;
-    V.fNum.textContent = fmt(puntos); V.fUnidad.textContent = def.unidad;
+    contar(V.fNum, puntos); V.fUnidad.textContent = def.unidad;
     V.fInsignia.hidden = !(leGana || empata || nuevo);
     V.fInsignia.classList.toggle("oro", leGana);
     V.fInsignia.textContent = leGana ? `👑 ¡Le quitaste el récord a ${o.nombre}!` : empata ? `¡Empate con ${o.nombre}! 💞` : "✨ ¡Nuevo récord personal!";
@@ -816,7 +847,7 @@
     });
     premio = { esperando: !!op.premio, mio: null, mios: [], ganados: [] };
     familia = op.familia || [];
-    montarSala(); pintarSala();
+    montarSala(); S.entraEn = Date.now(); pintarSala();
     const vivo = EN_VIVO.find((g) => g.id === id);
     bajarEnVivo().then(() => { conectarEnVivo(); if (vivo && window[vivo.global]) window[vivo.global].abrir("vivo"); });
     if (id && !vivo) { const def = JUEGOS.find((j) => j.id === id); if (def) abrir(def); }
@@ -848,7 +879,7 @@
   window.addEventListener("nosotros:dentro", iniciar);
   window.addEventListener("nosotros:juegos", () => {
     if (!X || prueba) return;
-    montarSala(); pintarSala(); marcarPunto();
+    montarSala(); S.entraEn = Date.now(); pintarSala(); marcarPunto();
     cargar().then(() => { pintarSala(); marcarPunto(); });
   });
   // Al volver a la app tras un rato: el marcador se pone al día y, si el canal se cayó, se vuelve a abrir

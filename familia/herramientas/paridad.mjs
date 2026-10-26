@@ -4,6 +4,8 @@
 //    del juego de Nosotros. Así un récord de Fernando o Martina vale lo mismo que uno de Eli o Maritza.
 // 2. Nada romántico: ninguna palabra ni emoji de pareja en lo que se publica (familia/, sin herramientas/).
 // 3. Nosotros intacto: ningún archivo de la app principal cambió.
+// 4. Juegos en vivo: la batalla naval y el UNO son los mismos archivos en las dos apps, y lo que corre en el Recreo
+//    no usa nada que el navegador viejo del teléfono de Eli no entienda.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
@@ -101,7 +103,8 @@ if (fu) {
 }
 
 // ---------- 2. nada romántico ----------
-const PROHIBIDO = /coraz|amor\b|amorcit|enamor|beso|besit|pareja|novi[oa]s?\b|te quiero|te amo|extra[ñn]|cupido|talca|nosotros|💗|💖|💕|💞|💘|💝|💓|💟|💌|💋|❤|♥|🥰|😘|😍|🌹|💑|💏|💍/i;
+// ("coraz" sin "ad" después: el Acorazado de la batalla naval no es un corazón)
+const PROHIBIDO = /coraz(?!ad)|amor\b|amorcit|enamor|beso|besit|pareja|novi[oa]s?\b|te quiero|te amo|extra[ñn]|cupido|talca|nosotros|💗|💖|💕|💞|💘|💝|💓|💟|💌|💋|❤|♥|🥰|😘|😍|🌹|💑|💏|💍/i;
 function archivos(dir) {
   return readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
@@ -125,6 +128,43 @@ const NOSOTROS = ["public", "supabase/schema.sql", "supabase/avisos.sql", "supab
   "supabase/functions/recordatorios", "supabase/functions/_shared", "README.md"];
 const cambios = execSync(`git status --porcelain -- ${NOSOTROS.map((p) => `"${p}"`).join(" ")}`, { encoding: "utf8" }).trim();
 ok(!cambios, "Nosotros sin cambios (public/, schema.sql, avisos.sql, funciones y README)" + (cambios ? `\n      ${cambios.replace(/\n/g, "\n      ")}` : ""));
+
+// ---------- 4. juegos en vivo ----------
+// batalla.js, uno.js, sus motores y sus estilos se usan tal cual en las dos apps: lo propio de cada una llega por el
+// ctx que les pasa su sala.js y por las --v-* de su juegos.css.
+const COMPARTIDOS = ["batalla-motor.js", "batalla.js", "batalla.css", "uno-motor.js", "uno.js", "uno.css"];
+for (const f of COMPARTIDOS) {
+  const a = leer(`public/juegos/${f}`), b = leer(`familia/juegos/${f}`);
+  const por = a == null ? " (falta en public/juegos)" : b == null ? " (falta en familia/juegos)" : a !== b ? ` (distintos: copiar con  cp public/juegos/${f} familia/juegos/)` : "";
+  ok(!por, `juegos/${f} igual en las dos apps${por}`);
+}
+// El navegador del teléfono de Eli es anterior a Chrome 80: en el JavaScript, nada de ?? ni ?. (ni flat/flatMap);
+// en las hojas compartidas, cada color-mix lleva antes un color fijo para la misma propiedad (y ninguna variable se
+// define con color-mix), y nada de inset, min(), max() ni clamp(); aspect-ratio, solo con su respaldo de @supports.
+const viejos = [];
+for (const f of archivos("familia").filter((x) => x.endsWith(".js"))) {
+  readFileSync(f, "utf8").split("\n").forEach((l, i) => {
+    const codigo = l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\/.*$/, "");
+    if (/\?\?|\?\.(?![0-9])|\.flat(Map)?\(/.test(codigo)) viejos.push(`${f}:${i + 1}: ${l.trim().slice(0, 90)}`);
+  });
+}
+for (const f of COMPARTIDOS.filter((x) => x.endsWith(".css"))) {
+  const css = (leer(`familia/juegos/${f}`) || "").replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const m of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    const donde = m[1].trim().split("\n").pop().slice(0, 60);
+    const decl = m[2].split(";").map((d) => d.trim()).filter(Boolean);
+    decl.forEach((d, i) => {
+      const prop = d.split(":")[0].trim();
+      if (prop === "inset") viejos.push(`${f}: inset en «${donde}»`);
+      if (/\b(min|max|clamp)\(/.test(d)) viejos.push(`${f}: min/max/clamp en «${donde}»`);
+      if (!/color-mix\(/.test(d)) return;
+      if (prop.startsWith("--")) viejos.push(`${f}: la variable ${prop} usa color-mix en «${donde}»`);
+      else if (!decl.slice(0, i).some((x) => x.split(":")[0].trim() === prop && !/color-mix\(/.test(x))) viejos.push(`${f}: ${prop} con color-mix sin respaldo en «${donde}»`);
+    });
+  }
+  if (/aspect-ratio\s*:/.test(css) && !/@supports not \(aspect-ratio/.test(css)) viejos.push(`${f}: aspect-ratio sin el respaldo de @supports`);
+}
+ok(!viejos.length, "nada que el navegador viejo de Eli no entienda" + (viejos.length ? `\n      ${viejos.slice(0, 30).join("\n      ")}` : ""));
 
 console.log(fallas ? `\n${fallas} revisión(es) con problemas` : "\nTodo bien ✓");
 process.exit(fallas ? 1 : 0);

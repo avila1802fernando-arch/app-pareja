@@ -170,3 +170,39 @@ body.con-juego .barra{visibility:hidden}
   .fu-tablero{background:#2B2F55}
   .fu-celda{background:rgba(255,255,255,.07)}
 }
+
+/* ---------- juegos en vivo: Batalla naval y UNO ----------
+   batalla.css y uno.css son los mismos de la otra app: aquí van las letras y los colores que piden (--v-*) */
+.jv,.j-carta{--v-texto:var(--f-texto);--v-num:var(--f-titulo);--v-mano:var(--f-titulo);--v-mano-tam:.82;--v-linea:var(--linea);--v-tinta:var(--tinta);
+  --v-suave:var(--tinta-2);--v-ok:var(--ok);--v-acento:var(--primario);--v-robot:var(--sol-suave);--v-nota:var(--sol-suave);--v-nota-tx:var(--tinta);
+  --v-oro:var(--oro);--v-capa:rgba(255,255,255,.93);--v-arcilla:var(--sombra-arcilla);--v-signo:"★";
+  --v-rayas:repeating-linear-gradient(-45deg,var(--primario) 0 9px,transparent 9px 14px,var(--sol) 14px 23px,transparent 23px 28px)}
+@media (prefers-color-scheme:dark){.jv,.j-carta{--v-capa:rgba(26,33,64,.94)}}
+
+/* ===== Sensación de juego 🎮 =====
+   Las tarjetas entran en cascada y se aprietan como gelatina, un brillo cruza los stickers, los botones redondos se
+   achican al tocarlos, el marcador salta (sala.js) y el final aparece por partes. Todo con transform y opacity (lo
+   que el teléfono anima sin trabarse). --d adelanta la cascada si la sala se redibuja a mitad.
+   (backwards y no both: al terminar, la animación no se queda con el transform y el apretar sigue funcionando) */
+.j-carta,.jv-boton,.btn{touch-action:manipulation}
+#juegos-lista.entrando>.j-carta{animation:j-entra .5s var(--resorte) backwards;animation-delay:calc(var(--d,0ms) + var(--i,0) * 60ms)}
+#juegos-lista.entrando>.j-carta:nth-child(2){--i:1}#juegos-lista.entrando>.j-carta:nth-child(3){--i:2}#juegos-lista.entrando>.j-carta:nth-child(4){--i:3}
+#juegos-lista.entrando>.j-carta:nth-child(5){--i:4}#juegos-lista.entrando>.j-carta:nth-child(6){--i:5}#juegos-lista.entrando>.j-carta:nth-child(n+7){--i:6}
+@keyframes j-entra{from{opacity:0;transform:translateY(18px) scale(.94)}}
+.j-carta:active{transform:scale(.965,.95);transition-duration:90ms}
+/* un brillo cruza el sticker (al entrar, al pasar el mouse y al tocar) */
+.j-carta .arte::after{content:"";position:absolute;top:-25%;right:-25%;bottom:-25%;left:-25%;pointer-events:none;transform:translateX(-130%);
+  background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.6) 50%,transparent 62%)}
+#juegos-lista.entrando .arte::after{animation:j-brillo .9s var(--salida) both;animation-delay:calc(var(--d,0ms) + var(--i,0) * 60ms + 250ms)}
+.j-carta:active .arte::after{animation:j-brillo .55s var(--salida)}
+@media (hover:hover){.j-carta:hover .arte::after{animation:j-brillo .8s var(--salida)}}
+@keyframes j-brillo{from{transform:translateX(-130%)}to{transform:translateX(130%)}}
+.jv-boton{transition:transform 160ms var(--resorte)}
+.jv-boton:active{transform:scale(.88)}
+/* el final de la partida aparece por partes (la insignia, con su sello de siempre) */
+.jv-fin:not([hidden])>:not(.jv-insignia){animation:j-entra .45s var(--resorte) backwards}
+.jv-fin:not([hidden])>:nth-child(2){animation-delay:60ms}.jv-fin:not([hidden])>:nth-child(3){animation-delay:120ms}
+.jv-fin:not([hidden])>:nth-child(4){animation-delay:180ms}.jv-fin:not([hidden])>:nth-child(5){animation-delay:230ms}
+.jv-fin:not([hidden])>:nth-child(6){animation-delay:280ms}.jv-fin:not([hidden])>:nth-child(n+7){animation-delay:330ms}
+.jv-fin:not([hidden])>.jv-insignia{animation-fill-mode:backwards}
+.jv-puntaje span{display:inline-block;font-variant-numeric:tabular-nums}

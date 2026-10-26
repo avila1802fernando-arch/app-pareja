@@ -1,105 +1,146 @@
 /* ===== Batalla naval ⚓ (ver juegos/batalla.js) =====
-   El marco es el de los demás juegos (.jv); adentro, el mar en turquesa y el fuego en rosa (un color de cada uno),
-   y los barcos en gris pizarra con ojos de buey. El tablero es puro CSS: sin imágenes ni canvas.
+   El marco es el de los demás juegos (.jv); adentro, el mar en turquesa y el fuego en rosa, y los barcos en gris
+   pizarra con ojos de buey. El tablero es puro CSS: sin imágenes ni canvas.
+   Lo usan las dos apps y el archivo es el mismo en las dos (lo revisa familia/herramientas/paridad.mjs): los colores y
+   letras de cada app llegan como --v-* (los pone el juegos.css de cada una) y nada depende de algo moderno sin respaldo
+   (el teléfono de Eli tiene un navegador viejo): color-mix lleva antes un color fijo, nada de inset ni de min().
    Lo que se anima al llegar (un disparo, el turno) recibe --d: así no vuelve a empezar cuando la pantalla se redibuja. */
 .bn,.bn-carta{--j-a:#2bb8c9;--j-b:#ff7aa2;--j-c:#11707c;--fuego:#e5395f;--chispa:#ffa043}
-.bn{--mar:#dcf3f1;--mar-hondo:#b6e1dd;--casco:#3b6474;--casco-luz:#a7d2db;--espuma:#4fa9a3;--mira:#e5395f}
+.bn{--mar:#dcf3f1;--mar-hondo:#b6e1dd;--casco:#3b6474;--casco-luz:#a7d2db;--espuma:#4fa9a3;--onda:rgba(79,169,163,.75);--mira:#e5395f;--mira-halo:rgba(229,57,95,.35);
+  /* las mezclas ya hechas, para los navegadores sin color-mix */
+  --f-su:#ccc2cb;--f-mira:#ded2d7;--f-mira-fuerte:#dfb7c2;--f-revelado:#98b7bc;--f-hundido:#8d4f6a;--f-tocado:#dec6ce;--f-espuma:rgba(79,169,163,.28)}
 @media (prefers-color-scheme:dark){
   .bn,.bn-carta{--fuego:#ff6b8a;--chispa:#ffb35c}
-  .bn{--mar:#133f42;--mar-hondo:#0b2a2d;--casco:#a9cdd7;--casco-luz:#35606f;--espuma:#6cc7bf;--mira:#ff6b8a}
+  .bn{--mar:#133f42;--mar-hondo:#0b2a2d;--casco:#a9cdd7;--casco-luz:#35606f;--espuma:#6cc7bf;--onda:rgba(108,199,191,.75);--mira:#ff6b8a;--mira-halo:rgba(255,107,138,.35);
+    --f-su:#544250;--f-mira:#3e474f;--f-mira-fuerte:#5f4d59;--f-revelado:#527b81;--f-hundido:#d29eb2;--f-tocado:#4c4a53;--f-espuma:rgba(108,199,191,.28)}
 }
 
 /* ---------- la tarjeta en la sala ---------- */
 .bn-carta.toca{border-color:var(--j-b);animation:bn-llama 2.2s ease-in-out infinite}
 @keyframes bn-llama{50%{border-color:var(--j-a)}}
-.bn-vivo{display:inline-flex;align-items:center;gap:5px;vertical-align:3px;padding:3px 8px 3px 7px;border-radius:999px;font-family:var(--body);
+.bn-vivo{display:inline-flex;align-items:center;vertical-align:3px;margin-left:2px;padding:3px 8px 3px 7px;border-radius:999px;font-family:var(--v-texto);
   font-size:.58rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;line-height:1;color:var(--j-tx);
-  background:color-mix(in srgb,var(--j-a) 16%,var(--card));border:1px solid color-mix(in srgb,var(--j-a) 45%,var(--line))}
-.bn-vivo::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
+  background:var(--card);background:color-mix(in srgb,var(--j-a) 16%,var(--card));
+  border:1px solid var(--j-a);border:1px solid color-mix(in srgb,var(--j-a) 45%,var(--v-linea))}
+.bn-vivo::before{content:"";width:6px;height:6px;margin-right:5px;border-radius:50%;background:currentColor;opacity:.5}
 .bn-vivo.encendido{color:#fff;background:var(--fuego);border-color:var(--fuego)}
 .bn-vivo.encendido::before{opacity:1;background:#fff;animation:bn-parpadeo 1.3s ease-in-out infinite}
 @keyframes bn-parpadeo{50%{opacity:.25}}
 .bn-estado-carta{display:flex;flex-direction:column;gap:2px;margin-top:8px;padding:8px 12px;border-radius:12px;
-  background:color-mix(in srgb,var(--j-a) 9%,var(--card));border:1.5px dashed color-mix(in srgb,var(--j-a) 45%,var(--line))}
-.bn-estado-carta b{font-family:var(--j-num);font-weight:600;font-size:.98rem;line-height:1.2}
-.bn-estado-carta small{font-size:.76rem;color:var(--muted);line-height:1.3;overflow-wrap:anywhere}
-.bn-carta.toca .bn-estado-carta{border-style:solid;border-color:color-mix(in srgb,var(--j-b) 65%,var(--line));background:color-mix(in srgb,var(--j-b) 13%,var(--card))}
+  background:var(--card);background:color-mix(in srgb,var(--j-a) 9%,var(--card));
+  border:1.5px dashed var(--j-a);border:1.5px dashed color-mix(in srgb,var(--j-a) 45%,var(--v-linea))}
+.bn-estado-carta b{font-family:var(--v-num);font-weight:600;font-size:.98rem;line-height:1.2}
+.bn-estado-carta small{font-size:.76rem;color:var(--v-suave);line-height:1.3;overflow-wrap:anywhere}
+.bn-carta.toca .bn-estado-carta{border-style:solid;border-color:var(--j-b);border-color:color-mix(in srgb,var(--j-b) 65%,var(--v-linea));
+  background:var(--card);background:color-mix(in srgb,var(--j-b) 13%,var(--card))}
+/* el sticker de la tarjeta (en el Recreo) */
+.arte-vivo{display:grid;place-items:center}
+.arte-vivo svg{width:50px;height:50px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25))}
+.arte-batalla{background:radial-gradient(circle at 30% 22%,#5fd3e0,#11707c 74%)}
 
 /* ---------- la pantalla ---------- */
 .bn-cuerpo{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;align-items:center;gap:10px;
-  padding:14px 10px 16px;border-radius:26px;background:var(--j-capa);border:3px solid var(--card);text-align:center;
-  box-shadow:var(--j-clay),0 0 0 1.5px color-mix(in srgb,var(--j-a) 45%,transparent)}
+  padding:14px 10px 16px;border-radius:26px;background:var(--v-capa);border:3px solid var(--card);text-align:center;
+  box-shadow:var(--v-arcilla);box-shadow:var(--v-arcilla),0 0 0 1.5px color-mix(in srgb,var(--j-a) 45%,transparent)}
 .bn-cuerpo>*{flex:none;max-width:100%}
 .bn-cuerpo>:first-child{margin-top:auto}
 .bn-cuerpo>:last-child{margin-bottom:auto}
 .bn[data-fase=juego] .bn-cuerpo{gap:8px;padding-top:10px}
-.bn-cuerpo .small-note{margin:0;max-width:40ch}
-.bn-cargando{margin:0;font-family:var(--hand);font-size:1.5rem;color:var(--j-tx)}
-.bn-texto{margin:0;font-size:.88rem;color:var(--muted);line-height:1.45;max-width:36ch}
-.bn-ayuda{margin:0;font-size:.82rem;color:var(--muted);line-height:1.4;max-width:38ch;min-height:2.8em}
-.bn-presente{margin:0;font-size:.8rem;font-weight:800;color:var(--ok)}
-.bn button.ghost{border-color:color-mix(in srgb,var(--j-c) 40%,var(--line));color:var(--j-tx);background:var(--card)}
-.bn .bn-principal{min-width:220px}
-.bn-fuego:not([disabled]){background:linear-gradient(135deg,var(--chispa),var(--fuego));box-shadow:inset 0 -4px 0 rgba(0,0,0,.16),0 14px 26px -14px var(--fuego)}
+.bn-nota{margin:0;max-width:40ch;font-size:.8rem;color:var(--v-suave);line-height:1.45}
+.bn-cargando{margin:0;font-family:var(--v-mano);font-size:calc(1.5rem * var(--v-mano-tam));color:var(--j-tx)}
+.bn-texto{margin:0;font-size:.88rem;color:var(--v-suave);line-height:1.45;max-width:36ch}
+.bn-ayuda{margin:0;font-size:.82rem;color:var(--v-suave);line-height:1.4;max-width:38ch;min-height:2.8em}
+.bn-presente{margin:0;font-size:.8rem;font-weight:800;color:var(--v-ok)}
+.bn button.ghost{border-color:var(--v-linea);border-color:color-mix(in srgb,var(--j-c) 40%,var(--v-linea));color:var(--j-tx);background:var(--card)}
+.bn .bn-principal{min-width:220px;max-width:360px}
+.bn .bn-fuego:not([disabled]){color:#fff;background:var(--fuego);background:linear-gradient(135deg,var(--chispa),var(--fuego));box-shadow:inset 0 -4px 0 rgba(0,0,0,.16),0 14px 26px -14px var(--fuego)}
+
+/* ---------- ¿con quién juegas? ---------- */
+.bn-personas{display:flex;flex-direction:column;gap:8px;width:100%;max-width:400px}
+.bn-grupo{margin:6px 0 -2px;font:800 .72rem var(--v-texto);letter-spacing:.14em;text-transform:uppercase;color:var(--v-suave)}
+.bn .bn-persona{display:flex;align-items:center;gap:12px;width:100%;min-height:66px;margin:0;padding:10px 12px;border-radius:18px;background:var(--card);color:var(--v-tinta);
+  border:2px solid var(--v-linea);box-shadow:var(--v-arcilla);font:inherit;text-align:left;cursor:pointer;
+  transition:transform var(--t-rapido) var(--salida),border-color var(--t-medio) var(--salida)}
+.bn .bn-persona:active{transform:scale(.98);box-shadow:var(--v-arcilla)}
+@media (hover:hover){.bn .bn-persona:hover{border-color:var(--j-a)}}
+.bn .bn-persona.toca{border-color:var(--j-b)}
+.bn-persona .avatar,.bn-persona .bn-av{width:46px;height:46px;font-size:1.45rem}
+.bn-persona.en-linea .avatar,.bn-persona.en-linea .bn-av{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--v-ok)}
+.bn-persona-txt{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.bn-persona-txt b{font-family:var(--v-num);font-weight:600;font-size:1.06rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bn-persona-txt small{margin-top:2px;font-size:.74rem;font-weight:600;color:var(--v-suave);overflow-wrap:anywhere}
+.bn-chip-estado{flex:none;max-width:44%;padding:6px 10px;border-radius:999px;font-size:.74rem;font-weight:800;line-height:1.15;text-align:center;
+  background:var(--card);color:var(--v-suave);border:1.5px solid var(--v-linea)}
+.bn-chip-estado.n2{color:var(--j-tx);border-color:var(--j-a)}
+.bn-chip-estado.n3{color:#fff;border-color:transparent;background:var(--fuego);background:linear-gradient(135deg,var(--j-b),var(--fuego));
+  box-shadow:0 8px 16px -10px var(--fuego);animation:bn-late 1.4s ease-in-out infinite}
+@keyframes bn-late{50%{transform:scale(1.06)}}
+/* el personaje de alguien del Recreo (en la app principal, las fotos son .avatar) */
+.bn-av{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;
+  font-size:1rem;line-height:1;background:var(--t,#fff);box-shadow:inset 0 0 0 2.5px var(--av,#3B82F6)}
 
 /* la apuesta: "Quien pierde…" en una notita */
 .bn-caja{width:100%;max-width:360px;display:flex;flex-direction:column;gap:6px;text-align:left}
-.bn-apuesta{font-family:var(--hand);font-size:1.3rem;min-height:0}
+.bn-caja label{font-size:.86rem;font-weight:700;color:var(--v-tinta)}
+.bn-apuesta{display:block;width:100%;min-height:0;padding:6px 14px;border:2px solid var(--v-linea);border-radius:14px;background-color:var(--card);color:var(--v-tinta);
+  font-family:var(--v-mano);font-size:calc(1.3rem * var(--v-mano-tam));resize:none}
 .bn-ideas{display:flex;flex-wrap:wrap;gap:6px}
-.bn-idea{padding:7px 11px;min-height:36px;border-radius:999px;background:var(--card);color:var(--fg);border:1.5px solid var(--line);box-shadow:none;
-  font-size:.76rem;font-weight:700;line-height:1.2;text-align:left}
-.bn-idea:active{transform:scale(.97)}
-.bn-apuesta-ver{margin:0;padding:8px 14px 7px;border-radius:3px 3px 14px 3px;background:var(--nota);color:var(--nota-tx);font-family:var(--hand);font-size:1.3rem;line-height:1.15;
-  transform:rotate(-1.2deg);box-shadow:0 10px 18px -14px rgba(0,0,0,.55);max-width:32ch;overflow-wrap:anywhere}
-.bn-apuesta-ver.deuda{background:linear-gradient(135deg,#ffe08a,var(--j-oro));color:#4a2a00;font-size:1.4rem}
+.bn .bn-idea{margin:0;padding:7px 11px;min-height:36px;border-radius:999px;background:var(--card);color:var(--v-tinta);border:1.5px solid var(--v-linea);box-shadow:none;
+  font-family:inherit;font-size:.76rem;font-weight:700;line-height:1.2;text-align:left;cursor:pointer}
+.bn .bn-idea:active{transform:scale(.97);box-shadow:none}
+.bn-apuesta-ver{margin:0;padding:8px 14px 7px;border-radius:3px 3px 14px 3px;background:var(--v-nota);color:var(--v-nota-tx);font-family:var(--v-mano);
+  font-size:calc(1.3rem * var(--v-mano-tam));line-height:1.15;transform:rotate(-1.2deg);box-shadow:0 10px 18px -14px rgba(0,0,0,.55);max-width:32ch;overflow-wrap:anywhere}
+.bn-apuesta-ver.deuda{background:var(--v-oro);background:linear-gradient(135deg,#ffe08a,var(--v-oro));color:#4a2a00;font-size:calc(1.4rem * var(--v-mano-tam))}
 
 /* practicando con la compu, cuando la batalla de verdad te espera */
 .bn-volver{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 10px;width:100%;max-width:400px;padding:8px 10px;border-radius:14px;
-  background:color-mix(in srgb,var(--j-b) 14%,var(--card));border:1.5px solid color-mix(in srgb,var(--j-b) 50%,var(--line));font-size:.82rem;font-weight:700}
+  background:var(--card);background:color-mix(in srgb,var(--j-b) 14%,var(--card));
+  border:1.5px solid var(--j-b);border:1.5px solid color-mix(in srgb,var(--j-b) 50%,var(--v-linea));font-size:.82rem;font-weight:700}
 .bn .bn-volver button{padding:7px 14px;min-height:36px}
 
 /* ---------- los dos, el turno y qué tablero se ve ---------- */
 .bn-duelo{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:6px;width:100%;max-width:400px}
-.bn-lado{display:flex;align-items:center;gap:7px;min-width:0;padding:5px 10px 5px 5px;border-radius:999px;background:var(--card);border:1.5px solid var(--line);text-align:left;
+.bn-lado{display:flex;align-items:center;gap:7px;min-width:0;padding:5px 10px 5px 5px;border-radius:999px;background:var(--card);border:1.5px solid var(--v-linea);text-align:left;
   transition:border-color var(--t-medio) var(--salida),box-shadow var(--t-medio) var(--salida)}
 .bn-lado:last-child{flex-direction:row-reverse;text-align:right;padding:5px 5px 5px 10px}
-.bn-lado.toca{border-color:var(--j-b);box-shadow:0 0 0 3px color-mix(in srgb,var(--j-b) 25%,transparent)}
+.bn-lado.toca{border-color:var(--j-b);box-shadow:0 0 0 3px rgba(0,0,0,.1);box-shadow:0 0 0 3px color-mix(in srgb,var(--j-b) 25%,transparent)}
 .bn-lado .avatar{width:30px;height:30px}
-.bn-lado.en-linea .avatar{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ok)}
+.bn-lado.en-linea .avatar,.bn-lado.en-linea .bn-av{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--v-ok)}
 .bn-lado-txt{display:flex;flex-direction:column;min-width:0;line-height:1.1}
-.bn-lado-txt b{font-family:var(--j-num);font-weight:600;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bn-lado-txt small{font-size:.66rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bn-vs{font-family:var(--hand);font-size:1.4rem;color:var(--accent);line-height:1}
-.bn-robot{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:1rem;background:var(--blush);border:2px solid var(--card)}
-.bn-turno{margin:0;padding:7px 16px;border-radius:999px;font-family:var(--j-num);font-weight:600;font-size:1rem;line-height:1.2;color:var(--muted);
-  background:var(--card);border:1.5px dashed var(--line)}
-.bn-turno.mio{color:#fff;background:linear-gradient(135deg,var(--j-b),var(--fuego));border:1.5px solid transparent;box-shadow:0 10px 20px -12px var(--fuego)}
+.bn-lado-txt b{font-family:var(--v-num);font-weight:600;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bn-lado-txt small{font-size:.66rem;color:var(--v-suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bn-vs{font-family:var(--v-mano);font-size:calc(1.4rem * var(--v-mano-tam));color:var(--v-acento);line-height:1}
+.bn-robot{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:1rem;background:var(--v-robot);border:2px solid var(--card)}
+.bn-turno{margin:0;padding:7px 16px;border-radius:999px;font-family:var(--v-num);font-weight:600;font-size:1rem;line-height:1.2;color:var(--v-suave);
+  background:var(--card);border:1.5px dashed var(--v-linea)}
+.bn-turno.mio{color:#fff;background:var(--fuego);background:linear-gradient(135deg,var(--j-b),var(--fuego));border:1.5px solid transparent;box-shadow:0 10px 20px -12px var(--fuego)}
 .bn-turno.pop{animation:bn-pop .6s var(--resorte) both;animation-delay:var(--d,0ms)}
 @keyframes bn-pop{from{transform:scale(.6);opacity:0}}
-.bn-fuera{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;font-size:.8rem;color:var(--muted);max-width:400px}
+.bn-fuera{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;font-size:.8rem;color:var(--v-suave);max-width:400px}
 .bn .bn-avisar{padding:8px 14px;min-height:40px;font-size:.84rem}
-.bn-vistas{display:inline-flex;gap:3px;padding:3px;border-radius:999px;background:var(--card);border:1.5px solid var(--line)}
-.bn-vistas button{padding:8px 14px;min-height:40px;border-radius:999px;background:none;color:var(--muted);box-shadow:none;font-size:.84rem;font-weight:700}
-.bn-vistas button.on{background:var(--j-c);color:#fff}
-.bn-mensaje{margin:0;min-height:1.3em;font-family:var(--hand);font-size:1.38rem;line-height:1.12;color:var(--j-tx);max-width:30ch;text-wrap:balance}
+.bn-vistas{display:inline-flex;padding:3px;border-radius:999px;background:var(--card);border:1.5px solid var(--v-linea)}
+.bn .bn-vistas button{margin:0;padding:8px 14px;min-height:40px;border:0;border-radius:999px;background:none;color:var(--v-suave);box-shadow:none;font-family:inherit;font-size:.84rem;font-weight:700}
+.bn .bn-vistas button+button{margin-left:3px}
+.bn .bn-vistas button.on{background:var(--j-c);color:#fff}
+.bn-mensaje{margin:0;min-height:1.3em;font-family:var(--v-mano);font-size:calc(1.38rem * var(--v-mano-tam));line-height:1.12;color:var(--j-tx);max-width:30ch;text-wrap:balance}
 
 /* ---------- el tablero: 10 × 10, con letras arriba y números al costado ---------- */
 .bn-grilla{display:grid;grid-template-columns:1.1rem repeat(10,minmax(0,1fr));gap:2px;width:100%;max-width:400px;padding:6px 7px 7px 3px;border-radius:16px;
   background:var(--mar-hondo);box-shadow:inset 0 2px 8px rgba(0,30,40,.14);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.bn-su{background:color-mix(in srgb,var(--j-b) 30%,var(--mar-hondo))}
-.bn-rotulo{display:grid;place-items:center;min-height:.95rem;font-family:var(--j-num);font-size:.6rem;font-weight:600;line-height:1;
-  color:color-mix(in srgb,var(--j-c) 70%,var(--muted))}
-.bn-celda{position:relative;width:100%;aspect-ratio:1;min-height:0;padding:0;border:0;border-radius:4px;background:var(--mar);color:inherit;box-shadow:none;
+.bn-su{background:var(--f-su);background:color-mix(in srgb,var(--j-b) 30%,var(--mar-hondo))}
+.bn-rotulo{display:grid;place-items:center;min-height:.95rem;font-family:var(--v-num);font-size:.6rem;font-weight:600;line-height:1;
+  color:var(--v-suave);color:color-mix(in srgb,var(--j-c) 70%,var(--v-suave))}
+.bn .bn-celda{position:relative;width:100%;aspect-ratio:1;min-height:0;margin:0;padding:0;border:0;border-radius:4px;background:var(--mar);color:inherit;box-shadow:none;
   font-size:0;cursor:default;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:background-color var(--t-rapido) var(--salida)}
-.bn-celda:active{transform:none;box-shadow:none}
+.bn .bn-celda:active{transform:none;box-shadow:none}
 .bn-celda:focus-visible{outline:3px solid var(--j-c);outline-offset:1px;z-index:3}
 .bn-celda:not([aria-disabled]){cursor:pointer}
-@media (hover:hover){.bn-su .bn-celda:not([aria-disabled]):hover{background:color-mix(in srgb,var(--mira) 18%,var(--mar))}}
-.bn-su .bn-celda:not([aria-disabled]):active{background:color-mix(in srgb,var(--mira) 32%,var(--mar))}
-@supports not (aspect-ratio:1){.bn-celda{height:0;padding-bottom:100%}}
+@media (hover:hover){.bn-su .bn-celda:not([aria-disabled]):hover{background:var(--f-mira);background:color-mix(in srgb,var(--mira) 18%,var(--mar))}}
+.bn-su .bn-celda:not([aria-disabled]):active{background:var(--f-mira-fuerte);background:color-mix(in srgb,var(--mira) 32%,var(--mar))}
+@supports not (aspect-ratio:1){.bn .bn-celda{height:0;padding-bottom:100%}}
 
 /* los barcos: el casco es continuo (::before tapa el hueco con la celda siguiente) y cada celda tiene su ojo de buey */
-.bn-celda.barco{background:var(--casco)}
+.bn .bn-celda.barco{background:var(--casco)}
 .bn-celda.barco.h.ini{border-radius:999px 4px 4px 999px}
 .bn-celda.barco.h.fin{border-radius:4px 999px 999px 4px}
 .bn-celda.barco.v.ini{border-radius:999px 999px 4px 4px}
@@ -108,16 +149,16 @@
 .bn-celda.barco.h:not(.fin)::before{top:0;bottom:0;right:-3px;width:4px}
 .bn-celda.barco.v:not(.fin)::before{left:0;right:0;bottom:-3px;height:4px}
 .bn-celda.barco::after{content:"";position:absolute;top:34%;left:34%;width:32%;height:32%;border-radius:50%;background:var(--casco-luz);box-shadow:inset 0 1px 1px rgba(0,0,0,.3)}
-.bn-celda.barco.sel{background:var(--j-b)}
+.bn .bn-celda.barco.sel{background:var(--j-b)}
 .bn-celda.barco.sel::after{background:#fff}
-.bn-celda.barco.revelado{background:color-mix(in srgb,var(--casco) 42%,var(--mar))}
+.bn .bn-celda.barco.revelado{background:var(--f-revelado);background:color-mix(in srgb,var(--casco) 42%,var(--mar))}
 .bn-celda.barco.revelado::after{opacity:.5}
-.bn-celda.barco.hundido{background:color-mix(in srgb,var(--fuego) 48%,var(--casco))}
+.bn .bn-celda.barco.hundido{background:var(--f-hundido);background:color-mix(in srgb,var(--fuego) 48%,var(--casco))}
 
 /* los disparos: agua (espuma), tocado (fuego) y hundido */
 .bn-celda.agua::after{content:"";position:absolute;top:36%;left:36%;width:28%;height:28%;border-radius:50%;background:var(--espuma);
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--espuma) 28%,transparent)}
-.bn-celda.tocado:not(.barco){background:color-mix(in srgb,var(--fuego) 24%,var(--mar))}
+  box-shadow:0 0 0 3px var(--f-espuma);box-shadow:0 0 0 3px color-mix(in srgb,var(--espuma) 28%,transparent)}
+.bn .bn-celda.tocado:not(.barco){background:var(--f-tocado);background:color-mix(in srgb,var(--fuego) 24%,var(--mar))}
 .bn-celda.tocado::after{content:"";position:absolute;top:20%;left:20%;width:60%;height:60%;border-radius:50%;box-shadow:0 0 6px var(--fuego);
   background:radial-gradient(circle,#fff 0 14%,var(--chispa) 15% 42%,var(--fuego) 43%)}
 .bn-celda.hundido.tocado::after{top:27%;left:27%;width:46%;height:46%;box-shadow:none;background:radial-gradient(circle,var(--chispa) 0 32%,var(--fuego) 33%)}
@@ -125,31 +166,32 @@
 .bn-celda.agua.nuevo{animation:bn-onda .9s var(--salida) both;animation-delay:var(--d,0ms)}
 .bn-celda.tocado.nuevo{animation:bn-temblor .4s ease-in-out both;animation-delay:var(--d,0ms)}
 @keyframes bn-impacto{from{transform:scale(0);opacity:0}}
-@keyframes bn-onda{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--espuma) 75%,transparent)}to{box-shadow:0 0 0 12px transparent}}
+@keyframes bn-onda{from{box-shadow:0 0 0 0 var(--onda)}to{box-shadow:0 0 0 12px transparent}}
 @keyframes bn-temblor{25%{transform:translateX(-2px)}50%{transform:translateX(2px)}75%{transform:translateX(-1px)}}
 
 /* apuntando: una mira que late */
-.bn-celda.apunta{z-index:2;background:color-mix(in srgb,var(--mira) 24%,var(--mar));box-shadow:inset 0 0 0 2px var(--mira);
+.bn .bn-celda.apunta{z-index:2;background:var(--f-tocado);background:color-mix(in srgb,var(--mira) 24%,var(--mar));box-shadow:inset 0 0 0 2px var(--mira);
   animation:bn-mira 1.2s ease-in-out infinite;animation-delay:var(--d,0ms)}
 .bn-celda.apunta::before,.bn-celda.apunta::after{content:"";position:absolute;border-radius:1px;background:var(--mira)}
 .bn-celda.apunta::before{left:50%;top:14%;bottom:14%;width:2px;margin-left:-1px}
 .bn-celda.apunta::after{top:50%;left:14%;right:14%;height:2px;margin-top:-1px}
-@keyframes bn-mira{50%{box-shadow:inset 0 0 0 2px var(--mira),0 0 0 3px color-mix(in srgb,var(--mira) 35%,transparent)}}
+@keyframes bn-mira{50%{box-shadow:inset 0 0 0 2px var(--mira),0 0 0 3px var(--mira-halo)}}
 
 /* ---------- los barcos, en fila (para elegir y para ver cuáles quedan) ---------- */
-.bn-mini{display:inline-block;flex:none;width:calc(var(--n) * 8px - 2px);height:8px;border-radius:4px;
+.bn-mini{display:inline-block;flex:none;width:calc(var(--n) * 8px - 2px);height:8px;margin-right:7px;border-radius:4px;
   background:repeating-linear-gradient(90deg,var(--casco) 0 6px,transparent 6px 8px)}
 .bn-barcos,.bn-flota{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:400px}
-.bn-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;min-height:38px;border-radius:999px;background:var(--card);color:var(--fg);
-  border:1.5px solid var(--line);box-shadow:none;font-size:.78rem;font-weight:700}
-.bn-chip.on{border-color:var(--j-b);background:color-mix(in srgb,var(--j-b) 14%,var(--card))}
+.bn .bn-chip{display:inline-flex;align-items:center;margin:0;padding:7px 12px;min-height:38px;border-radius:999px;background:var(--card);color:var(--v-tinta);
+  border:1.5px solid var(--v-linea);box-shadow:none;font-family:inherit;font-size:.78rem;font-weight:700}
+.bn .bn-chip.on{border-color:var(--j-b);background:var(--card);background:color-mix(in srgb,var(--j-b) 14%,var(--card))}
 .bn-chip.on .bn-mini{background:repeating-linear-gradient(90deg,var(--j-b) 0 6px,transparent 6px 8px)}
 .bn-fila{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
 .bn-flota{list-style:none;margin:0;padding:0;gap:5px}
-.bn-flota li{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);
-  font-size:.7rem;font-weight:700;color:var(--fg)}
-.bn-flota li.hundido{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--fuego);text-decoration-thickness:2px;
-  background:color-mix(in srgb,var(--fuego) 8%,var(--card))}
+.bn-flota li{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--v-linea);
+  font-size:.7rem;font-weight:700;color:var(--v-tinta)}
+.bn-flota li .bn-mini{margin-right:6px}
+.bn-flota li.hundido{color:var(--v-suave);text-decoration:line-through;text-decoration-color:var(--fuego);text-decoration-thickness:2px;
+  background:var(--card);background:color-mix(in srgb,var(--fuego) 8%,var(--card))}
 .bn-flota li.hundido .bn-mini{opacity:.7;background:repeating-linear-gradient(90deg,var(--fuego) 0 6px,transparent 6px 8px)}
 
 @media (prefers-reduced-motion:reduce){

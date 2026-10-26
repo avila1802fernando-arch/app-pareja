@@ -319,6 +319,9 @@
     const t = Date.now() - (S.entraEn || 0), en = t < 1100 && !poco();
     S.lista.classList.toggle("entrando", en);
     if (en) S.lista.style.setProperty("--d", `${-t}ms`);
+    // y se apaga al terminar: si no, una tarjeta que cambia después (las en vivo) volvería a entrar
+    clearTimeout(S.finCascada);
+    if (en) S.finCascada = setTimeout(() => S.lista.classList.remove("entrando"), 1700 - t);
   }
 
   function pintarSala() {
@@ -767,10 +770,14 @@
     if (X.estallido) X.estallido(V.retar, "😏", 6);
   }
 
-  // ---------- Juegos en vivo, los dos a la vez: Batalla naval ⚓ (batalla.js) y UNO 🃏 (uno.js) ----------
-  // Cada uno con su motor y su hoja de estilos (uno.css usa piezas de batalla.css, así que va después)
+  // ---------- Juegos en vivo, para dos a la vez: Batalla naval ⚓ (batalla.js) y UNO 🃏 (uno.js) ----------
+  // Cada uno con su motor y su hoja de estilos (uno.css usa piezas de batalla.css, así que va después). Las pantallas
+  // son las mismas del Recreo; lo de la pareja (sus partidas, los avisos push y las ideas de apuesta) viene de
+  // vivo-pareja.js. Se juega con tu pareja y, en «Otros», con los del Recreo: esas partidas se ven en las dos apps.
   const EN_VIVO = [{ id: "batalla", global: "Batalla" }, { id: "uno", global: "Uno" }];
+  const RECREO = "https://recreo-familia.vercel.app";
   let enVivo = null, conEnVivo = false;
+  let delRecreo = [];         // los del Recreo con quienes se puede jugar: { id, nombre, avatar, color, grupo: "otros", enlace }
   function bajarEnVivo() {
     if (enVivo) return enVivo;
     const css = EN_VIVO.map((g) => {
@@ -779,22 +786,31 @@
       return l;
     });
     enVivo = new Promise((listo) => {
-      const archivos = EN_VIVO.flatMap((g) => [`${g.id}-motor`, g.id]);
+      const archivos = ["vivo-pareja"].concat(EN_VIVO.flatMap((g) => [`${g.id}-motor`, g.id]));
       archivos.forEach((j, i) => {
         const s = document.createElement("script");
         s.src = `/juegos/${j}.js`; s.async = false;
         if (i === archivos.length - 1) s.onload = s.onerror = listo;
         document.body.append(s);
       });
-    }).then(() => { if (!EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
+    }).then(() => { if (!window.VivoPareja || !EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
     return enVivo;
   }
+  // Con quién se juega cada uno: primero tu pareja (con su adaptador: partidas de la pareja y push) y después los del
+  // Recreo, que el juego pone aparte, en «Otros»
+  function rivalesEnVivo(g) {
+    const o = elOtro(), P = window.VivoPareja, pj = X.pareja.id;
+    const pareja = { id: o.id, nombre: o.nombre, av: "suyo", ideas: P.IDEAS, adaptador: (yoId) => P[g.id](X.sb, yoId, pj) };
+    return [pareja].concat(delRecreo);
+  }
   function conectarEnVivo() {
-    if (!X || !X.pareja || !X.otro || !X.otro.id) return;
+    if (!X || !X.pareja || !X.otro || !X.otro.id || !window.VivoPareja) return;
+    const y = yo();
     EN_VIVO.forEach((g) => {
       if (!window[g.global]) return;
       window[g.global].iniciar({
-        sb: prueba ? null : X.sb, prueba, yo: yo(), otro: elOtro(), parejaId: X.pareja.id, toast, vibrar,
+        app: "nosotros", sb: prueba ? null : X.sb, prueba, yo: { id: y.id, nombre: y.nombre, av: "mio" }, rivales: rivalesEnVivo(g),
+        enlace: RECREO, toast, vibrar,
         lluvia: (e, n) => { if (X && X.lluvia) X.lluvia(e, n); },
         renderAvatares: () => { if (X && X.renderAvatares) X.renderAvatares(); },
         alCambiar: pintarEnVivo,
@@ -802,6 +818,18 @@
     });
     conEnVivo = true;
     pintarEnVivo();
+    cargarRecreo();
+  }
+  // Los del Recreo: RLS solo los deja ver a quien también es del Recreo (a tu pareja, si no lo es, no le sale nadie),
+  // y la que está oculta ahí no sale. Sin la tabla o sin red, simplemente no hay «Otros».
+  async function cargarRecreo() {
+    if (prueba || !X || !X.sb || !conEnVivo) return;
+    let r;
+    try { r = await X.sb.from("familia_miembros").select("usuario_id, nombre, avatar, color"); } catch (e) { return; }
+    if (r.error || !X) return;
+    delRecreo = (r.data || []).filter((m) => m.usuario_id !== yo().id && m.usuario_id !== elOtro().id)
+      .map((m) => ({ id: m.usuario_id, nombre: m.nombre || "Alguien", avatar: m.avatar || "🙂", color: m.color || "azul", grupo: "otros", enlace: RECREO }));
+    EN_VIVO.forEach((g) => { if (window[g.global]) window[g.global].rivales(rivalesEnVivo(g)); });
   }
   // Las tarjetas se cambian solas cuando algo pasa en el juego (sin redibujar el resto de la sala). Cada una se pone
   // primera la primera vez: queda arriba el UNO y después la batalla.
@@ -827,7 +855,8 @@
 
   // Solo para probar en el computador sin iniciar sesión: NosotrosJuegos.probar("vuelo", { marcador: { vuelo: [1200, 1800] } })
   // Los juegos en vivo, en dos pestañas: probar("uno") en una y probar("uno", { soy: "otro" }) en la otra (el lado de tu
-  // pareja); igual con "batalla"
+  // pareja); igual con "batalla". En «Otros» salen Eli y Maritza de mentira (sin nadie del otro lado: jugar con ellas
+  // se prueba en el modo prueba del Recreo); { otros: false } los saca.
   function probar(id, op = {}) {
     prueba = true;
     const hoy = new Date().toISOString().slice(0, 10);
@@ -847,6 +876,10 @@
     });
     premio = { esperando: !!op.premio, mio: null, mios: [], ganados: [] };
     familia = op.familia || [];
+    delRecreo = op.soy === "otro" || op.otros === false ? [] : [
+      { id: "eli", nombre: "Eli", avatar: "🦋", color: "uva", grupo: "otros", enlace: RECREO },
+      { id: "maritza", nombre: "Maritza", avatar: "🌺", color: "coral", grupo: "otros", enlace: RECREO },
+    ];
     montarSala(); S.entraEn = Date.now(); pintarSala();
     const vivo = EN_VIVO.find((g) => g.id === id);
     bajarEnVivo().then(() => { conectarEnVivo(); if (vivo && window[vivo.global]) window[vivo.global].abrir("vivo"); });
@@ -887,7 +920,7 @@
     if (!X || prueba) return;
     if (!canal || canal.state === "closed" || canal.state === "errored") suscribir();
     cargar().then(() => { pintarSala(); marcarPunto(); });
-    if (conEnVivo) EN_VIVO.forEach((g) => { if (window[g.global]) window[g.global].alDia(); });
+    if (conEnVivo) { EN_VIVO.forEach((g) => { if (window[g.global]) window[g.global].alDia(); }); cargarRecreo(); }
   });
   // "Atrás" (botón o gesto de Android) en plena partida la pausa en vez de tirarla; si no se está jugando, cierra
   window.addEventListener("popstate", () => {

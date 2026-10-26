@@ -3,6 +3,8 @@
 // partida), la práctica que no cuenta y «Retar por WhatsApp». Los juegos viven en lluvia.js, vuelo.js, memoria.js y
 // fusion.js y se anotan con RecreoJuegos.registrar(). Los puntajes van y vienen por RecreoDatos (datos.js).
 // Es la sala de la otra app adaptada a varias personas: en vez de un rival hay «metas», las marcas de los demás.
+// Arriba van los juegos en vivo, para dos a la vez (Batalla naval y UNO): son los mismos de la otra app (batalla.js y
+// uno.js, con sus motores y estilos) y aquí cada uno reta a cualquiera de la familia.
 (() => {
   "use strict";
   const D = window.RecreoDatos;
@@ -21,6 +23,7 @@
   const JUEGOS = [];
   let X = null;               // window.recreo
   let V = null, actual = null, foco = null;
+  let entraEn = 0;            // cuándo se abrió la pestaña Juegos (para la cascada de las tarjetas)
 
   // ---------- utilidades ----------
   const $ = (id) => document.getElementById(id);
@@ -37,7 +40,8 @@
     return b;
   }
   const fmt = (n) => Number(n || 0).toLocaleString("es");
-  const poco = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reducir = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const poco = () => reducir.matches;
   const vibrar = (p) => { if (X && X.vibrar) X.vibrar(p); };
   const toast = (m) => { if (X && X.toast) X.toast(m); };
   const yo = () => (X ? X.yo : { id: null, nombre: "Tú", avatar: "🙂", color: "azul", colorHex: "#3B82F6" });
@@ -115,11 +119,37 @@
   const siguienteMeta = (metas, marca) => metas.find((m) => m.mejor > (marca == null ? -1 : marca)) || null; // sin "??": navegadores viejos
 
   // ---------- las tarjetas de la pestaña Juegos ----------
+  // Entran en cascada al abrir la pestaña; si la sala se redibuja a mitad, siguen donde iban
+  let finCascada = 0;
+  function cascada(lista) {
+    const t = Date.now() - entraEn, en = t < 1100 && !poco();
+    lista.classList.toggle("entrando", en);
+    if (en) lista.style.setProperty("--d", `${-t}ms`);
+    // y se apaga al terminar: si no, una tarjeta en vivo que cambia después volvería a entrar
+    clearTimeout(finCascada);
+    if (en) finCascada = setTimeout(() => lista.classList.remove("entrando"), 1700 - t);
+  }
+  // El puntaje final sube contando (como en las máquinas de juegos)
+  function contar(el, n) {
+    const mia = (el._cuenta = {});
+    if (poco() || n < 10 || !window.requestAnimationFrame) { el.textContent = fmt(n); return; }
+    const t0 = performance.now(), dur = Math.min(900, 350 + n / 15);
+    const paso = (t) => {
+      if (el._cuenta !== mia) return;
+      const k = Math.min(1, (t - t0) / dur);
+      el.textContent = fmt(Math.round(n * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) requestAnimationFrame(paso);
+    };
+    el.textContent = "0";
+    requestAnimationFrame(paso);
+  }
   function pintarSala() {
     const lista = $("juegos-lista");
     if (!lista || !X) return;
     lista.innerHTML = "";
+    cascada(lista);
     JUEGOS.forEach((j) => lista.append(cartaJuego(j)));
+    pintarEnVivo();
   }
   function cartaJuego(j) {
     const t = D.tabla(j.id), primero = t[0] && t[0].marca != null ? t[0] : null;
@@ -246,7 +276,15 @@
       hud(k, v, caliente) {
         const e = V.hudVal[k]; if (!e) return;
         const t = String(v);
-        if (e.textContent !== t) e.textContent = t;
+        if (e.textContent !== t) {
+          // si sube de golpe (no algo que cambia en cada cuadro, como los metros), da un saltito
+          const n = parseInt(t.replace(/[^\d]/g, ""), 10) || 0, ahora = Date.now();
+          const salta = n > (e._n || 0) && ahora - (e._t || 0) > 250;
+          e.textContent = t; e._n = n; e._t = ahora;
+          if (salta && !poco() && e.animate && (!e._pop || e._pop.playState === "finished")) {
+            e._pop = e.animate([{ transform: "scale(1.3)" }, { transform: "scale(1)" }], { duration: 260, easing: "cubic-bezier(.34,1.56,.64,1)" });
+          }
+        }
         e.classList.toggle("caliente", !!caliente);
       },
       terminar: (res) => terminar(res),
@@ -390,7 +428,7 @@
     actual.ultimo = puntos;
 
     V.fRango.textContent = def.rango(puntos, res).nombre;
-    V.fNum.textContent = fmt(puntos); V.fUnidad.textContent = def.unidad;
+    contar(V.fNum, puntos); V.fUnidad.textContent = def.unidad;
     V.fInsignia.hidden = !r.insignia; V.fInsignia.textContent = r.insignia; V.fInsignia.classList.toggle("oro", r.oro);
     V.fPuesto.hidden = !r.puesto; V.fPuesto.textContent = r.puesto;
     V.fFrase.textContent = [res.prefijo, r.frase].filter(Boolean).join(" ");
@@ -425,6 +463,68 @@
     window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
   }
 
+  // ---------- juegos en vivo, para dos a la vez: Batalla naval ⚓ (batalla.js) y UNO 🃏 (uno.js) ----------
+  // Cada uno con su motor y su hoja de estilos (uno.css usa piezas de batalla.css, así que va después). Se bajan
+  // después de entrar, así no demoran la app. Se reta a cualquiera de la familia; las partidas con Fernando también
+  // las ve él desde la otra app.
+  const EN_VIVO = [{ id: "batalla", global: "Batalla" }, { id: "uno", global: "Uno" }];
+  let enVivo = null, conectadoComo = null;
+  const vivas = {};
+  function bajarEnVivo() {
+    if (enVivo) return enVivo;
+    const css = EN_VIVO.map((g) => {
+      const l = document.createElement("link");
+      l.rel = "stylesheet"; l.href = `/juegos/${g.id}.css`; document.head.append(l);
+      return l;
+    });
+    enVivo = new Promise((listo) => {
+      const archivos = [];
+      EN_VIVO.forEach((g) => archivos.push(`${g.id}-motor`, g.id));
+      archivos.forEach((j, i) => {
+        const s = document.createElement("script");
+        s.src = `/juegos/${j}.js`; s.async = false;
+        if (i === archivos.length - 1) s.onload = s.onerror = listo;
+        document.body.append(s);
+      });
+    }).then(() => { if (!EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
+    return enVivo;
+  }
+  // Con quién se puede jugar: todos los de la familia menos yo (la que está oculta ni llega: RLS no la deja ver)
+  const rivalesEnVivo = () => D.miembros().filter((m) => m.usuario_id && m.usuario_id !== yo().id)
+    .map((m) => ({ id: m.usuario_id, nombre: m.nombre || "Alguien", avatar: m.avatar || "🙂", color: m.color || "azul" }));
+  function conectarEnVivo() {
+    const y = yo();
+    if (!X || !y.id) return;
+    EN_VIVO.forEach((g) => {
+      if (!window[g.global]) return;
+      if (conectadoComo === y.id) { window[g.global].rivales(rivalesEnVivo()); return; }
+      window[g.global].iniciar({
+        app: "recreo", sb: X.prueba ? null : X.sb, prueba: !!X.prueba, yo: { id: y.id, nombre: y.nombre, avatar: y.avatar, color: y.color },
+        rivales: rivalesEnVivo(), enlace: location.origin, toast, vibrar,
+        lluvia: (e, n) => { if (X && X.lluvia) X.lluvia(e, n); },
+        alCambiar: pintarEnVivo,
+      });
+    });
+    conectadoComo = y.id;
+    pintarEnVivo();
+  }
+  const ponerEnVivo = () => bajarEnVivo().then(conectarEnVivo);
+  // Las tarjetas se cambian solas cuando algo pasa en el juego (sin redibujar el resto de la sala); van arriba de
+  // todo: primero el UNO y después la batalla
+  function pintarEnVivo() {
+    const lista = $("juegos-lista");
+    if (!lista || !X || !conectadoComo) return;
+    EN_VIVO.forEach((g) => {
+      if (!window[g.global]) return;
+      const n = window[g.global].tarjeta();
+      if (!n) return;
+      const vieja = vivas[g.id], tenia = !!vieja && document.activeElement === vieja;
+      if (vieja && vieja.parentNode === lista) vieja.replaceWith(n); else lista.prepend(n);
+      vivas[g.id] = n;
+      if (tenia) n.focus({ preventScroll: true });
+    });
+  }
+
   // ---------- registro y arranque ----------
   function registrar(def) {
     JUEGOS.push(def);
@@ -433,8 +533,11 @@
   const juego = (id) => JUEGOS.find((j) => j.id === id) || null;
 
   window.RecreoJuegos = { registrar, juego, juegos: () => JUEGOS.slice() };
-  window.addEventListener("recreo:dentro", () => { X = window.recreo; pintarSala(); });
-  window.addEventListener("recreo:datos", () => { if (X && !actual) pintarSala(); });
+  window.addEventListener("recreo:dentro", () => { X = window.recreo; pintarSala(); ponerEnVivo(); });
+  window.addEventListener("recreo:datos", () => { if (X && !actual) pintarSala(); if (X) ponerEnVivo(); });
+  window.addEventListener("recreo:tab", (e) => { if (e.detail === "juegos") { entraEn = Date.now(); if (X && !actual) pintarSala(); } });
+  // Al volver a la app tras un rato: los juegos en vivo se ponen al día (y vuelven a abrir su canal si se cayó)
+  window.addEventListener("recreo:aldia", () => { if (conectadoComo) EN_VIVO.forEach((g) => { if (window[g.global]) window[g.global].alDia(); }); });
   // "Atrás" (botón o gesto de Android) en plena partida la pausa en vez de tirarla; si no se está jugando, cierra
   window.addEventListener("popstate", () => {
     if (!actual) return;

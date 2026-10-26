@@ -1,8 +1,8 @@
 // UNO 🃏 · el motor (sin pantalla)
 // Las mismas reglas de supabase/uno.sql en JavaScript: el mazo, qué carta vale, qué hace cada una, los puntos, la
 // compu y una "mesa" local que se porta igual que la base. La mesa local sirve para jugar contra la compu y para
-// probar la pantalla en el computador sin tocar la base (dos pestañas: NosotrosJuegos.probar("uno") y
-// NosotrosJuegos.probar("uno", { soy: "otro" })). uno.js es la pantalla.
+// probar la pantalla en el computador sin tocar la base (dos pestañas en modo prueba). uno.js es la pantalla.
+// Lo usan las dos apps: el archivo es el mismo en las dos (lo revisa familia/herramientas/paridad.mjs).
 // Cartas: color (r rojo, a amarillo, v verde, z azul) + valor (0–9, s salta, r reversa, d roba dos), y los comodines
 // x (cambia el color) y x4 (roba cuatro). Entre dos, salta y reversa hacen lo mismo: vuelves a jugar.
 (function (raiz) {

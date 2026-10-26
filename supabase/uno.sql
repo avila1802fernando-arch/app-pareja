@@ -5,7 +5,10 @@
 -- Las cartas: color (r rojo, a amarillo, v verde, z azul) + valor (0–9, s salta, r reversa, d roba dos), y los
 -- comodines x (cambia el color) y x4 (roba cuatro). Entre dos, salta y reversa hacen lo mismo: vuelves a jugar.
 -- public/juegos/uno.js es la pantalla y uno-motor.js tiene las mismas reglas en JavaScript (para jugar contra la compu).
--- Pegar en Supabase → SQL Editor → Run, después de schema.sql y avisos.sql. Se puede volver a ejecutar: no borra datos.
+-- También lo juega la familia en el Recreo (familia/juegos/uno.js): ahí cualquiera reta a cualquiera de la familia
+-- (uno_retar), las partidas van con familia = true y sin pareja, y no mandan push (el Recreo no tiene).
+-- Pegar en Supabase → SQL Editor → Run, después de schema.sql, avisos.sql y familia.sql. Se puede volver a ejecutar:
+-- no borra datos.
 
 -- ========== TABLAS ==========
 create table if not exists public.unos (
@@ -33,6 +36,12 @@ create table if not exists public.unos (
   check (creado_por <> rival)
 );
 create index if not exists unos_pareja_idx on public.unos (pareja_id, creado_en desc);
+-- las de la familia (el Recreo) no son de una pareja
+alter table public.unos alter column pareja_id drop not null;
+alter table public.unos add column if not exists familia boolean not null default false;
+alter table public.unos drop constraint if exists unos_de_quien;
+alter table public.unos add constraint unos_de_quien check (familia or pareja_id is not null);
+create index if not exists unos_familia_idx on public.unos (least(creado_por, rival), greatest(creado_por, rival), creado_en desc) where familia;
 
 -- La mano de cada uno. Solo la lee su dueño. `robada`: la que acaba de robar (después de robar, solo puede jugar esa).
 create table if not exists public.uno_manos (
@@ -66,7 +75,8 @@ create table if not exists public.uno_jugadas (
 create index if not exists uno_jugadas_idx on public.uno_jugadas (juego_id, id);
 
 -- ========== SEGURIDAD (RLS) ==========
--- Se leen entre los dos la partida y las jugadas; la mano, cada uno la suya; el mazo, nadie. Nada se escribe directo.
+-- La partida y las jugadas las leen los dos que juegan (en Nosotros, la pareja; en el Recreo, los dos de la familia);
+-- la mano, cada uno la suya; el mazo, nadie. Nada se escribe directo.
 alter table public.unos enable row level security;
 alter table public.uno_manos enable row level security;
 alter table public.uno_mazos enable row level security;
@@ -74,11 +84,11 @@ alter table public.uno_jugadas enable row level security;
 
 create or replace function public.es_mi_uno(p uuid) returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.unos x where x.id = p and public.es_mi_pareja(x.pareja_id));
+  select exists (select 1 from public.unos x where x.id = p and auth.uid() in (x.creado_por, x.rival));
 $$;
 
 drop policy if exists "unos: leer" on public.unos;
-create policy "unos: leer" on public.unos for select using (public.es_mi_pareja(pareja_id));
+create policy "unos: leer" on public.unos for select using (auth.uid() in (creado_por, rival));
 drop policy if exists "uno_manos: solo la mía" on public.uno_manos;
 create policy "uno_manos: solo la mía" on public.uno_manos for select using (usuario_id = auth.uid());
 drop policy if exists "uno_jugadas: leer" on public.uno_jugadas;
@@ -148,17 +158,38 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ========== JUGAR ==========
--- Retar: reparte 7 cartas a cada uno y da vuelta la primera del pozo (un número); empieza quien diga la suerte.
--- Una partida a la vez por pareja (si ya hay una, devuelve esa); las abandonadas (12 h sin movimiento) se cancelan
--- solas. Al otro le llega un aviso (ver avisar_uno).
+-- (interno) Baraja, reparte 7 cartas a cada uno y da vuelta la primera del pozo (un número); empieza quien diga la
+-- suerte. Sin pareja = es del Recreo.
+create or replace function public.uno_repartir(p_pareja uuid, p_rival uuid, p_apuesta text) returns public.unos
+language plpgsql security definer set search_path = public as $$
+declare
+  j public.unos;
+  baraja text[];
+  k int;
+begin
+  select array_agg(c order by random()) into baraja from unnest(public.uno_mazo_nuevo()) c;
+  -- la primera del pozo: la primera carta de número que salga (las demás siguen en el mazo)
+  select min(i) into k from generate_subscripts(baraja, 1) i where baraja[i] ~ '^[ravz][0-9]$';
+  insert into public.unos (pareja_id, familia, creado_por, rival, turno, arriba, color, cartas, mazo, apuesta)
+  values (p_pareja, p_pareja is null, auth.uid(), p_rival, case when random() < 0.5 then auth.uid() else p_rival end,
+          baraja[k], left(baraja[k], 1), jsonb_build_object(auth.uid()::text, 7, p_rival::text, 7), cardinality(baraja) - 15,
+          nullif(left(btrim(coalesce(p_apuesta, '')), 120), ''))
+  returning * into j;
+  baraja := baraja[:k - 1] || baraja[k + 1:];
+  insert into public.uno_manos (juego_id, usuario_id, cartas) values (j.id, auth.uid(), baraja[1:7]), (j.id, p_rival, baraja[8:14]);
+  insert into public.uno_mazos (juego_id, mazo) values (j.id, baraja[15:]);
+  return j;
+end;
+$$;
+
+-- Retar: reparte y empieza. Una partida a la vez por pareja (si ya hay una, devuelve esa); las abandonadas
+-- (12 h sin movimiento) se cancelan solas. Al otro le llega un aviso (ver avisar_uno).
 create or replace function public.uno_crear(p_apuesta text default null) returns public.unos
 language plpgsql security definer set search_path = public as $$
 declare
   pj public.parejas;
   j public.unos;
   otro uuid;
-  baraja text[];
-  k int;
 begin
   select * into pj from public.parejas
    where (usuario_a = auth.uid() or usuario_b = auth.uid()) and usuario_b is not null;
@@ -169,18 +200,31 @@ begin
   select * into j from public.unos where pareja_id = pj.id and estado = 'jugando' order by creado_en desc limit 1;
   if found then return j; end if;
   otro := case when pj.usuario_a = auth.uid() then pj.usuario_b else pj.usuario_a end;
-  select array_agg(c order by random()) into baraja from unnest(public.uno_mazo_nuevo()) c;
-  -- la primera del pozo: la primera carta de número que salga (las demás siguen en el mazo)
-  select min(i) into k from generate_subscripts(baraja, 1) i where baraja[i] ~ '^[ravz][0-9]$';
-  insert into public.unos (pareja_id, creado_por, rival, turno, arriba, color, cartas, mazo, apuesta)
-  values (pj.id, auth.uid(), otro, case when random() < 0.5 then auth.uid() else otro end, baraja[k], left(baraja[k], 1),
-          jsonb_build_object(auth.uid()::text, 7, otro::text, 7), cardinality(baraja) - 15,
-          nullif(left(btrim(coalesce(p_apuesta, '')), 120), ''))
-  returning * into j;
-  baraja := baraja[:k - 1] || baraja[k + 1:];
-  insert into public.uno_manos (juego_id, usuario_id, cartas) values (j.id, auth.uid(), baraja[1:7]), (j.id, otro, baraja[8:14]);
-  insert into public.uno_mazos (juego_id, mazo) values (j.id, baraja[15:]);
-  return j;
+  return public.uno_repartir(pj.id, otro, p_apuesta);
+end;
+$$;
+
+-- Retar en el Recreo: a alguien de la familia (que no esté oculto). Una partida a la vez por cada dos personas.
+create or replace function public.uno_retar(p_rival uuid, p_apuesta text default null) returns public.unos
+language plpgsql security definer set search_path = public as $$
+declare
+  j public.unos;
+  a uuid := least(auth.uid(), p_rival);
+  z uuid := greatest(auth.uid(), p_rival);
+begin
+  if p_rival is null or p_rival = auth.uid() or not public.es_familia()
+     or not exists (select 1 from public.familia_miembros where usuario_id = p_rival and not oculto) then
+    return null;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('recreo:uno:' || a || ':' || z));
+  update public.unos set estado = 'cancelada', turno = null, robo = null, uno_pendiente = null, actualizado_en = now()
+   where familia and least(creado_por, rival) = a and greatest(creado_por, rival) = z
+     and estado = 'jugando' and actualizado_en < now() - interval '12 hours';
+  select * into j from public.unos
+   where familia and least(creado_por, rival) = a and greatest(creado_por, rival) = z and estado = 'jugando'
+   order by creado_en desc limit 1;
+  if found then return j; end if;
+  return public.uno_repartir(null, p_rival, p_apuesta);
 end;
 $$;
 
@@ -336,7 +380,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ========== AVISOS ==========
--- Al que retaron le llega una push (la manda la función notificar, por el mismo camino que los demás avisos:
+-- Al que retaron le llega una push, solo en Nosotros: el Recreo no tiene (la manda la función notificar, por el mismo camino que los demás avisos:
 -- privado.llamar de avisos.sql; si avisos.sql no está, no pasa nada).
 -- "¡Avisarle!": una push al otro para que vuelva a la mesa. Una por minuto como mucho. Devuelve si se mandó.
 create or replace function public.uno_avisar(p_id uuid) returns boolean
@@ -344,7 +388,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   j public.unos;
 begin
-  select * into j from public.unos where id = p_id and auth.uid() in (creado_por, rival) and estado = 'jugando' for update;
+  select * into j from public.unos where id = p_id and auth.uid() in (creado_por, rival) and estado = 'jugando' and not familia for update;
   if not found or j.avisado_en > now() - interval '1 minute' then return false; end if;
   update public.unos set avisado_en = now() where id = p_id returning * into j;
   if to_regprocedure('privado.llamar(text, jsonb)') is not null then
@@ -358,7 +402,7 @@ $$;
 create or replace function public.avisar_uno() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if to_regprocedure('privado.llamar(text, jsonb)') is not null then
+  if not new.familia and to_regprocedure('privado.llamar(text, jsonb)') is not null then
     execute 'select privado.llamar($1, $2)' using 'notificar', jsonb_build_object(
       'type', 'INSERT', 'table', 'unos', 'schema', 'public', 'record', to_jsonb(new));
   end if;
@@ -372,6 +416,8 @@ create trigger unos_aviso after insert on public.unos for each row execute funct
 revoke all on function public.uno_sacar(uuid, uuid, int) from public, anon, authenticated;
 revoke all on function public.uno_cuantas(uuid) from public, anon, authenticated;
 revoke all on function public.uno_en_mazo(uuid) from public, anon, authenticated;
+revoke all on function public.uno_repartir(uuid, uuid, text) from public, anon, authenticated;
+revoke all on function public.uno_retar(uuid, text) from public, anon;
 revoke all on function public.uno_crear(text) from public, anon;
 revoke all on function public.uno_jugar(uuid, text, text) from public, anon;
 revoke all on function public.uno_robar(uuid) from public, anon;
@@ -382,6 +428,7 @@ revoke all on function public.uno_rendirse(uuid) from public, anon;
 revoke all on function public.uno_mano_rival(uuid) from public, anon;
 revoke all on function public.uno_avisar(uuid) from public, anon;
 grant execute on function public.uno_crear(text) to authenticated;
+grant execute on function public.uno_retar(uuid, text) to authenticated;
 grant execute on function public.uno_jugar(uuid, text, text) to authenticated;
 grant execute on function public.uno_robar(uuid) to authenticated;
 grant execute on function public.uno_pasar(uuid) to authenticated;

@@ -4,7 +4,10 @@
 -- disparos los resuelve la base (batalla_disparar), que es la única que mira la flota del otro.
 -- El tablero es de 10 × 10 y cada celda es fila * 10 + columna (0 = A1, 99 = J10). La flota: 5, 4, 3, 3 y 2.
 -- public/juegos/batalla.js es la otra mitad (y batalla-motor.js tiene las mismas reglas para jugar contra la compu).
--- Pegar en Supabase → SQL Editor → Run, después de schema.sql y avisos.sql. Se puede volver a ejecutar: no borra datos.
+-- También la juega la familia en el Recreo (familia/juegos/batalla.js): ahí cualquiera reta a cualquiera de la familia
+-- (batalla_retar), las partidas van con familia = true y sin pareja, y no mandan push (el Recreo no tiene).
+-- Pegar en Supabase → SQL Editor → Run, después de schema.sql, avisos.sql y familia.sql. Se puede volver a ejecutar:
+-- no borra datos.
 
 -- ========== TABLAS ==========
 create table if not exists public.batallas (
@@ -24,6 +27,12 @@ create table if not exists public.batallas (
   check (creado_por <> rival)
 );
 create index if not exists batallas_pareja_idx on public.batallas (pareja_id, creado_en desc);
+-- las de la familia (el Recreo) no son de una pareja
+alter table public.batallas alter column pareja_id drop not null;
+alter table public.batallas add column if not exists familia boolean not null default false;
+alter table public.batallas drop constraint if exists batallas_de_quien;
+alter table public.batallas add constraint batallas_de_quien check (familia or pareja_id is not null);
+create index if not exists batallas_familia_idx on public.batallas (least(creado_por, rival), greatest(creado_por, rival), creado_en desc) where familia;
 
 -- La flota de cada uno, en orden: [[portaaviones (5)], [acorazado (4)], [crucero (3)], [submarino (3)], [lancha (2)]],
 -- cada barco con sus celdas. Solo la lee su dueño.
@@ -50,18 +59,19 @@ create table if not exists public.batalla_disparos (
 create index if not exists batalla_disparos_idx on public.batalla_disparos (batalla_id, id);
 
 -- ========== SEGURIDAD (RLS) ==========
--- Se leen entre los dos, salvo las flotas (cada uno la suya). Nada se escribe directo: todo por las funciones.
+-- Se leen entre los dos que juegan (en Nosotros, la pareja; en el Recreo, los dos de la familia), salvo las flotas
+-- (cada uno la suya). Nada se escribe directo: todo por las funciones.
 alter table public.batallas enable row level security;
 alter table public.batalla_flotas enable row level security;
 alter table public.batalla_disparos enable row level security;
 
 create or replace function public.es_mi_batalla(b uuid) returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.batallas x where x.id = b and public.es_mi_pareja(x.pareja_id));
+  select exists (select 1 from public.batallas x where x.id = b and auth.uid() in (x.creado_por, x.rival));
 $$;
 
 drop policy if exists "batallas: leer" on public.batallas;
-create policy "batallas: leer" on public.batallas for select using (public.es_mi_pareja(pareja_id));
+create policy "batallas: leer" on public.batallas for select using (auth.uid() in (creado_por, rival));
 drop policy if exists "flotas: solo la mía" on public.batalla_flotas;
 create policy "flotas: solo la mía" on public.batalla_flotas for select using (usuario_id = auth.uid());
 drop policy if exists "disparos: leer" on public.batalla_disparos;
@@ -121,6 +131,33 @@ begin
   insert into public.batallas (pareja_id, creado_por, rival, apuesta)
   values (pj.id, auth.uid(), case when pj.usuario_a = auth.uid() then pj.usuario_b else pj.usuario_a end,
           nullif(left(btrim(coalesce(p_apuesta, '')), 120), ''))
+  returning * into b;
+  return b;
+end;
+$$;
+
+-- Retar en el Recreo: a alguien de la familia (que no esté oculto). Una batalla a la vez por cada dos personas.
+create or replace function public.batalla_retar(p_rival uuid, p_apuesta text default null) returns public.batallas
+language plpgsql security definer set search_path = public as $$
+declare
+  b public.batallas;
+  a uuid := least(auth.uid(), p_rival);
+  z uuid := greatest(auth.uid(), p_rival);
+begin
+  if p_rival is null or p_rival = auth.uid() or not public.es_familia()
+     or not exists (select 1 from public.familia_miembros where usuario_id = p_rival and not oculto) then
+    return null;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('recreo:batalla:' || a || ':' || z));
+  update public.batallas set estado = 'cancelada', turno = null, actualizado_en = now()
+   where familia and least(creado_por, rival) = a and greatest(creado_por, rival) = z
+     and estado in ('colocando', 'jugando') and actualizado_en < now() - interval '12 hours';
+  select * into b from public.batallas
+   where familia and least(creado_por, rival) = a and greatest(creado_por, rival) = z and estado in ('colocando', 'jugando')
+   order by creado_en desc limit 1;
+  if found then return b; end if;
+  insert into public.batallas (pareja_id, familia, creado_por, rival, apuesta)
+  values (null, true, auth.uid(), p_rival, nullif(left(btrim(coalesce(p_apuesta, '')), 120), ''))
   returning * into b;
   return b;
 end;
@@ -221,7 +258,7 @@ $$;
 
 -- ========== AVISOS ==========
 -- Al que recibe el reto le llega una push, y también a quien acomodó primero cuando el otro termina y empieza
--- la batalla (puede haber salido de la app mientras esperaba). La manda la función notificar, por el mismo
+-- la batalla (puede haber salido de la app mientras esperaba). Solo en Nosotros: el Recreo no tiene push. La manda la función notificar, por el mismo
 -- camino que los demás avisos (privado.llamar de avisos.sql); si avisos.sql no está, no pasa nada.
 
 -- "¡Avisarle!": una push al otro para que vuelva a la batalla (le toca disparar o lo están esperando).
@@ -232,7 +269,7 @@ declare
   b public.batallas;
 begin
   select * into b from public.batallas
-   where id = p_id and auth.uid() in (creado_por, rival) and estado in ('colocando', 'jugando') for update;
+   where id = p_id and auth.uid() in (creado_por, rival) and estado in ('colocando', 'jugando') and not familia for update;
   if not found or b.avisado_en > now() - interval '1 minute' then return false; end if;
   update public.batallas set avisado_en = now() where id = p_id returning * into b;
   if to_regprocedure('privado.llamar(text, jsonb)') is not null then
@@ -244,12 +281,14 @@ end;
 $$;
 
 revoke all on function public.batalla_crear(text) from public, anon;
+revoke all on function public.batalla_retar(uuid, text) from public, anon;
 revoke all on function public.batalla_colocar(uuid, jsonb) from public, anon;
 revoke all on function public.batalla_disparar(uuid, int) from public, anon;
 revoke all on function public.batalla_rendirse(uuid) from public, anon;
 revoke all on function public.batalla_flota_rival(uuid) from public, anon;
 revoke all on function public.batalla_avisar(uuid) from public, anon;
 grant execute on function public.batalla_crear(text) to authenticated;
+grant execute on function public.batalla_retar(uuid, text) to authenticated;
 grant execute on function public.batalla_colocar(uuid, jsonb) to authenticated;
 grant execute on function public.batalla_disparar(uuid, int) to authenticated;
 grant execute on function public.batalla_rendirse(uuid) to authenticated;
@@ -260,7 +299,7 @@ grant execute on function public.batalla_avisar(uuid) to authenticated;
 create or replace function public.avisar_batalla() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if (tg_op = 'INSERT' or (old.estado = 'colocando' and new.estado = 'jugando'))
+  if not new.familia and (tg_op = 'INSERT' or (old.estado = 'colocando' and new.estado = 'jugando'))
      and to_regprocedure('privado.llamar(text, jsonb)') is not null then
     execute 'select privado.llamar($1, $2)' using 'notificar', jsonb_build_object(
       'type', tg_op, 'table', 'batallas', 'schema', 'public',

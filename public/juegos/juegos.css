@@ -20,6 +20,10 @@
 /* el color oscuro de cada juego, aclarado en modo oscuro para que los textos se lean bien */
 .jv,.j-carta{--j-tx:var(--j-c)}
 @media (prefers-color-scheme:dark){.jv,.j-carta{--j-tx:color-mix(in srgb,var(--j-c) 42%,#fff)}}
+/* lo que piden los juegos en vivo (batalla.css y uno.css son los mismos en el Recreo): las letras y colores de aquí */
+.jv,.j-carta{--v-texto:var(--body);--v-num:var(--j-num);--v-mano:var(--hand);--v-mano-tam:1;--v-linea:var(--line);--v-tinta:var(--fg);--v-suave:var(--muted);
+  --v-ok:var(--ok);--v-acento:var(--accent);--v-robot:var(--blush);--v-nota:var(--nota);--v-nota-tx:var(--nota-tx);--v-oro:var(--j-oro);--v-capa:var(--j-capa);
+  --v-arcilla:var(--j-clay);--v-rayas:var(--aereo);--v-signo:"♥"}
 
 /* ---------- marcador del amor ---------- */
 .j-marcador{position:relative;overflow:hidden;border-radius:28px;padding:16px 18px 16px;text-align:center;display:flex;flex-direction:column;gap:6px;

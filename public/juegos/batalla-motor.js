@@ -1,8 +1,8 @@
 // Batalla naval ⚓ · el motor (sin pantalla)
 // Las mismas reglas de supabase/batalla.sql en JavaScript: armar y validar flotas, resolver disparos, la compu
 // y una "mesa" local que se porta igual que la base. La mesa local sirve para jugar contra la compu y para probar
-// la pantalla en el computador sin tocar la base (dos pestañas: NosotrosJuegos.probar("batalla") y
-// NosotrosJuegos.probar("batalla", { soy: "otro" })). batalla.js es la pantalla.
+// la pantalla en el computador sin tocar la base (dos pestañas en modo prueba). batalla.js es la pantalla.
+// Lo usan las dos apps: el archivo es el mismo en las dos (lo revisa familia/herramientas/paridad.mjs).
 // El tablero es de 10 × 10; cada celda es fila * 10 + columna (0 = A1, 99 = J10). La flota: 5, 4, 3, 3 y 2.
 (function (raiz) {
   "use strict";
@@ -74,7 +74,7 @@
     const tam = barcos[i].length;
     if (!cabe(inicio, tam, vertical)) return null;
     const nuevo = barcoDe(inicio, tam, vertical);
-    const otras = new Set(barcos.filter((_, j) => j !== i).flat());
+    const otras = new Set([].concat(...barcos.filter((_, j) => j !== i)));
     if (nuevo.some((c) => otras.has(c))) return null;
     return barcos.map((b, j) => (j === i ? nuevo : b.slice()));
   }
@@ -109,7 +109,7 @@
   // De vez en cuando dispara al azar, para que no sea imbatible.
   function elegirDisparo(disparos, azar) {
     const hechos = new Set(disparos.map((d) => d.celda));
-    const hundidas = new Set(disparos.filter((d) => d.barco).flatMap((d) => d.barco));
+    const hundidas = new Set([].concat(...disparos.filter((d) => d.barco).map((d) => d.barco)));
     const libre = (c) => enTablero(c) && !hechos.has(c);
     const elegir = (lista) => lista[azarEntero(lista.length, azar)];
     const heridas = disparos.filter((d) => d.resultado !== "agua" && !hundidas.has(d.celda)).map((d) => d.celda);
@@ -124,13 +124,13 @@
         }
       }
       if (!opciones.length) {
-        opciones = heridas.flatMap((c) => [c - LADO, c + LADO, col(c) > 0 ? c - 1 : -1, col(c) < LADO - 1 ? c + 1 : -1]).filter(libre);
+        opciones = [].concat(...heridas.map((c) => [c - LADO, c + LADO, col(c) > 0 ? c - 1 : -1, col(c) < LADO - 1 ? c + 1 : -1])).filter(libre);
       }
       if (opciones.length) return elegir(opciones);
     }
     const todas = Array.from({ length: LADO * LADO }, (_, c) => c).filter(libre);
     if ((azar || Math.random)() < 0.2) return elegir(todas);
-    const alrededor = new Set([...hundidas].flatMap(vecinos));
+    const alrededor = new Set([].concat(...[...hundidas].map((c) => vecinos(c))));
     const caza = todas.filter((c) => (fila(c) + col(c)) % 2 === 0 && !alrededor.has(c));
     return elegir(caza.length ? caza : todas);
   }

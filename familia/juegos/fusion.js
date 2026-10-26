@@ -92,7 +92,7 @@
       return false;
     }
     function describir() {
-      const n = grid.flat().filter(Boolean).length;
+      const n = [].concat(...grid).filter(Boolean).length;
       tablero.setAttribute("aria-label", `Tablero con ${n} frutas. Mejor fruta: ${ficha(S ? S.mejor : 1)[1]}.`);
     }
 
@@ -205,7 +205,7 @@
         medir(); reiniciar();
         S = { puntos: 0, jugadas: 0, fusiones: 0, mejor: 1, moviendo: false };
         nueva(); nueva();
-        S.mejor = Math.max(...grid.flat().filter(Boolean).map((f) => f.v));
+        S.mejor = Math.max(...[].concat(...grid).filter(Boolean).map((f) => f.v));
         corriendo = true; pausado = false;
         aviso.textContent = "Desliza para juntar frutas 🍒";
         hud(); describir();

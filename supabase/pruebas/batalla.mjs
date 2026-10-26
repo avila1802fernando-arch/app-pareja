@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 
 const db = new PGlite();
 const leer = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
-const ID = { fer: "f1", mar: "a2", eli: "e1", suelta: "c3" };
+const ID = { fer: "f1", mar: "a2", eli: "e1", mari: "b2", suelta: "c3" };
 const uid = (k) => `00000000-0000-0000-0000-0000000000${ID[k]}`;
 let fallas = 0;
 const ok = (cond, txt) => { console.log(`${cond ? "OK " : "MAL"} ${txt}`); if (!cond) fallas++; };
@@ -24,6 +24,8 @@ await db.exec(leer("./stub.sql"));
 await db.exec(`create schema privado;
   create table privado.llamadas (funcion text, cuerpo jsonb);
   create function privado.llamar(funcion text, cuerpo jsonb) returns void language sql as $$ insert into privado.llamadas values (funcion, cuerpo) $$;`);
+// el Recreo (Eli, Maritza y Fernando; Martina oculta), para las partidas de familia
+await db.exec(leer("../familia.sql"));
 const SQL = leer("../batalla.sql");
 await db.exec(SQL);
 await db.exec(SQL);
@@ -144,6 +146,35 @@ ok((await fila("fer", "select public.batalla_avisar($1) a", [b.id])).a === false
 ok(!!(await falla("anon", "select public.batalla_avisar($1)", [b5.id])), "sin sesión no se puede avisar");
 llamadas = (await db.query("select count(*)::int n from privado.llamadas")).rows[0].n;
 ok(llamadas === 9, `los avisos a mano no disparan otros (9 en total: ${llamadas})`);
+
+// ---------- en familia (el Recreo) ----------
+await como("eli", "select public.entrar_familia()");
+await como("mari", "select public.entrar_familia()");
+const fb = await fila("eli", "select * from public.batalla_retar($1, 'Quien pierde lava los platos')", [uid("mari")]);
+ok(fb && fb.familia === true && fb.pareja_id === null && fb.creado_por === uid("eli") && fb.rival === uid("mari") && fb.estado === "colocando",
+  "en el Recreo, Eli reta a Maritza (sin pareja, de familia)");
+ok((await fila("mari", "select * from public.batalla_retar($1)", [uid("eli")])).id === fb.id, "una a la vez entre las dos");
+const fb2 = await fila("eli", "select * from public.batalla_retar($1)", [uid("fer")]);
+ok(fb2 && fb2.id && fb2.id !== fb.id, "y Eli puede tener otra con Fernando al mismo tiempo");
+ok(!(await fila("eli", "select * from public.batalla_retar($1)", [uid("mar")])).id, "a Martina (oculta en el Recreo) no se la puede retar");
+ok(!(await fila("eli", "select * from public.batalla_retar($1)", [uid("eli")])).id, "ni a una misma");
+ok(!(await fila("suelta", "select * from public.batalla_retar($1)", [uid("eli")])).id, "quien no es del Recreo no puede retar");
+ok(!!(await falla("anon", "select * from public.batalla_retar($1)", [uid("eli")])), "sin sesión, tampoco");
+ok((await como("mari", "select id from public.batallas")).rows.some((x) => x.id === fb.id)
+  && (await como("fer", "select id from public.batallas where id = $1", [fb.id])).rows.length === 0
+  && (await como("mar", "select id from public.batallas where familia")).rows.length === 0, "la ven solo las dos que juegan");
+await como("eli", "select public.batalla_colocar($1, $2::jsonb)", [fb.id, JSON.stringify(FLOTA_F)]);
+r = await fila("mari", "select * from public.batalla_colocar($1, $2::jsonb)", [fb.id, JSON.stringify(FLOTA_M)]);
+ok(r.estado === "jugando", "acomodan y empieza, igual que en Nosotros");
+await db.query("update public.batallas set turno = $1 where id = $2", [uid("eli"), fb.id]);
+d = await fila("eli", "select * from public.batalla_disparar($1, 9)", [fb.id]);
+ok(d.resultado === "tocado" && (await como("mari", "select * from public.batalla_disparos where batalla_id = $1", [fb.id])).rows.length === 1
+  && (await como("fer", "select * from public.batalla_disparos where batalla_id = $1", [fb.id])).rows.length === 0, "los disparos los ven las dos (y nadie más)");
+ok((await fila("eli", "select public.batalla_avisar($1) a", [fb.id])).a === false, "en el Recreo no hay \"¡Avisarle!\" (no hay push)");
+ok((await db.query("select count(*)::int n from privado.llamadas")).rows[0].n === 9, "ni el reto ni el comienzo de una de familia avisan por push");
+ok((await fila("fer", "select * from public.batalla_crear(null)")).familia === false, "en Nosotros, batalla_crear sigue siendo de la pareja");
+await db.query("update public.batallas set actualizado_en = now() - interval '13 hours' where id = $1", [fb2.id]);
+ok((await fila("fer", "select * from public.batalla_retar($1)", [uid("eli")])).id !== fb2.id, "la de familia abandonada (12 h) también se cancela sola");
 
 console.log(fallas ? `\n${fallas} PRUEBA(S) FALLARON` : "\nTodo bien ✓");
 process.exit(fallas ? 1 : 0);

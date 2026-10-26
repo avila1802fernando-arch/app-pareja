@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 
 const db = new PGlite();
 const leer = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
-const ID = { fer: "f1", mar: "a2", eli: "e1", suelta: "c3" };
+const ID = { fer: "f1", mar: "a2", eli: "e1", mari: "b2", suelta: "c3" };
 const uid = (k) => `00000000-0000-0000-0000-0000000000${ID[k]}`;
 let fallas = 0;
 const ok = (cond, txt) => { console.log(`${cond ? "OK " : "MAL"} ${txt}`); if (!cond) fallas++; };
@@ -39,6 +39,8 @@ await db.exec(leer("./stub.sql"));
 await db.exec(`create schema privado;
   create table privado.llamadas (funcion text, cuerpo jsonb);
   create function privado.llamar(funcion text, cuerpo jsonb) returns void language sql as $$ insert into privado.llamadas values (funcion, cuerpo) $$;`);
+// el Recreo (Eli, Maritza y Fernando; Martina oculta), para las partidas de familia
+await db.exec(leer("../familia.sql"));
 const SQL = leer("../uno.sql");
 await db.exec(SQL);
 await db.exec(SQL);
@@ -230,6 +232,32 @@ ok((await r("mar", "uno_avisar", j5.id)) === true, "pasado el minuto se puede de
 ok((await r("eli", "uno_avisar", j5.id)) === false, "alguien de afuera no puede avisar");
 ok((await r("fer", "uno_avisar", j.id)) === false, "en una partida terminada no se avisa");
 ok(!!(await falla("anon", "select public.uno_avisar($1)", [j5.id])), "sin sesión no se puede avisar");
+
+// ---------- en familia (el Recreo) ----------
+await como("eli", "select public.entrar_familia()");
+await como("mari", "select public.entrar_familia()");
+const fu = await fila("eli", "select * from public.uno_retar($1, 'Quien pierde lava los platos')", [uid("mari")]);
+ok(fu && fu.familia === true && fu.pareja_id === null && fu.creado_por === uid("eli") && fu.rival === uid("mari")
+  && fu.cartas[uid("eli")] === 7 && fu.cartas[uid("mari")] === 7 && fu.mazo === 93, "en el Recreo, Eli reta a Maritza: 7 y 7, sin pareja");
+ok(await total(fu.id) === 108, "con sus 108 cartas");
+ok((await fila("mari", "select * from public.uno_retar($1)", [uid("eli")])).id === fu.id, "una a la vez entre las dos");
+const fu2 = await fila("eli", "select * from public.uno_retar($1)", [uid("fer")]);
+ok(fu2 && fu2.id && fu2.id !== fu.id, "y Eli puede tener otra con Fernando al mismo tiempo");
+ok(!(await fila("eli", "select * from public.uno_retar($1)", [uid("mar")])).id, "a Martina (oculta en el Recreo) no se la puede retar");
+ok(!(await fila("eli", "select * from public.uno_retar($1)", [uid("eli")])).id, "ni a una misma");
+ok(!(await fila("suelta", "select * from public.uno_retar($1)", [uid("eli")])).id, "quien no es del Recreo no puede retar");
+ok(!!(await falla("eli", "select public.uno_repartir(null, $1, null)", [uid("mari")])), "nadie puede repartir a mano");
+ok((await como("mari", "select id from public.unos")).rows.some((x) => x.id === fu.id)
+  && (await como("fer", "select id from public.unos where id = $1", [fu.id])).rows.length === 0, "la ven solo las dos que juegan");
+ok((await como("eli", "select usuario_id from public.uno_manos where juego_id = $1", [fu.id])).rows.every((x) => x.usuario_id === uid("eli")), "y cada una ve solo su mano");
+await mesa(fu.id, { fer: ["r1"], mar: ["a1"], arriba: "r7", turno: "fer" }); // (pone la mesa a fer/mar: aquí no se usa)
+await db.query("update public.uno_manos set cartas = '{r3,z2}' where juego_id = $1 and usuario_id = $2", [fu.id, uid("eli")]);
+await db.query("update public.unos set turno = $1, arriba = 'r7', color = 'r' where id = $2", [uid("eli"), fu.id]);
+res = await r("eli", "uno_jugar", fu.id, "r3", null);
+ok(res && res.juego.turno === uid("mari") && res.juego.arriba === "r3", "se juega igual que en Nosotros");
+ok((await r("eli", "uno_avisar", fu.id)) === false, "en el Recreo no hay \"¡Avisarle!\" (no hay push)");
+ok((await db.query("select count(*)::int n from privado.llamadas")).rows[0].n === 7, "y el reto de familia no avisa por push");
+ok((await fila("fer", "select * from public.uno_crear(null)")).familia === false, "en Nosotros, uno_crear sigue siendo de la pareja");
 
 console.log(fallas ? `\n${fallas} PRUEBA(S) FALLARON` : "\nTodo bien ✓");
 process.exit(fallas ? 1 : 0);

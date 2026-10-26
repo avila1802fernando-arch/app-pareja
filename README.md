@@ -30,6 +30,7 @@ Costo: **US$0**. Supabase (base de datos, login, funciones) y Vercel (hosting) e
 - **Juegos** 🎮 · Cuatro minijuegos para jugar cada uno en su teléfono, con el **récord de cada uno** en cada juego y la corona 👑 para quien va ganando, y dos juegos para jugar los dos a la vez (`public/juegos/`):
   - **UNO en vivo** 🃏: las cartas de siempre. Del mismo color o número, salta, reversa, +2 y +4, y hay que decir "¡UNO!" cuando queda una (si el otro te pilla sin decirlo, robas dos). Gana quien se queda sin cartas y se lleva los puntos de lo que le quedó al otro. Las manos son secretas de verdad: la base baraja, reparte y revisa cada jugada (`supabase/uno.sql`). Con apuesta, aviso 🔔 y práctica contra la compu 🤖.
   - **Batalla naval en vivo** ⚓: cada uno acomoda su flota en secreto y se turnan para disparar (si aciertas, vuelves a disparar). Se puede apostar algo ("Quien pierde canta una canción…"), se ve si el otro tiene la batalla abierta y, si no, se le manda un aviso 🔔. Las flotas son secretas de verdad: los disparos los resuelve la base (`supabase/batalla.sql`). También se puede practicar contra la compu 🤖.
+  - **Con los del Recreo** 🎮: en los dos juegos en vivo, al elegir con quién jugar, debajo de tu pareja salen en **Otros** las personas del Recreo (la app de juegos de la familia: Eli y Maritza). Se juega igual, cada uno desde su app, pero esas partidas no mandan push: el aviso va por WhatsApp. Solo le aparece a quien también es del Recreo.
   - **Atrapa los corazones**: 90 segundos y 6 niveles tocando corazones (la postal "edición revancha", ahora para los dos). Cada corazón dice algo bonito con el nombre de quien juega.
   - **Vuelo hasta ti**: un corazón con alas vuela los km que los separan (los reales si activaron la ubicación) esquivando nubes de tormenta.
   - **Memoria de nosotros**: cuatro rondas contra el reloj para encontrar parejas (el girasol, las cartas, la misma luna…).
@@ -59,10 +60,11 @@ public/                 ← la app (HTML, CSS, JS, íconos, service worker)
   config.js             ← TUS claves públicas (editar)
   preguntas.js          ← las preguntas del día (puedes agregar las tuyas)
   juegos/               ← la sala de juegos (sala.js), cada minijuego (corazones, vuelo, memoria, fusion), la batalla naval (batalla.js, batalla-motor.js) y el UNO (uno.js, uno-motor.js)
+                          (la batalla y el UNO, con sus estilos, son los mismos archivos en familia/juegos/; lo de la pareja va aparte, en vivo-pareja.js)
 supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede repetir)
 supabase/avisos.sql     ← la base avisa a las funciones: triggers + tarea cada 5 min (editar 2 valores y pegar)
-supabase/batalla.sql    ← la batalla naval en vivo: flotas secretas, turnos y avisos (pegar después de avisos.sql)
-supabase/uno.sql        ← el UNO en vivo: manos secretas, el mazo, las jugadas y avisos (pegar después de avisos.sql)
+supabase/batalla.sql    ← la batalla naval en vivo: flotas secretas, turnos y avisos (pegar después de avisos.sql y familia.sql)
+supabase/uno.sql        ← el UNO en vivo: manos secretas, el mazo, las jugadas y avisos (pegar después de avisos.sql y familia.sql)
 supabase/functions/
   _shared/push.ts       ← código común para enviar push
   notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día, calendario y sesiones
@@ -183,7 +185,7 @@ Un solo script, `supabase/avisos.sql`, deja todo cableado: un trigger en `evento
    - `TU_REF` por el *Reference ID* del proyecto (Project Settings → General)
    - `TU_WEBHOOK_SECRET` por la misma clave del paso 5
 3. Pega el archivo en **SQL Editor** → **Run**. Se puede volver a correr: si lo corres sin cambiar esas dos líneas, se queda con los valores que ya había.
-4. Para la **batalla naval** ⚓ y el **UNO** 🃏: pega también `supabase/batalla.sql` y `supabase/uno.sql` → **Run** (después de `avisos.sql`, así el reto y el "¡Avisarle!" llegan como push). Se pueden volver a correr.
+4. Para la **batalla naval** ⚓ y el **UNO** 🃏: pega también `supabase/batalla.sql` y `supabase/uno.sql` → **Run** (después de `avisos.sql`, así el reto y el "¡Avisarle!" llegan como push, y de `familia.sql`, para jugar también con los del Recreo). Se pueden volver a correr.
 
 No crees **Database Webhooks** en el panel: hacen lo mismo y cada aviso llegaría doble (si ya los tenías de una versión anterior, `avisos.sql` los quita).
 
@@ -244,7 +246,7 @@ Cada vez que llega una versión nueva:
    ```
    (`sesion` solo si ya hiciste el paso 8.)
 4. Si todavía no lo corriste, `supabase/avisos.sql` (paso 6): reemplaza a los Database Webhooks del panel y a `cron.sql` de versiones anteriores. Las funciones nuevas (señales, ánimo, pregunta del día, cartas, lista) **no necesitan avisos ni secretos nuevos**.
-5. Para la batalla naval y el UNO: corre `supabase/batalla.sql` y `supabase/uno.sql` (una vez; se pueden repetir) y vuelve a publicar `notificar`.
+5. Para la batalla naval y el UNO: corre `supabase/batalla.sql` y `supabase/uno.sql` (después de `familia.sql`; se pueden repetir) y vuelve a publicar `notificar`.
 
 ## Prueba
 
@@ -256,7 +258,8 @@ Cada vez que llega una versión nueva:
 - Agreguen el viaje que tengan planeado en **Calendario** con tipo *Viaje*: el corazón del Inicio empieza a contar los días.
 - **Batalla naval**: uno reta al otro desde Juegos. Al otro le llega "⚓ X te reta a una batalla naval"; cuando los dos acomodan su flota, empieza y los disparos se ven al instante en los dos teléfonos.
 - **UNO**: uno reta al otro desde Juegos y ya están repartidas las cartas. Al otro le llega "🃏 X te reta a un UNO"; cada carta jugada se ve al instante en los dos teléfonos.
-- Para probar los juegos en vivo en el computador sin sesión (no toca la base): en la consola, `NosotrosJuegos.probar("uno")` (o `"batalla"`) en una pestaña y `NosotrosJuegos.probar("uno", { soy: "otro" })` en otra. Las pruebas automáticas: `cd supabase/pruebas && npm install && npm run test:batalla && npm run test:uno`.
+- **Con alguien del Recreo**: Juegos → UNO → en **Otros**, Eli. En su Recreo le aparece "🃏 Fernando te retó a un UNO" si lo tiene abierto; si no, toca **Avisarle por WhatsApp**. La partida se ve al instante en las dos apps.
+- Para probar los juegos en vivo en el computador sin sesión (no toca la base): en la consola, `NosotrosJuegos.probar("uno")` (o `"batalla"`) en una pestaña y `NosotrosJuegos.probar("uno", { soy: "otro" })` en otra. En **Otros** salen Eli y Maritza de mentira (sin nadie del otro lado: jugar con ellas se prueba en el modo prueba del Recreo, ver `familia/README.md`). Las pruebas automáticas: `cd supabase/pruebas && npm install && npm run test:batalla && npm run test:uno`.
 
 Ajustes que ya trae (constantes al inicio de cada archivo):
 - `MINUTOS_SIN_REPETIR = 15` en `notificar/index.ts`: si la misma persona entra varias veces en 15 minutos, solo se avisa la primera.

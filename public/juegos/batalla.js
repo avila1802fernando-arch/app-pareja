@@ -826,7 +826,7 @@
     c.append(nodo("p", "jv-ojo", "Fin de la batalla"));
     c.append(nodo("h3", "jv-rango", gane ? (conCompu ? "¡Le ganaste a la compu! 🏆" : "¡Ganaste la batalla! 🏆") : conCompu ? "Ganó la compu 🤖" : `${mayus(o)} ganó esta vez 😏`));
     if (b.rendido) c.append(nodo("p", "bn-texto", gane ? `${mayus(o)} se rindió 🏳️` : "Te rendiste 🏳️"));
-    if (b.apuesta && !conCompu) c.append(apuestaVer(gane ? `${mayus(o)} tiene que cumplir: «${b.apuesta}»` : `Te toca cumplir: «${b.apuesta}»`, true));
+    if (b.apuesta && !conCompu) c.append(apuestaVer(gane ? `Ganaste la apuesta: «${b.apuesta}»` : `${mayus(o)} ganó la apuesta: «${b.apuesta}»`, true));
     const mios = misDisparos(), suyos = susDisparos(), est = nodo("div", "jv-stats");
     [[mios.length, "tus disparos"], [mios.length ? `${Math.round((aciertos(mios) / mios.length) * 100)}%` : "—", "tu puntería"],
       [suyos.length, conCompu ? "de la compu" : `de ${o}`]].forEach(([v, t]) => {

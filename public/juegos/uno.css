@@ -1,0 +1,106 @@
+/* ===== UNO 🃏 (ver juegos/uno.js) =====
+   La mesa usa el marco de los juegos (.jv) y las piezas comunes de la batalla naval (bn-…: el cuerpo, el turno, la
+   apuesta y los avisos; batalla.css se carga antes), con colores cálidos de mesa de cartas. Las cartas son puro CSS:
+   un sello redondo de correo en el centro y el dorso con las rayas de correo aéreo de la app.
+   Lo que se anima al llegar (una carta, el turno) recibe --d: así no vuelve a empezar cuando la pantalla se redibuja. */
+.uno,.uno-tarjeta{--j-a:#ff8a5c;--j-b:#ffc94d;--j-c:#c4452f;--u-r:#e23b4e;--u-a:#f4b42c;--u-v:#22a05b;--u-z:#2c79d6;--u-x:#2d2333}
+.col-r{--kc:var(--u-r)}.col-a{--kc:var(--u-a)}.col-v{--kc:var(--u-v)}.col-z{--kc:var(--u-z)}
+.uno .jv-marco{position:relative}
+.uno-reglas{margin:0;padding:0 0 0 1.1em;max-width:36ch;text-align:left;font-size:.84rem;line-height:1.45;color:var(--muted)}
+.uno-reglas li+li{margin-top:3px}
+
+/* ---------- una carta ---------- */
+.uno-c{position:relative;flex:none;display:grid;place-items:center;width:58px;height:86px;padding:0;border-radius:10px;border:3px solid #fff;
+  background:var(--k,var(--u-x));color:#fff;font-family:var(--j-num);font-weight:700;font-size:1rem;line-height:1;letter-spacing:0;
+  box-shadow:0 6px 14px -8px rgba(0,0,0,.6);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.uno-c.c-r{--k:var(--u-r)}.uno-c.c-a{--k:var(--u-a)}.uno-c.c-v{--k:var(--u-v)}.uno-c.c-z{--k:var(--u-z)}.uno-c.c-x{--k:var(--u-x)}
+.uno-sello{display:grid;place-items:center;width:78%;aspect-ratio:1;border-radius:50%;background:#fff;color:var(--k);font-size:1.55rem;
+  box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px color-mix(in srgb,var(--k) 45%,#fff)}
+.uno-c.c-a .uno-sello{color:#b07a00}
+.uno-sello.subraya{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.uno-sello svg{width:64%;height:64%;fill:none;stroke:currentColor;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
+.uno-sello.rueda{background:conic-gradient(var(--u-r) 0 25%,var(--u-a) 0 50%,var(--u-v) 0 75%,var(--u-z) 0);color:#fff;
+  box-shadow:inset 0 0 0 2px #fff}
+.uno-sello.rueda b{font-size:1.1rem;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.uno-esq{position:absolute;top:4px;left:5px;font-size:.7rem;line-height:1}
+.uno-esq.abajo{top:auto;left:auto;bottom:4px;right:5px;transform:rotate(180deg)}
+.uno-esq svg{display:block;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.uno-c.c-a .uno-esq{color:#5a3c00}
+.uno-c.grande{width:78px;height:116px;border-radius:13px;border-width:4px}
+.uno-c.grande .uno-sello{font-size:2.1rem}
+.uno-c.grande .uno-esq{font-size:.88rem;top:5px;left:6px}
+.uno-c.grande .uno-esq.abajo{top:auto;left:auto;bottom:5px;right:6px}
+.uno-c.chica{width:38px;height:56px;border-radius:7px;border-width:2px}
+.uno-c.chica .uno-sello{font-size:1rem}
+.uno-c.chica .uno-sello.rueda b{font-size:.75rem}
+.uno-c.chica .uno-esq{display:none}
+.uno-c.mini{width:30px;height:44px;border-radius:5px;border-width:2px}
+/* el dorso: rayas de correo aéreo y un corazón */
+.uno-dorso{background:var(--u-x);overflow:hidden}
+.uno-dorso::before{content:"";position:absolute;inset:0;background:var(--aereo);opacity:.85}
+.uno-dorso::after{content:"♥";position:absolute;inset:14%;border-radius:999px;background:var(--u-x);color:var(--j-b);display:grid;place-items:center;font-size:1.3rem}
+.uno-dorso.mini::after{inset:18%;font-size:.7rem}
+.uno-dorso.grande::after{font-size:1.9rem}
+
+/* ---------- el otro ---------- */
+.uno-rival{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;max-width:400px}
+.uno-rival .bn-lado{max-width:100%}
+.uno-abanico{display:flex;justify-content:center;flex-wrap:wrap;padding-left:20px;min-height:44px}
+.uno-abanico .uno-c{margin-left:-20px}
+.uno-mas{align-self:center;margin-left:8px;font-family:var(--j-num);font-weight:600;font-size:.82rem;color:var(--muted)}
+.uno .uno-pillar{min-width:0;background:linear-gradient(135deg,var(--u-z),#7b5cff);box-shadow:inset 0 -4px 0 rgba(0,0,0,.16),0 14px 26px -14px #5b4bdc;
+  animation:uno-late 1s ease-in-out infinite}
+
+/* ---------- la mesa: el mazo y la de arriba ---------- */
+.uno-mesa{display:flex;align-items:center;justify-content:center;gap:28px;padding:4px 0}
+.uno-mazo{position:relative;padding:0;border:0;border-radius:13px;background:none;box-shadow:none;cursor:default}
+.uno-mazo:active{transform:none}
+.uno-mazo .uno-c{box-shadow:3px 3px 0 -1px #fff,3px 3px 0 1px rgba(0,0,0,.18),6px 6px 0 -1px #fff,6px 6px 0 1px rgba(0,0,0,.14)}
+.uno-mazo:not([disabled]){cursor:pointer}
+.uno-mazo:not([disabled]) .uno-c{outline:3px solid var(--j-b);outline-offset:2px}
+.uno-mazo:not([disabled]):active .uno-c{transform:translateY(2px)}
+.uno-mazo[disabled]{opacity:1}
+.uno-cuenta{position:absolute;right:-10px;bottom:-10px;min-width:28px;height:28px;padding:0 6px;border-radius:14px;display:grid;place-items:center;
+  background:var(--card);color:var(--fg);border:2px solid var(--line);font-family:var(--j-num);font-weight:600;font-size:.8rem}
+.uno-pozo{border-radius:18px;padding:5px;box-shadow:0 0 0 4px var(--kc),0 12px 26px -14px var(--kc);transition:box-shadow var(--t-medio) var(--salida)}
+.uno-pozo .uno-c.llega{animation:uno-cae .45s var(--resorte) both;animation-delay:var(--d,0ms)}
+@keyframes uno-cae{from{transform:translateY(-34px) rotate(-14deg) scale(1.15);opacity:0}}
+.uno-color{margin:-2px 0 0;font-size:.82rem;font-weight:800;color:color-mix(in srgb,var(--kc) 78%,var(--fg))}
+.uno-puntos{margin:0;font-family:var(--j-num);font-weight:600;font-size:1.05rem;color:var(--j-tx)}
+
+/* ---------- ¡UNO!, robar y pasar ---------- */
+.uno-acciones{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px}
+.uno .uno-acciones button.ghost{padding:10px 16px}
+.uno .uno-grito{min-width:0;padding:12px 22px;font-size:1.2rem;background:linear-gradient(135deg,#ff5a4e,#ffb03b);
+  box-shadow:inset 0 -4px 0 rgba(0,0,0,.16),0 14px 26px -14px #ff5a4e;animation:uno-late 1s ease-in-out infinite}
+@keyframes uno-late{50%{transform:scale(1.07)}}
+
+/* ---------- tu mano ---------- */
+.uno-mano{display:flex;flex-wrap:wrap;justify-content:center;width:100%;max-width:430px;min-height:104px;padding:14px 0 4px 24px}
+.uno-mano .uno-c{margin:8px 0 0 -24px;transition:transform var(--t-rapido) var(--salida),filter var(--t-rapido) var(--salida),box-shadow var(--t-rapido) var(--salida)}
+.uno-mano.mi-turno .uno-c[aria-disabled]{filter:saturate(.45) brightness(.86)}
+.uno-mano .uno-c.puede{transform:translateY(-10px);cursor:pointer;box-shadow:0 0 0 3px var(--j-b),0 12px 20px -10px rgba(0,0,0,.6)}
+.uno-mano .uno-c.puede:active{transform:translateY(-14px) scale(1.05)}
+.uno-mano .uno-c:not(.puede):active{transform:none}
+.uno-mano .uno-c.robada{box-shadow:0 0 0 3px #fff,0 0 0 6px var(--j-b),0 12px 20px -10px rgba(0,0,0,.6)}
+.uno-mano .uno-c:focus-visible{outline:3px solid var(--j-c);outline-offset:3px;z-index:2}
+.uno-mano .uno-c.nueva{animation:uno-llega .5s var(--resorte) both;animation-delay:var(--d,0ms)}
+@keyframes uno-llega{from{transform:translateY(-46px) scale(.6);opacity:0}}
+
+/* ---------- el color de un comodín ---------- */
+.uno-capa:empty{display:none}
+.uno-elegir{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;
+  border-radius:26px;background:var(--j-capa);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);text-align:center;
+  animation:aparece var(--t-medio) var(--salida)}
+.uno-colores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(300px,86%)}
+.uno-colores button{min-height:86px;border-radius:20px;background:var(--kc);color:#fff;font-family:var(--j-num);font-weight:600;font-size:1.1rem;
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.18),0 12px 22px -14px var(--kc)}
+.uno-colores button.col-a{color:#4a3100}
+.uno-colores button.sugerido{outline:3px solid var(--fg);outline-offset:3px}
+
+/* ---------- el final ---------- */
+.uno-resto{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;max-width:360px}
+
+@media (prefers-reduced-motion:reduce){
+  .uno *,.uno-tarjeta,.uno-tarjeta *{animation:none!important;transition:none!important}
+}

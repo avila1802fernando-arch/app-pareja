@@ -2,11 +2,12 @@
   "name": "recreo-pruebas-sql",
   "private": true,
   "type": "module",
-  "description": "Prueba familia.sql, las sesiones de pareja de schema.sql y la batalla naval (batalla.sql) en un Postgres local (PGlite), y el motor de la batalla en Node. No toca la base real.",
+  "description": "Prueba familia.sql, las sesiones de pareja de schema.sql, la batalla naval (batalla.sql) y el UNO (uno.sql) en un Postgres local (PGlite), y los motores de los dos juegos en vivo en Node. No toca la base real.",
   "scripts": {
     "test": "node familia.mjs",
     "test:sesiones": "node sesiones.mjs",
-    "test:batalla": "node batalla.mjs && node batalla-motor.mjs"
+    "test:batalla": "node batalla.mjs && node batalla-motor.mjs",
+    "test:uno": "node uno.mjs && node uno-motor.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.2.17"

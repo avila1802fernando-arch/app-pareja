@@ -3,6 +3,7 @@
 //   - `eventos` (INSERT): entrada, "te extraño", "estoy libre", abrazo, beso, a dormir… → push a la otra persona
 //   - `eventos_cal` (INSERT / UPDATE / DELETE): cambios del calendario → push a la otra persona
 //   - `batallas` (batalla.sql): el reto de batalla naval, el comienzo y el "¡Avisarle!" → push a la otra persona
+//   - `unos` (uno.sql): el reto de UNO y el "¡Avisarle!" → push a la otra persona
 //
 // Secretos y utilidades compartidas: ver ../_shared/push.ts
 
@@ -56,6 +57,7 @@ type Batalla = {
   id: string; pareja_id: string; creado_por: string; rival: string; estado: string;
   listos: string[] | null; turno: string | null; apuesta: string | null;
 };
+type Uno = { id: string; pareja_id: string; creado_por: string; rival: string; estado: string; turno: string | null; apuesta: string | null };
 type EventoCal = {
   id: string; pareja_id: string; creado_por: string; actualizado_por: string | null;
   titulo: string; tipo: string; inicio: string; fin: string | null; nota: string | null;
@@ -69,6 +71,7 @@ Deno.serve(async (req) => {
   if (payload.table === "eventos" && payload.type === "INSERT") return porEvento(payload.record as Evento);
   if (payload.table === "eventos_cal") return porCalendario(payload);
   if (payload.table === "batallas") return porBatalla(payload);
+  if (payload.table === "unos") return porUno(payload);
   return ok("ignorado");
 });
 
@@ -316,6 +319,38 @@ async function porBatalla(payload: { type: string; record: Batalla | null; old_r
       ? (b.turno === para ? "¡Te toca disparar! 🎯" : `Vuelve a la batalla: ${nombre} te está esperando.`)
       : (b.listos ?? []).includes(para) ? `${nombre} ya casi termina de acomodar su flota: vuelve para empezar.` : "Acomoda tu flota y a jugar ⚓";
     mensaje = { title: `⚓ ${nombre} te espera en la batalla naval`, body, tag: "batalla", url: "/#juegos", vibrate: [120, 60, 120], ttl: 3600 };
+  } else {
+    return ok("ignorado");
+  }
+  const enviadas = await enviarPush(sb, para, mensaje);
+  return new Response(JSON.stringify({ enviadas }), { headers: { "content-type": "application/json" } });
+}
+
+// ----- unos: el reto de UNO y el "¡Avisarle!" -----
+// INSERT: al que retaron (las cartas ya están repartidas). AVISO (uno_avisar): de parte de `de`, para que el otro
+// vuelva a la mesa.
+async function porUno(payload: { type: string; record: Uno | null; de?: string }) {
+  const u = payload.record;
+  if (!u) return ok("sin partida");
+  let para: string, mensaje: Mensaje;
+  if (payload.type === "INSERT") {
+    para = u.rival;
+    const nombre = await nombreDe(u.creado_por);
+    mensaje = {
+      title: `🃏 ${nombre} te reta a un UNO`,
+      // la apuesta no va en el aviso (se vería con el teléfono bloqueado): se lee en la app
+      body: (u.turno === para ? "Ya están repartidas las cartas y empiezas tú." : "Ya están repartidas las cartas.")
+        + (u.apuesta ? " Hay una apuesta en juego 😏" : " Entra a Juegos a jugar."),
+      tag: "uno", url: "/#juegos", vibrate: [80, 60, 80, 60, 200], ttl: 12 * 3600,
+    };
+  } else if (payload.type === "AVISO" && payload.de && [u.creado_por, u.rival].includes(payload.de)) {
+    para = payload.de === u.creado_por ? u.rival : u.creado_por;
+    const nombre = await nombreDe(payload.de);
+    mensaje = {
+      title: `🃏 ${nombre} te espera en el UNO`,
+      body: u.turno === para ? "¡Te toca jugar! 🃏" : `Vuelve a la mesa: ${nombre} te está esperando.`,
+      tag: "uno", url: "/#juegos", vibrate: [120, 60, 120], ttl: 3600,
+    };
   } else {
     return ok("ignorado");
   }

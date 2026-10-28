@@ -484,18 +484,7 @@ input.sr:focus-visible+.boton-archivo{outline:3px solid var(--accent);outline-of
 .playlist .p-info{flex:1;display:flex;flex-direction:column;min-width:0;white-space:normal!important;color:var(--fg)!important}
 .playlist .p-info small{color:var(--muted);font-size:.75rem}
 .playlist a{color:var(--accent);font-weight:700;font-size:.85rem;text-decoration:none;flex:none;padding:8px}
-/* dibujos */
-.lienzo-dibujo{border-radius:18px;overflow:hidden;border:1.5px solid var(--line);background:#fffafc;touch-action:none}
-.lienzo-dibujo canvas{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair}
-.dibujo-herr{display:flex;flex-direction:column;gap:8px}
-.dibujo-colores,.dibujo-grosores{display:flex;gap:8px;flex-wrap:wrap}
-.dibujo-colores button{width:36px;height:36px;border-radius:50%;padding:0;border:3px solid var(--card);box-shadow:0 0 0 1.5px var(--line)}
-.dibujo-colores button[aria-checked=true]{box-shadow:0 0 0 3px var(--accent)}
-.dibujo-grosores button{width:44px;height:36px;padding:0;background:var(--blush);border:1.5px solid var(--line);box-shadow:none;border-radius:10px;display:grid;place-items:center}
-.dibujo-grosores button i{display:block;border-radius:50%;background:var(--fg)}
-.dibujo-grosores button[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft)}
-.dibujo-botones{display:flex;gap:8px}
-.dibujo-botones button{flex:1}
+/* (los dibujos tienen su propio estilo en dibujo.css) */
 /* amor en números */
 .numeros{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px}
 /* cada número es una estampilla: borde perforado, marco fino y un poquito torcida */

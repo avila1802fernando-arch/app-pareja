@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/noche.css">
   <link rel="stylesheet" href="/focus.css">
   <link rel="stylesheet" href="/sesion.css">
+  <link rel="stylesheet" href="/dibujo.css">
 </head>
 <body>
 <!-- Íconos propios (mismo trazo que los de la barra): reemplazan a los emojis en botones y listas -->
@@ -717,23 +718,52 @@
   </form>
 </dialog>
 
-<!-- Dibujar algo -->
-<dialog id="dlg-dibujo" class="dlg">
+<!-- Dibujar algo: el lienzo, las herramientas y el fondo (dibujo.js arma los botones) -->
+<dialog id="dlg-dibujo" class="dlg dlg-dibujo">
   <div class="stack">
     <h2 id="dibujo-para">Un dibujo</h2>
-    <div class="lienzo-dibujo"><canvas id="dibujo-canvas" width="720" height="720" aria-label="Lienzo para dibujar con el dedo"></canvas></div>
-    <div class="dibujo-herr">
-      <div class="dibujo-colores" id="dibujo-colores" role="radiogroup" aria-label="Color"></div>
-      <div class="dibujo-grosores" id="dibujo-grosores" role="radiogroup" aria-label="Grosor"></div>
+    <div class="dib-barra">
+      <button type="button" class="ghost" id="dib-deshacer" disabled>Deshacer</button>
+      <button type="button" class="ghost" id="dib-rehacer" disabled>Rehacer</button>
+      <button type="button" class="ghost" id="dib-limpiar">Borrar todo</button>
     </div>
-    <div class="dibujo-botones">
-      <button type="button" class="ghost" id="dibujo-deshacer">↶ Deshacer</button>
-      <button type="button" class="ghost" id="dibujo-borrar">Borrar todo</button>
+    <div class="lienzo-dibujo"><canvas id="dibujo-canvas" width="1080" height="1080" aria-label="Lienzo para dibujar con el dedo"></canvas></div>
+    <div class="dib-herr">
+      <div id="dib-herramientas" role="radiogroup" aria-label="Herramienta"></div>
+      <button type="button" id="dib-fondo" aria-pressed="false"><span>Fondo</span></button>
+    </div>
+    <div class="dib-panel">
+      <p class="small-note dib-pista" id="dib-pista"></p>
+      <div class="dib-chips" id="dib-pinceles" role="radiogroup" aria-label="Pincel"></div>
+      <div class="dib-fila" id="dib-formas-fila">
+        <div class="dib-chips" id="dib-formas" role="radiogroup" aria-label="Forma"></div>
+        <button type="button" id="dib-relleno" aria-pressed="false">Rellena</button>
+      </div>
+      <div class="dib-texto" id="dib-escribir">
+        <label for="dib-texto-in" class="sr">Lo que vas a escribir en el dibujo</label>
+        <input id="dib-texto-in" maxlength="40" autocomplete="off" placeholder="Escribe algo lindo…">
+        <div class="dib-chips" id="dib-letras" role="radiogroup" aria-label="Letra"></div>
+      </div>
+      <div class="dib-stickers" id="dib-stickers" role="radiogroup" aria-label="Sticker"></div>
+      <div class="dib-colores" id="dib-colores" role="radiogroup" aria-label="Color"></div>
+      <div class="dib-ajustes" id="dib-ajustes">
+        <label class="dib-ajuste" id="dib-grosor-caja"><span>Grosor</span><input type="range" id="dib-grosor" min="0" max="100"><i class="dib-muestra" id="dib-muestra" aria-hidden="true"></i></label>
+        <label class="dib-ajuste" id="dib-opacidad-caja"><span>Opacidad</span><input type="range" id="dib-opacidad" min="10" max="100" step="5"></label>
+      </div>
+      <div class="dib-colores" id="dib-fondos" role="radiogroup" aria-label="Color del fondo"></div>
+      <div class="dib-chips" id="dib-papeles" role="radiogroup" aria-label="Papel"></div>
+      <div class="dib-foto" id="dib-foto">
+        <input type="file" id="dib-foto-in" accept="image/*" class="sr">
+        <label for="dib-foto-in" id="dib-foto-poner">Poner una foto</label>
+        <button type="button" class="ghost" id="dib-foto-quitar" hidden>Quitar la foto</button>
+      </div>
     </div>
     <label for="dibujo-texto" class="sr">Texto (opcional)</label>
     <input id="dibujo-texto" maxlength="140" placeholder="Un texto para acompañarlo (opcional)">
     <button type="button" id="dibujo-enviar">Enviar dibujo</button>
-    <button type="button" class="link" id="dibujo-cancelar">Cancelar</button>
+    <button type="button" class="ghost" id="dib-guardar">Guardar en el teléfono</button>
+    <button type="button" class="link" id="dibujo-cancelar">Cerrar</button>
+    <p class="toast" id="dib-aviso" role="status" aria-live="polite"></p>
   </div>
 </dialog>
 
@@ -804,5 +834,6 @@
 <script defer src="/noche.js"></script>
 <script defer src="/focus.js"></script>
 <script defer src="/sesion.js"></script>
+<script defer src="/dibujo.js"></script>
 </body>
 </html>

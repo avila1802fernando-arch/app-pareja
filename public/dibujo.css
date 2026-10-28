@@ -1,0 +1,66 @@
+/* Dibujos con el dedo ✏️ (dibujo.js): el lienzo, las herramientas y sus opciones.
+   La ventana es un poco más ancha que las otras y con menos margen: así el lienzo queda más grande para el dedo. */
+/* (manipulation: tocar rápido dos veces un botón, como Deshacer, no hace zoom en el iPhone) */
+.dlg-dibujo{width:calc(100% - 20px);max-width:480px;padding:20px 14px 14px;overscroll-behavior:contain;touch-action:manipulation}
+.dlg-dibujo::before{margin:-20px -14px 14px}
+.dlg-dibujo svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* el lienzo: con el dedo encima, la ventana no se mueve y no hay zoom, ni lupa, ni menú del iPhone */
+.lienzo-dibujo{border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fffafc;
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.lienzo-dibujo canvas{display:block;width:100%;height:auto;aspect-ratio:1;touch-action:none;cursor:crosshair}
+/* deshacer, rehacer y borrar todo, justo encima del lienzo */
+.dib-barra{display:flex;gap:6px}
+.dib-barra button{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;min-height:40px;padding:7px 4px;font-size:.78rem;white-space:nowrap}
+.dib-barra button[disabled]{opacity:.35}
+/* las herramientas, y el fondo al final */
+.dib-herr{display:flex;gap:4px}
+#dib-herramientas{flex:6;display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.dib-herr button{flex:1;min-width:0;min-height:52px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  background:var(--blush);color:var(--fg);border:1.5px solid var(--line);border-radius:14px;box-shadow:none;font-size:.6rem;line-height:1.1}
+.dib-herr button svg{width:22px;height:22px}
+.dib-herr button[aria-checked=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+#dib-fondo{border-style:dashed}
+#dib-fondo[aria-pressed=true]{background:var(--accent);border:1.5px solid var(--accent);color:var(--on-accent)}
+/* las opciones de la herramienta elegida */
+.dib-panel{display:flex;flex-direction:column;gap:10px}
+.dib-pista:empty{display:none}
+/* las formas van siempre juntas; "Rellena" baja a su propia fila solo si no cabe al lado */
+.dib-fila{display:flex;flex-wrap:wrap;gap:6px}
+.dib-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dib-fila .dib-chips{flex:4 1 200px;flex-wrap:nowrap}
+.dib-chips button,#dib-relleno{flex:1 1 auto;min-width:0;min-height:38px;padding:6px 6px;display:flex;align-items:center;justify-content:center;gap:5px;
+  background:var(--blush);color:var(--fg);border:1.5px solid var(--line);border-radius:12px;box-shadow:none;font-size:.78rem}
+.dib-fila .dib-chips button{padding:6px 0}
+.dib-chips button[aria-checked=true],#dib-relleno[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+#dib-relleno{flex:1 0 auto;padding:6px 12px}
+#dib-letras button{font-size:1rem}
+.dib-texto{display:flex;flex-direction:column;gap:8px}
+/* paletas: 8 por fila; la última abre el selector de colores del teléfono */
+.dib-colores{display:grid;grid-template-columns:repeat(8,1fr);gap:7px}
+.dib-colores button,.dib-libre{position:relative;display:block;width:100%;aspect-ratio:1;min-height:0;padding:0;border-radius:50%;
+  border:3px solid var(--card);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--fg) 22%,transparent)}
+.dib-colores button[aria-checked=true],.dib-libre.elegido{box-shadow:0 0 0 3px var(--accent)}
+.dib-libre{cursor:pointer;background:conic-gradient(from 90deg,#e53935,#f7b500,#9bd770,#0f8f86,#3b82f6,#7c3aed,#e0457b,#e53935)}
+.dib-libre i{position:absolute;inset:24%;border-radius:50%;background:var(--libre,transparent)}
+.dib-libre input{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;opacity:0;cursor:pointer}
+.dib-libre:focus-within{outline:3px solid var(--accent);outline-offset:3px}
+.dib-stickers{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.dib-stickers button{aspect-ratio:1;min-height:0;padding:0;font-size:1.4rem;line-height:1;background:transparent;border:1.5px solid transparent;border-radius:12px;box-shadow:none}
+.dib-stickers button[aria-checked=true]{background:var(--accent-soft);border-color:var(--accent)}
+/* grosor (con cómo se va a ver) y opacidad, lado a lado */
+.dib-ajustes{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
+.dib-ajustes.uno{grid-template-columns:1fr}
+.dib-ajuste{display:grid;grid-template-columns:1fr auto;align-items:center;gap:0 8px;font-size:.72rem;font-weight:700;color:var(--muted)}
+.dib-ajuste span{grid-column:1/-1}
+.dlg-dibujo input[type=range]{width:100%;height:30px;margin:0;padding:0;border:0;border-radius:0;background:none;accent-color:var(--accent)}
+.dib-muestra{width:34px;height:34px;display:grid;place-items:center;overflow:hidden;font-style:normal;line-height:1}
+.dib-muestra i{display:block;border-radius:50%}
+/* una foto de fondo */
+.dib-foto{display:flex;gap:8px}
+.dib-foto label,.dib-foto button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:8px 10px;font-size:.85rem}
+.dib-foto label{border-radius:14px;cursor:pointer;color:var(--accent);font-weight:600;border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--line))}
+.dib-foto label .ico{width:20px;height:20px}
+#dib-foto-in:focus-visible+label{outline:3px solid var(--accent);outline-offset:3px}
+#dib-guardar{display:flex;align-items:center;justify-content:center;gap:6px}
+/* en los teléfonos más angostos las herramientas van sin nombre (queda el ícono) */
+@media (max-width:350px){.dib-herr button span{display:none}.dib-herr button{min-height:44px;justify-content:center}}

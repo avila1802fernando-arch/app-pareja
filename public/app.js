@@ -352,7 +352,7 @@
     // Funciones en archivos aparte (noche.js) arrancan con lo que necesitan de aquí
     window.nosotros = {
       sb, toast, estallido, pocoMovimiento, hora, partes, claveDia, miTz, suTz, tzPareja, renderAvatares,
-      lluvia, vibrar, irA, ago, aIso, diaHoy, fechaCorta, plural,
+      lluvia, vibrar, irA, ago, aIso, diaHoy, fechaCorta, plural, subirFoto, aImagen, cargarMomentos,
       get user() { return user; }, get perfil() { return perfil; }, get pareja() { return pareja; }, get otro() { return otro; },
     };
     window.dispatchEvent(new Event("nosotros:dentro"));
@@ -2552,77 +2552,7 @@
     $("dlg-cancion").close(); lluvia("🎶", 10); toast(`Canción dedicada a ${otro.nombre} 🎶`); cargarCanciones();
   });
 
-  // ---------- dibujos con el dedo ----------
-  // Los trazos terminados se guardan en un lienzo aparte; así dibujar no se pone lento.
-  const COLORES_DIBUJO = ["#e0457b", "#c9325c", "#ff9ab8", "#f7b500", "#3f9b4a", "#3b82f6", "#7c3aed", "#3a2230", "#ffffff"];
-  const GROSORES = [4, 9, 16, 28];
-  const lienzoD = $("dibujo-canvas"), ctxD = lienzoD.getContext("2d");
-  const baseD = document.createElement("canvas"); baseD.width = lienzoD.width; baseD.height = lienzoD.height;
-  const ctxB = baseD.getContext("2d");
-  const dib = { color: COLORES_DIBUJO[0], grosor: 9, trazos: [], actual: null };
-  function trazar(ctx, t) {
-    const p = t.puntos;
-    ctx.strokeStyle = t.color; ctx.lineWidth = t.grosor; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
-    if (p.length === 1) ctx.lineTo(p[0].x + 0.1, p[0].y);
-    for (let i = 1; i < p.length - 1; i++) ctx.quadraticCurveTo(p[i].x, p[i].y, (p[i].x + p[i + 1].x) / 2, (p[i].y + p[i + 1].y) / 2);
-    if (p.length > 1) ctx.lineTo(p[p.length - 1].x, p[p.length - 1].y);
-    ctx.stroke();
-  }
-  function rehacerBase() {
-    ctxB.fillStyle = "#fffafc"; ctxB.fillRect(0, 0, baseD.width, baseD.height);
-    dib.trazos.forEach((t) => trazar(ctxB, t));
-  }
-  function pintarDibujo() { ctxD.drawImage(baseD, 0, 0); if (dib.actual) trazar(ctxD, dib.actual); }
-  const puntoD = (e) => { const r = lienzoD.getBoundingClientRect(), k = lienzoD.width / r.width; return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k, k }; };
-  lienzoD.addEventListener("pointerdown", (e) => {
-    lienzoD.setPointerCapture(e.pointerId);
-    const p = puntoD(e);
-    dib.actual = { color: dib.color, grosor: dib.grosor * p.k, puntos: [{ x: p.x, y: p.y }] }; pintarDibujo();
-  });
-  lienzoD.addEventListener("pointermove", (e) => {
-    if (!dib.actual) return;
-    const p = puntoD(e); dib.actual.puntos.push({ x: p.x, y: p.y }); pintarDibujo();
-  });
-  ["pointerup", "pointercancel"].forEach((tipo) => lienzoD.addEventListener(tipo, () => {
-    if (!dib.actual) return;
-    dib.trazos.push(dib.actual); trazar(ctxB, dib.actual); dib.actual = null; pintarDibujo();
-  }));
-  function pintarHerramientas() {
-    const c = $("dibujo-colores"), g = $("dibujo-grosores"); c.innerHTML = ""; g.innerHTML = "";
-    COLORES_DIBUJO.forEach((col) => {
-      const b = document.createElement("button"); b.type = "button"; b.style.background = col;
-      b.setAttribute("role", "radio"); b.setAttribute("aria-label", `Color ${col}`); b.setAttribute("aria-checked", String(col === dib.color));
-      b.addEventListener("click", () => { dib.color = col; pintarHerramientas(); }); c.append(b);
-    });
-    GROSORES.forEach((gr) => {
-      const b = document.createElement("button"); b.type = "button";
-      b.setAttribute("role", "radio"); b.setAttribute("aria-label", `Grosor ${gr}`); b.setAttribute("aria-checked", String(gr === dib.grosor));
-      const i = document.createElement("i"); i.style.width = i.style.height = Math.min(24, gr) + "px"; b.append(i);
-      b.addEventListener("click", () => { dib.grosor = gr; pintarHerramientas(); }); g.append(b);
-    });
-  }
-  $("btn-dibujo").addEventListener("click", () => {
-    $("dibujo-para").textContent = `Un dibujo para ${otro.nombre}`;
-    $("dibujo-texto").value = ""; dib.trazos = []; dib.actual = null; rehacerBase(); pintarDibujo();
-    pintarHerramientas(); $("dlg-dibujo").showModal();
-  });
-  $("dibujo-deshacer").addEventListener("click", () => { dib.trazos.pop(); rehacerBase(); pintarDibujo(); });
-  $("dibujo-borrar").addEventListener("click", () => {
-    if (dib.trazos.length && !confirm("¿Borrar todo el dibujo?")) return;
-    dib.trazos = []; rehacerBase(); pintarDibujo();
-  });
-  $("dibujo-cancelar").addEventListener("click", () => $("dlg-dibujo").close());
-  $("dibujo-enviar").addEventListener("click", async () => {
-    if (!dib.trazos.length) { toast("Dibuja algo primero 😊"); return; }
-    const b = $("dibujo-enviar"); b.disabled = true; b.textContent = "Enviando…";
-    const ruta = await subirFoto(await aImagen(baseD, 0.9), "dibujo");
-    const texto = $("dibujo-texto").value.trim() || "✏️ Te hice un dibujo";
-    const { error } = ruta ? await sb.from("momentos").insert({ pareja_id: pareja.id, de_usuario: user.id, ruta, texto }) : { error: true };
-    b.disabled = false; b.textContent = "Enviar dibujo ✏️";
-    if (error) { toast("No se pudo enviar"); return; }
-    $("dlg-dibujo").close(); lluvia("✏️", 8); toast(`Dibujo enviado a ${otro.nombre} ✏️`); cargarMomentos();
-  });
+  // (los dibujos con el dedo están en dibujo.js: llegan al álbum como un momento más)
 
   // ---------- la misma luna ----------
   // Fase de la luna (es la misma en Ecuador y en Chile): días desde una luna nueva conocida

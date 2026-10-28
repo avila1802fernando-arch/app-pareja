@@ -510,28 +510,30 @@
   }
   // ¿Mi pareja tiene el reloj abierto? (presencia propia de esta función)
   function marcarPresencia() {
-    if (!vivo) return;
+    if (!vivo || !vivo.unido()) return; // (me anoto al unirse)
     const viendo = !!el && !el.v.hidden && !document.hidden;
-    try { vivo.track({ viendo }); } catch (e) {}
+    vivo.canal.track({ viendo }).catch(() => {});
   }
 
+  // Si un canal se cae, se vuelve a abrir solo (vivo-canal.js): el del reloj trae cómo va y en el de la presencia me
+  // anoto de nuevo
   function iniciar() {
     X = window.nosotros;
     if (!X || !X.pareja) return;
     montar();
     cargar();
-    if (canal) X.sb.removeChannel(canal);
-    canal = X.sb.channel(`focos-${X.pareja.id}`).on("postgres_changes",
+    if (canal) canal.apagar();
+    canal = window.VivoCanal(X.sb, `focos-${X.pareja.id}`, {}, (c) => c.on("postgres_changes",
       { event: "*", schema: "public", table: "focos", filter: `pareja_id=eq.${X.pareja.id}` },
-      (p) => { if (p.new && p.new.id) aplicar(p.new); }).subscribe();
-    if (vivo) X.sb.removeChannel(vivo);
-    vivo = X.sb.channel(`foco-vivo-${X.pareja.id}`, { config: { presence: { key: X.user.id } } })
+      (p) => { if (p.new && p.new.id) aplicar(p.new); }), null, cargar);
+    if (vivo) vivo.apagar();
+    vivo = window.VivoCanal(X.sb, `foco-vivo-${X.pareja.id}`, { config: { presence: { key: X.user.id } } }, (c) => c
       .on("presence", { event: "sync" }, () => {
-        const st = (X.otro && vivo.presenceState()[X.otro.id]) || [];
+        const st = (X.otro && c.presenceState()[X.otro.id]) || [];
         otroAqui = st.some((x) => x.viendo);
         pintarVista();
-      })
-      .subscribe((s) => { if (s === "SUBSCRIBED") marcarPresencia(); });
+      }), () => marcarPresencia());
+    canal.abrir(); vivo.abrir();
   }
   // al volver a la app se trae lo último (el tiempo real se duerme con el teléfono) y vuelve la pantalla encendida
   document.addEventListener("visibilitychange", () => {
@@ -540,6 +542,11 @@
     if (document.hidden) return;
     cargar();
     if (!el.v.hidden && CORRIENDO.includes(estado())) pantallaEncendida(true);
+  });
+  // app.js avisa cuando se pone al día tras un rato en segundo plano: el canal que se cayó sin avisar se vuelve a abrir
+  window.addEventListener("nosotros:aldia", () => {
+    if (canal) canal.revisar();
+    if (vivo) vivo.revisar();
   });
 
   window.addEventListener("nosotros:dentro", iniciar);

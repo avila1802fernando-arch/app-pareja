@@ -774,7 +774,8 @@
   // Cada uno con su motor y su hoja de estilos (uno.css usa piezas de batalla.css, así que va después). Las pantallas
   // son las mismas del Recreo; lo de la pareja (sus partidas, los avisos push y las ideas de apuesta) viene de
   // vivo-pareja.js. Se juega con tu pareja y, en «Otros», con los del Recreo: esas partidas se ven en las dos apps.
-  // vivo-canal.js (el canal de tiempo real que se vuelve a abrir solo si se cae) va antes que todos.
+  // vivo-canal.js (el canal de tiempo real que se vuelve a abrir solo si se cae) va antes que todos. index.html ya lo
+  // trae para los otros canales de la app: bajarlo de nuevo solo vuelve a dejar la misma función en window.VivoCanal.
   const EN_VIVO = [{ id: "batalla", global: "Batalla" }, { id: "uno", global: "Uno" }];
   const RECREO = "https://recreo-familia.vercel.app";
   let enVivo = null, conEnVivo = false;
@@ -888,9 +889,11 @@
     return "ok";
   }
 
+  // Las partidas de mi pareja. Si el canal se cae, se vuelve a abrir solo (vivo-canal.js, que ya trae index.html) y, al
+  // volver, el marcador se pone al día
   function suscribir() {
-    if (canal) X.sb.removeChannel(canal);
-    canal = X.sb.channel(`juegos-${X.pareja.id}`).on("postgres_changes",
+    if (canal) canal.apagar();
+    canal = window.VivoCanal(X.sb, `juegos-${X.pareja.id}`, {}, (c) => c.on("postgres_changes",
       { event: "INSERT", schema: "public", table: "partidas", filter: `pareja_id=eq.${X.pareja.id}` },
       (p) => {
         const f = p.new;
@@ -898,7 +901,8 @@
         anotarEnMarcador(f.usuario_id, f.juego, f.puntos, f.creado_en);
         recientes = [f, ...recientes].slice(0, 12);
         pintarSala(); marcarPunto();
-      }).subscribe();
+      }), null, () => { if (!prueba) cargar().then(() => { pintarSala(); marcarPunto(); }); });
+    canal.abrir();
   }
   function iniciar() {
     if (!window.nosotros || !window.nosotros.pareja) return;
@@ -916,10 +920,10 @@
     montarSala(); S.entraEn = Date.now(); pintarSala(); marcarPunto();
     cargar().then(() => { pintarSala(); marcarPunto(); });
   });
-  // Al volver a la app tras un rato: el marcador se pone al día y, si el canal se cayó, se vuelve a abrir
+  // Al volver a la app tras un rato: el marcador se pone al día y el canal que se cayó sin avisar se vuelve a abrir
   window.addEventListener("nosotros:aldia", () => {
     if (!X || prueba) return;
-    if (!canal || canal.state === "closed" || canal.state === "errored") suscribir();
+    if (canal) canal.revisar();
     cargar().then(() => { pintarSala(); marcarPunto(); });
     if (conEnVivo) { EN_VIVO.forEach((g) => { if (window[g.global]) window[g.global].alDia(); }); cargarRecreo(); }
   });

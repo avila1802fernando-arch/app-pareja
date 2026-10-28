@@ -665,9 +665,9 @@
     if (yoEscribo) { yoEscribo = false; marcarPresencia(); }
   }
   function marcarPresencia() {
-    if (!vivo) return;
+    if (!vivo || !vivo.unido()) return; // (me anoto al unirse)
     const viendo = el && !el.v.hidden && mirando && !document.hidden ? mirando.id : null;
-    try { Promise.resolve(vivo.track({ sesion: viendo, escribe: !!viendo && yoEscribo })).catch(() => {}); } catch (e) {}
+    vivo.canal.track({ sesion: viendo, escribe: !!viendo && yoEscribo }).catch(() => {});
   }
 
   // ---------- datos ----------
@@ -749,11 +749,29 @@
     const t0 = Date.now(), { data, error } = await X.sb.rpc("ahora"), t1 = Date.now();
     if (!error && data) desfase = ms(data) + (t1 - t0) / 2 - t1;
   }
+  // Cuando el canal vuelve después de caerse: la lista y, en la sesión que está en pantalla, lo que se escribió y se vio
+  // mientras tanto, por el mismo camino que el tiempo real (sin redibujar la conversación ni mover lo que se está leyendo)
+  async function traerLoQueFalta() {
+    if (!X || !el) return;
+    cargar();
+    if (!mirando) return;
+    const id = mirando.id, ult = mensajes.length ? mensajes[mensajes.length - 1].id : 0;
+    const [{ data, error }, { data: vistos }] = await Promise.all([
+      X.sb.from("sesion_mensajes").select("id, sesion_id, autor, texto, creado_en").eq("sesion_id", id).gt("id", ult).order("id").limit(1000),
+      X.sb.from("sesion_vistos").select("sesion_id, usuario_id, hasta").eq("sesion_id", id),
+    ]);
+    if (error || !mirando || mirando.id !== id) return;
+    (data || []).forEach(agregarMensaje);
+    (vistos || []).forEach(llegoVisto);
+  }
 
+  // Si un canal se cae, se vuelve a abrir solo (vivo-canal.js): el de las sesiones trae lo que se perdió y en el de la
+  // presencia me anoto de nuevo
   function suscribir() {
-    if (canal) X.sb.removeChannel(canal);
+    if (canal) canal.apagar();
+    if (vivo) vivo.apagar();
     const p = X.pareja.id;
-    canal = X.sb.channel(`sesiones-${p}`)
+    canal = window.VivoCanal(X.sb, `sesiones-${p}`, {}, (c) => c
       .on("postgres_changes", { event: "*", schema: "public", table: "sesiones", filter: `pareja_id=eq.${p}` },
         (x) => { if (x.eventType === "DELETE") cargar(); else aplicarSesion(x.new); })
       // (los borrados no se pueden filtrar: si se descarta una sesión vacía, se recarga la lista)
@@ -761,19 +779,16 @@
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "sesion_mensajes", filter: `pareja_id=eq.${p}` },
         (x) => { if (x.new && x.new.id) agregarMensaje(x.new); })
       .on("postgres_changes", { event: "*", schema: "public", table: "sesion_vistos", filter: `pareja_id=eq.${p}` },
-        (x) => llegoVisto(x.new))
-      .subscribe();
-    if (vivo) X.sb.removeChannel(vivo);
-    vivo = X.sb.channel(`sesion-vivo-${p}`, { config: { presence: { key: X.user.id } } })
+        (x) => llegoVisto(x.new)), null, traerLoQueFalta);
+    vivo = window.VivoCanal(X.sb, `sesion-vivo-${p}`, { config: { presence: { key: X.user.id } } }, (c) => c
       .on("presence", { event: "sync" }, () => {
-        const st = (X.otro && vivo.presenceState()[X.otro.id]) || [];
+        const st = (X.otro && c.presenceState()[X.otro.id]) || [];
         const ahi = st.find((x) => x.sesion) || null;
         suyo = { sesion: ahi ? ahi.sesion : null, escribe: !!(ahi && ahi.escribe) };
         pintarCard(); pintarAviso(); pintarVista();
-      })
-      .subscribe((estado) => { if (estado === "SUBSCRIBED") marcarPresencia(); });
+      }), () => marcarPresencia());
+    canal.abrir(); vivo.abrir();
   }
-  const caido = (c) => !c || c.state === "closed" || c.state === "errored";
 
   function iniciar() {
     X = window.nosotros;
@@ -794,8 +809,8 @@
     if (mirando) cargarMensajes(mirando.id);
   });
   window.addEventListener("nosotros:aldia", () => {
-    if (!X || !el) return;
-    if (caido(canal) || caido(vivo)) suscribir();
+    if (!X || !el || !canal) return;
+    canal.revisar(); vivo.revisar();
   });
   window.addEventListener("popstate", () => {
     if (el && !el.v.hidden && !(history.state && history.state.sesion)) ocultarVista();

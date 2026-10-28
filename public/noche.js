@@ -307,9 +307,10 @@
     pintar();
   }
 
+  // Si el canal se cae, se vuelve a abrir solo (vivo-canal.js) y, al volver, trae lo que pasó mientras tanto
   function suscribir() {
-    if (canal) X.sb.removeChannel(canal);
-    canal = X.sb.channel(`noches-${X.pareja.id}`).on("postgres_changes",
+    if (canal) canal.apagar();
+    canal = window.VivoCanal(X.sb, `noches-${X.pareja.id}`, {}, (c) => c.on("postgres_changes",
       { event: "*", schema: "public", table: "noches", filter: `pareja_id=eq.${X.pareja.id}` },
       (p) => {
         if (p.eventType === "DELETE") { if (p.old && p.old.id) quitar(p.old.id); return; }
@@ -317,7 +318,8 @@
         const llega = p.eventType === "INSERT" && p.new.usuario_id !== X.user.id;
         guardar(p.new);
         if (llega && !el.vista.hidden) { el.avSuyo.classList.add("llega"); setTimeout(() => el.avSuyo.classList.remove("llega"), 500); }
-      }).subscribe();
+      }), null, cargar);
+    canal.abrir();
   }
   function iniciar() {
     X = window.nosotros;
@@ -330,9 +332,9 @@
   }
   // al volver a la app (p. ej. en la mañana) se trae lo último por si el tiempo real se durmió
   document.addEventListener("visibilitychange", () => { if (!document.hidden && X && el) cargar(); });
-  // app.js avisa cuando se pone al día tras un rato en segundo plano: si el canal se cayó, se vuelve a abrir
+  // app.js avisa cuando se pone al día tras un rato en segundo plano: el canal que se cayó sin avisar se vuelve a abrir
   window.addEventListener("nosotros:aldia", () => {
-    if (X && el && (!canal || canal.state === "closed" || canal.state === "errored")) suscribir();
+    if (X && el && canal) canal.revisar();
   });
 
   window.addEventListener("nosotros:dentro", iniciar);

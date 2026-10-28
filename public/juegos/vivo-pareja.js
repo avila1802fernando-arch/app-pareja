@@ -20,15 +20,13 @@
 
   // El canal de la pareja para un juego: sus filas (filtradas por pareja), lo que se juega en ellas (sin filtro: RLS
   // solo deja pasar lo de nuestras partidas; el juego descarta lo que no es de la que tiene abierta) y quién tiene la
-  // mesa abierta (cada uno se anota con track mientras la mira)
+  // mesa abierta (cada uno se anota con track mientras la mira). Si se cae, se vuelve a abrir solo (vivo-canal.js) y
+  // avisa "conectado" para que el juego se ponga al día.
   function canalPareja(sb, yoId, parejaId, nombre, tabla, tipo, tablaJugadas, tipoJugadas) {
     const oyentes = new Set();
     const emitir = (t, f) => oyentes.forEach((fn) => fn(t, f));
-    let canal = null, viendo = false;
-    function abrir() {
-      if (canal) sb.removeChannel(canal);
-      const c = sb.channel(`${nombre}-${parejaId}`, { config: { presence: { key: yoId } } });
-      canal = c;
+    let viendo = false;
+    const vivo = window.VivoCanal(sb, `${nombre}-${parejaId}`, { config: { presence: { key: yoId } } }, (c) => {
       c.on("postgres_changes", { event: "*", schema: "public", table: tabla, filter: `pareja_id=eq.${parejaId}` },
         (p) => { if (p.new && p.new.id) emitir(tipo, p.new); })
         .on("postgres_changes", { event: "INSERT", schema: "public", table: tablaJugadas },
@@ -36,18 +34,17 @@
         .on("presence", { event: "sync" }, () => {
           const st = c.presenceState();
           emitir("presencia", Object.keys(st).some((k) => k !== yoId && st[k].length > 0));
-        })
-        .subscribe((estado) => { if (estado === "SUBSCRIBED" && viendo) c.track({ viendo: true }).catch(() => {}); });
-    }
+        });
+    }, (c) => { if (viendo) c.track({ viendo: true }).catch(() => {}); }, () => emitir("conectado"));
     return {
-      escuchar(fn) { oyentes.add(fn); if (!canal) abrir(); return () => oyentes.delete(fn); },
-      reabrir() { if (!canal || canal.state === "closed" || canal.state === "errored") abrir(); },
+      escuchar(fn) { oyentes.add(fn); vivo.abrir(); return () => oyentes.delete(fn); },
+      reabrir() { vivo.revisar(); },
       presencia(si) {
         if (viendo === si) return;
         viendo = si;
-        if (canal && canal.state === "joined") (si ? canal.track({ viendo: true }) : canal.untrack()).catch(() => {});
+        if (vivo.unido()) (si ? vivo.canal.track({ viendo: true }) : vivo.canal.untrack()).catch(() => {});
       },
-      apagar() { if (canal) sb.removeChannel(canal); canal = null; oyentes.clear(); },
+      apagar() { vivo.apagar(); oyentes.clear(); },
     };
   }
 
@@ -102,6 +99,7 @@
         return d ? { cartas: d.cartas || [], robada: d.robada || null } : null;
       },
       async manoRival(id) { return (await rpc("uno_mano_rival", { p_id: id })) || null; },
+      async jugadas(id) { return conError(await sb.from("uno_jugadas").select("*").eq("juego_id", id).order("id")) || []; },
       async avisar(id) { return (await rpc("uno_avisar", { p_id: id })) === true; },
     });
   }

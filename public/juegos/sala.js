@@ -774,6 +774,7 @@
   // Cada uno con su motor y su hoja de estilos (uno.css usa piezas de batalla.css, así que va después). Las pantallas
   // son las mismas del Recreo; lo de la pareja (sus partidas, los avisos push y las ideas de apuesta) viene de
   // vivo-pareja.js. Se juega con tu pareja y, en «Otros», con los del Recreo: esas partidas se ven en las dos apps.
+  // vivo-canal.js (el canal de tiempo real que se vuelve a abrir solo si se cae) va antes que todos.
   const EN_VIVO = [{ id: "batalla", global: "Batalla" }, { id: "uno", global: "Uno" }];
   const RECREO = "https://recreo-familia.vercel.app";
   let enVivo = null, conEnVivo = false;
@@ -786,14 +787,14 @@
       return l;
     });
     enVivo = new Promise((listo) => {
-      const archivos = ["vivo-pareja"].concat(EN_VIVO.flatMap((g) => [`${g.id}-motor`, g.id]));
+      const archivos = ["vivo-canal", "vivo-pareja"].concat(EN_VIVO.flatMap((g) => [`${g.id}-motor`, g.id]));
       archivos.forEach((j, i) => {
         const s = document.createElement("script");
         s.src = `/juegos/${j}.js`; s.async = false;
         if (i === archivos.length - 1) s.onload = s.onerror = listo;
         document.body.append(s);
       });
-    }).then(() => { if (!window.VivoPareja || !EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
+    }).then(() => { if (!window.VivoCanal || !window.VivoPareja || !EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
     return enVivo;
   }
   // Con quién se juega cada uno: primero tu pareja (con su adaptador: partidas de la pareja y push) y después los del

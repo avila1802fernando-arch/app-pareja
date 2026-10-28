@@ -132,7 +132,7 @@ ok(!cambios, "Nosotros sin cambios (public/, schema.sql, avisos.sql, funciones y
 // ---------- 4. juegos en vivo ----------
 // batalla.js, uno.js, sus motores y sus estilos se usan tal cual en las dos apps: lo propio de cada una llega por el
 // ctx que les pasa su sala.js y por las --v-* de su juegos.css.
-const COMPARTIDOS = ["batalla-motor.js", "batalla.js", "batalla.css", "uno-motor.js", "uno.js", "uno.css"];
+const COMPARTIDOS = ["vivo-canal.js", "batalla-motor.js", "batalla.js", "batalla.css", "uno-motor.js", "uno.js", "uno.css"];
 for (const f of COMPARTIDOS) {
   const a = leer(`public/juegos/${f}`), b = leer(`familia/juegos/${f}`);
   const por = a == null ? " (falta en public/juegos)" : b == null ? " (falta en familia/juegos)" : a !== b ? ` (distintos: copiar con  cp public/juegos/${f} familia/juegos/)` : "";

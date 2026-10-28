@@ -119,22 +119,19 @@
 
   // ---------- adaptadores: la misma forma para la base, la mesa entre pestañas y la compu ----------
   // activa, historial, crear, colocar, disparar, rendirse, miFlota, flotaRival, disparos; escuchar(fn) avisa
-  // ("batalla", fila), ("disparo", disparo) y ("presencia", ¿el otro tiene esta mesa abierta?); presencia(si), reabrir,
-  // apagar y, solo si hay push, avisar(id).
+  // ("batalla", fila), ("disparo", disparo), ("presencia", ¿el otro tiene esta mesa abierta?) y ("conectado") cuando
+  // el canal vuelve después de caerse; presencia(si), reabrir, apagar y, solo si hay push, avisar(id).
   const conError = (r) => { if (r.error) throw r.error; return r.data; };
   const fila = (d) => (d && d.id ? d : null); // una función que no encuentra nada devuelve una fila vacía
   // Un solo canal para todas las batallas de familia: llegan las mías (RLS) y se reparten por rival; y la presencia,
-  // donde cada uno anota con quién tiene la mesa abierta ({ con })
+  // donde cada uno anota con quién tiene la mesa abierta ({ con }). Si se cae, se vuelve a abrir solo (vivo-canal.js).
   function canalFamilia() {
     if (familia) return familia;
     const sb = ctx.sb, yoId = yo();
-    const F = { canal: null, viendo: null, oyentes: new Map(), deQuien: new Map() }; // deQuien: id de batalla → rival
+    const F = { viendo: null, oyentes: new Map(), deQuien: new Map() }; // deQuien: id de batalla → rival
     const emitir = (rivalId, tipo, f) => { const s = F.oyentes.get(rivalId); if (s) s.forEach((fn) => fn(tipo, f)); };
     F.recordar = (b) => { if (b && b.id) F.deQuien.set(b.id, b.creado_por === yoId ? b.rival : b.creado_por); };
-    F.abrir = () => {
-      if (F.canal) sb.removeChannel(F.canal);
-      const c = sb.channel("vivo-batalla-familia", { config: { presence: { key: yoId } } });
-      F.canal = c;
+    F.vivo = window.VivoCanal(sb, "vivo-batalla-familia", { config: { presence: { key: yoId } } }, (c) => {
       c.on("postgres_changes", { event: "*", schema: "public", table: "batallas" }, (p) => {
         const b = p.new;
         if (!b || !b.id || !b.familia || (b.creado_por !== yoId && b.rival !== yoId)) return;
@@ -148,22 +145,22 @@
         .on("presence", { event: "sync" }, () => {
           const st = c.presenceState();
           F.oyentes.forEach((_, rivalId) => emitir(rivalId, "presencia", (st[rivalId] || []).some((m) => m.con === yoId)));
-        })
-        .subscribe((estado) => { if (estado === "SUBSCRIBED" && F.viendo) c.track({ con: F.viendo }).catch(() => {}); });
-    };
+        });
+    }, (c) => { if (F.viendo) c.track({ con: F.viendo }).catch(() => {}); },
+    () => F.oyentes.forEach((_, rivalId) => emitir(rivalId, "conectado")));
     F.ver = (rivalId) => {
       if (F.viendo === rivalId) return;
       F.viendo = rivalId;
-      if (F.canal && F.canal.state === "joined") (rivalId ? F.canal.track({ con: rivalId }) : F.canal.untrack()).catch(() => {});
+      if (F.vivo.unido()) (rivalId ? F.vivo.canal.track({ con: rivalId }) : F.vivo.canal.untrack()).catch(() => {});
     };
     F.escuchar = (rivalId, fn) => {
       if (!F.oyentes.has(rivalId)) F.oyentes.set(rivalId, new Set());
       F.oyentes.get(rivalId).add(fn);
-      if (!F.canal) F.abrir();
+      F.vivo.abrir();
       return () => { const s = F.oyentes.get(rivalId); if (s) s.delete(fn); };
     };
-    F.reabrir = () => { if (!F.canal || F.canal.state === "closed" || F.canal.state === "errored") F.abrir(); };
-    F.apagar = () => { if (F.canal) sb.removeChannel(F.canal); F.canal = null; F.oyentes.clear(); };
+    F.reabrir = () => F.vivo.revisar();
+    F.apagar = () => { F.vivo.apagar(); F.oyentes.clear(); };
     familia = F;
     return F;
   }
@@ -386,6 +383,7 @@
   // Lo que llega de la base (o de la otra pestaña): la tarjeta, los avisos y, si está abierta, la vista
   function alLlegar(m, tipo, f) {
     const mirando = vistaAbierta() && E.modo === "vivo" && E.mesaRef === m;
+    if (tipo === "conectado") { refrescar(m); if (mirando) revisar(); return; } // volvió el canal: a ponerse al día
     if (tipo === "presencia") {
       if (m.presente === f) return;
       m.presente = f;
@@ -1093,6 +1091,37 @@
     return g;
   }
 
+  // ---------- al día aunque se corte el tiempo real ----------
+  // El canal puede quedar sordo sin que se note (el teléfono durmió, cambió la red, venció la sesión). Con la batalla
+  // abierta se le pregunta a la base cada 5 s, al volver a la app y cuando vuelve el canal; si algo cambió, entra por
+  // el mismo camino que el tiempo real: primero los disparos que faltan, en orden, y después la batalla.
+  let revisando = false;
+  async function revisar() {
+    if (revisando || document.hidden || !vistaAbierta() || E.modo !== "vivo" || !E.mesaRef || E.cola || E.ocupado || E.error) return;
+    const e = E, m = E.mesaRef, antes = E.batalla;
+    revisando = true;
+    try {
+      let b = await E.mesa.activa();
+      if (!b && enCurso(antes)) {
+        b = (await E.mesa.historial()).find((h) => h.id === antes.id) || null; // ya terminó
+        if (!b) { if (E === e && !E.cola) recargar(); return; } // o la cancelaron: como al abrirla de nuevo
+      }
+      if (E !== e || E.cola || !b) return;
+      const a = E.batalla;
+      if (a && a.id === b.id && a.estado === b.estado && hora(a.actualizado_en) === hora(b.actualizado_en)) return; // nada nuevo
+      if (a && a.id === b.id) {
+        const disparos = await E.mesa.disparos(b.id);
+        if (E !== e || E.cola) return;
+        disparos.forEach((d) => alLlegar(m, "disparo", d)); // (los que ya estaban no se repiten)
+      }
+      alLlegar(m, "batalla", b);
+    } catch (er) { /* sin red: se intenta en la próxima vuelta */ }
+    finally { revisando = false; }
+  }
+  // de paso, el canal que se cayó sin avisar se vuelve a abrir (si está bien, no se toca)
+  const ponerAlDia = () => { if (!ctx || document.hidden) return; todas().forEach((m) => { if (m.ad.reabrir) m.ad.reabrir(); }); revisar(); };
+  setInterval(ponerAlDia, 5000);
+
   // ---------- arranque ----------
   function apagarTodo() {
     mesas.forEach(cerrarMesa);
@@ -1118,8 +1147,11 @@
     if (vistaAbierta() && E.modo === "vivo" && E.mesaRef) recargar();
   }
   window.addEventListener("popstate", () => { if (vistaAbierta() && !(history.state && history.state.batalla)) cerrar(); });
-  // con la app en segundo plano no se está mirando la batalla
-  document.addEventListener("visibilitychange", () => { if (E && E.mesaRef) E.mesaRef.ad.presencia(!document.hidden && vistaAbierta() && E.modo === "vivo"); });
+  // con la app en segundo plano no se está mirando la batalla; al volver, se revisa al tiro si algo pasó
+  document.addEventListener("visibilitychange", () => {
+    if (E && E.mesaRef) E.mesaRef.ad.presencia(!document.hidden && vistaAbierta() && E.modo === "vivo");
+    ponerAlDia();
+  });
 
   window.Batalla = { iniciar, rivales, tarjeta, abrir, alDia };
 })();

@@ -466,7 +466,7 @@
   // ---------- juegos en vivo, para dos a la vez: Batalla naval ⚓ (batalla.js) y UNO 🃏 (uno.js) ----------
   // Cada uno con su motor y su hoja de estilos (uno.css usa piezas de batalla.css, así que va después). Se bajan
   // después de entrar, así no demoran la app. Se reta a cualquiera de la familia; las partidas con Fernando también
-  // las ve él desde la otra app.
+  // las ve él desde la otra app. vivo-canal.js (el canal de tiempo real que se vuelve a abrir solo) va antes que todos.
   const EN_VIVO = [{ id: "batalla", global: "Batalla" }, { id: "uno", global: "Uno" }];
   let enVivo = null, conectadoComo = null;
   const vivas = {};
@@ -478,7 +478,7 @@
       return l;
     });
     enVivo = new Promise((listo) => {
-      const archivos = [];
+      const archivos = ["vivo-canal"];
       EN_VIVO.forEach((g) => archivos.push(`${g.id}-motor`, g.id));
       archivos.forEach((j, i) => {
         const s = document.createElement("script");
@@ -486,7 +486,7 @@
         if (i === archivos.length - 1) s.onload = s.onerror = listo;
         document.body.append(s);
       });
-    }).then(() => { if (!EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
+    }).then(() => { if (!window.VivoCanal || !EN_VIVO.some((g) => window[g.global])) { enVivo = null; css.forEach((l) => l.remove()); } }); // sin red: se reintenta la próxima vez
     return enVivo;
   }
   // Con quién se puede jugar: todos los de la familia menos yo (la que está oculta ni llega: RLS no la deja ver)

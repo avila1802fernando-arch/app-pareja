@@ -664,10 +664,11 @@
     clearTimeout(escribeTimer);
     if (yoEscribo) { yoEscribo = false; marcarPresencia(); }
   }
+  // (vivo-canal.js la manda sin pasar el límite de Supabase y se anota solo al unirse)
   function marcarPresencia() {
-    if (!vivo || !vivo.unido()) return; // (me anoto al unirse)
+    if (!vivo) return;
     const viendo = el && !el.v.hidden && mirando && !document.hidden ? mirando.id : null;
-    vivo.canal.track({ sesion: viendo, escribe: !!viendo && yoEscribo }).catch(() => {});
+    vivo.presencia({ sesion: viendo, escribe: !!viendo && yoEscribo });
   }
 
   // ---------- datos ----------

@@ -146,12 +146,12 @@
           const st = c.presenceState();
           F.oyentes.forEach((_, rivalId) => emitir(rivalId, "presencia", (st[rivalId] || []).some((m) => m.con === yoId)));
         });
-    }, (c) => { if (F.viendo) c.track({ con: F.viendo }).catch(() => {}); },
-    () => F.oyentes.forEach((_, rivalId) => emitir(rivalId, "conectado")));
+    }, null, () => F.oyentes.forEach((_, rivalId) => emitir(rivalId, "conectado")));
+    // (la presencia la manda vivo-canal.js sin pasar el límite de Supabase, que a la sexta en 30 s cierra el canal)
     F.ver = (rivalId) => {
       if (F.viendo === rivalId) return;
       F.viendo = rivalId;
-      if (F.vivo.unido()) (rivalId ? F.vivo.canal.track({ con: rivalId }) : F.vivo.canal.untrack()).catch(() => {});
+      F.vivo.presencia(rivalId ? { con: rivalId } : null);
     };
     F.escuchar = (rivalId, fn) => {
       if (!F.oyentes.has(rivalId)) F.oyentes.set(rivalId, new Set());

@@ -509,10 +509,11 @@
     if (data) aplicar(data); else arrancar();
   }
   // ¿Mi pareja tiene el reloj abierto? (presencia propia de esta función)
+  // (vivo-canal.js la manda sin pasar el límite de Supabase y se anota solo al unirse)
   function marcarPresencia() {
-    if (!vivo || !vivo.unido()) return; // (me anoto al unirse)
+    if (!vivo) return;
     const viendo = !!el && !el.v.hidden && !document.hidden;
-    vivo.canal.track({ viendo }).catch(() => {});
+    vivo.presencia({ viendo });
   }
 
   // Si un canal se cae, se vuelve a abrir solo (vivo-canal.js): el del reloj trae cómo va y en el de la presencia me

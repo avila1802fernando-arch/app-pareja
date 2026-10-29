@@ -2340,18 +2340,23 @@
   });
 
   // ---------- corazón vivo: besitos, latido y presencia ----------
-  // Canal en tiempo real que no guarda nada: quién está en la app, quién toca su corazón y los besitos al vuelo.
-  // Si se cae, se vuelve a abrir solo (vivo-canal.js) y me anoto de nuevo; quién está llega solo al unirse.
+  // Canal en tiempo real que no guarda nada: quién está en la app (presencia), los besitos al vuelo y el latido. Si
+  // se cae, se vuelve a abrir solo y me anoto de nuevo (vivo-canal.js, que además cuida el límite de la presencia).
+  // El latido va por mensajes y no por la presencia: Supabase deja cambiarla solo 5 veces cada 30 s, a la sexta cierra
+  // el canal, y mantener el corazón un par de veces la gastaba. Mientras lo mantengo mando "latido" cada segundo; el
+  // otro late mientras le sigan llegando y me contesta "siento": así sé que lo sintió y no hace falta el aviso.
   const PATRON_LATIDO = [90, 120, 90, 600];
   const vibrar = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
   let canalVivo = null, otroAqui = false, otroTocando = false, yoTocando = false, vibraLatido = null;
+  // el otro late por mensaje (suyoLate, mientras sigan llegando) o, si tiene la app vieja, por la presencia (suyoToca)
+  let suyoLate = false, suyoToca = false, finSuyo = null, sientoEn = 0, meSienteEn = 0, latidoCada = null;
   function conectarVivo() {
     if (canalVivo) canalVivo.apagar();
     canalVivo = window.VivoCanal(sb, `vivo-${pareja.id}`, { config: { presence: { key: user.id }, broadcast: { self: false } } }, (c) => c
       .on("presence", { event: "sync" }, () => {
         const estado = c.presenceState()[otro.id] || [];
         otroAqui = estado.length > 0;
-        otroTocando = estado.some((p) => p.tocando);
+        suyoToca = estado.some((p) => p.tocando);
         renderVivo();
       })
       .on("broadcast", { event: "beso" }, ({ payload }) => {
@@ -2359,35 +2364,73 @@
         if (!$("tab-inicio").hidden) besosVoladores(n, false); else lluvia("💋", Math.min(10, 3 + n));
         toast(n > 1 ? `${otro.nombre} te mandó ${n} besitos 😘` : `${otro.nombre} te mandó un besito 😘`);
         vibrar([40, 40, 40]);
-      }), () => marcarVivo(yoTocando));
+      })
+      .on("broadcast", { event: "latido" }, ({ payload }) => {
+        clearTimeout(finSuyo);
+        suyoLate = !!(payload && payload.on);
+        // si dejan de llegar (soltó y no llegó el aviso, o se cortó), deja de latir solo
+        if (suyoLate) finSuyo = setTimeout(() => { suyoLate = false; renderVivo(); }, 2600);
+        // le cuento que lo siento (con la app a la vista; como mucho una vez por segundo)
+        if (suyoLate && !document.hidden && Date.now() - sientoEn > 900) { sientoEn = Date.now(); mandarVivo("siento"); }
+        renderVivo();
+      })
+      .on("broadcast", { event: "siento" }, () => { meSienteEn = Date.now(); if (yoTocando) tipLatido(); }));
     canalVivo.abrir();
+    marcarVivo();
   }
-  // En la presencia figuro "en la app" (y si estoy tocando mi corazón) solo con la app a la vista. Si el canal no
-  // está unido, me anoto al unirse.
-  function marcarVivo(tocando) {
-    if (!canalVivo || !canalVivo.unido()) return;
-    (document.hidden ? canalVivo.canal.untrack() : canalVivo.canal.track({ tocando })).catch(() => {});
+  // En la presencia figuro "en la app" solo con la app a la vista
+  function marcarVivo() { if (canalVivo) canalVivo.presencia(document.hidden ? null : { aqui: true }); }
+  function mandarVivo(evento, payload) {
+    if (canalVivo && canalVivo.canal) canalVivo.canal.send({ type: "broadcast", event: evento, payload: payload || {} }).catch(() => {});
   }
-  // Si la app pasa a segundo plano, deja de figurar como "en la app"
+  // Si la app pasa a segundo plano, deja de figurar como "en la app" (y si tenía el dedo en el corazón, lo suelta)
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) yoTocando = false;
-    marcarVivo(false);
+    if (document.hidden && toque) soltarCorazon(false);
+    marcarVivo();
   });
   function renderVivo() {
-    $("presente").hidden = !otroAqui;
+    otroTocando = suyoLate || suyoToca;
+    const aqui = otroAqui || otroTocando;
+    $("presente").hidden = !aqui;
     $("presente").textContent = otroTocando ? `${otro.nombre} está tocando su corazón 💓` : `${otro.nombre} está en la app ahora`;
-    document.querySelectorAll('[data-av="suyo"]').forEach((el) => el.classList.toggle("aqui", otroAqui));
+    document.querySelectorAll('[data-av="suyo"]').forEach((el) => el.classList.toggle("aqui", aqui));
     // cuando los dos están en la app, sus fotos se acercan un poquito
-    document.querySelectorAll(".avatares").forEach((el) => el.classList.toggle("cerca", otroAqui));
+    document.querySelectorAll(".avatares").forEach((el) => el.classList.toggle("cerca", aqui));
     const h = $("heart");
     h.classList.toggle("suyo", otroTocando);
     h.classList.toggle("latiendo", otroTocando || yoTocando);
     const juntos = otroTocando && yoTocando;
     if (juntos && $("latido-juntos").hidden) { lluvia("💞", 18); vibrar([200, 100, 200, 100, 600]); }
     $("latido-juntos").hidden = !juntos;
-    // mientras tu pareja toca su corazón, el tuyo late y vibra con el suyo
-    clearInterval(vibraLatido);
-    if (otroTocando) { vibrar(PATRON_LATIDO); vibraLatido = setInterval(() => vibrar(PATRON_LATIDO), 1200); }
+    // mientras tu pareja toca su corazón, el tuyo late con el suyo
+    if (otroTocando && !vibraLatido) {
+      latir(); vibraLatido = setInterval(latir, 1200);
+      if ($("tab-inicio").hidden) toast(`💓 ${otro.nombre} te está mandando su latido`);
+    } else if (!otroTocando && vibraLatido) { clearInterval(vibraLatido); vibraLatido = null; }
+  }
+  // Un latido: vibra en Android. El iPhone no deja que las apps web vibren, así que ahí suena un «tum-tum» suavecito
+  // (solo si el teléfono no está en silencio y si ya se tocó la app alguna vez: antes, el navegador no deja sonar).
+  function latir() { if (navigator.vibrate) vibrar(PATRON_LATIDO); else sonarLatido(); }
+  let audioLatido = null;
+  function audioListo() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!audioLatido && AC) audioLatido = new AC();
+      if (audioLatido && audioLatido.state !== "running") audioLatido.resume().catch(() => {});
+    } catch (e) {}
+    return audioLatido;
+  }
+  // (se prepara con el primer toque, que es cuando el navegador lo permite)
+  if (!navigator.vibrate) document.addEventListener("pointerdown", audioListo, { passive: true });
+  function sonarLatido() {
+    const ac = audioListo();
+    if (!ac || ac.state !== "running") return;
+    [[0, 140, 0.5], [0.22, 120, 0.35]].forEach(([d, f, v]) => {
+      const t = ac.currentTime + d, o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.14);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.2);
+    });
   }
   function besosVoladores(n = 1, mio = false) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -2437,18 +2480,22 @@
   function empezarLatido() {
     if (!toque) return;
     toque.largo = true; yoTocando = true; vibrar(60); renderVivo();
-    marcarVivo(true);
-    $("heart-tip").textContent = otroAqui ? `${otro.nombre} siente tu latido ahora mismo 💓` : "Mandando tu latido… 💓";
+    mandarVivo("latido", { on: true });
+    clearInterval(latidoCada); latidoCada = setInterval(() => mandarVivo("latido", { on: true }), 1000);
+    tipLatido();
+  }
+  function tipLatido() {
+    $("heart-tip").textContent = Date.now() - meSienteEn < 2500 ? `${otro.nombre} siente tu latido ahora mismo 💓` : "Mandando tu latido… 💓";
   }
   async function soltarCorazon(cancelado) {
     if (!toque) return;
     const t = toque; toque = null; clearTimeout(t.timer);
     if (!t.largo) { if (!cancelado) mandarBeso(); return; }
-    yoTocando = false; renderVivo();
+    yoTocando = false; clearInterval(latidoCada); latidoCada = null; renderVivo();
+    mandarVivo("latido", { on: false });
     $("heart-tip").textContent = "Toca el corazón para mandarle besitos · mantenlo para mandar tu latido";
-    marcarVivo(false);
-    // si no estaba en la app, el latido le llega como notificación (como mucho uno cada 10 minutos)
-    if (!cancelado && !otroAqui && Date.now() - t.t >= 1500) {
+    // si no lo sintió en vivo (no tenía la app a la vista), le llega como notificación (como mucho una cada 10 minutos)
+    if (!cancelado && meSienteEn < t.t && Date.now() - t.t >= 1500) {
       if (pocoDesde("ultimo-latido", 10)) { toast("Tu latido ya va en camino 💓"); return; }
       const { error } = await sb.from("eventos").insert({ pareja_id: pareja.id, de_usuario: user.id, tipo: "latido" });
       if (error) olvidarDesde("ultimo-latido");

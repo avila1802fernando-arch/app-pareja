@@ -62,7 +62,8 @@ public/                 ← la app (HTML, CSS, JS, íconos, service worker)
   preguntas.js          ← las preguntas del día (puedes agregar las tuyas)
   juegos/               ← la sala de juegos (sala.js), cada minijuego (corazones, vuelo, memoria, fusion), la batalla naval (batalla.js, batalla-motor.js) y el UNO (uno.js, uno-motor.js)
                           (la batalla y el UNO, con sus estilos, son los mismos archivos en familia/juegos/; lo de la pareja va aparte, en vivo-pareja.js;
-                          vivo-canal.js, también compartido, es el canal de tiempo real que se vuelve a abrir solo si se cae)
+                          vivo-canal.js, también compartido, es el canal de tiempo real que se vuelve a abrir solo si se cae; index.html lo carga
+                          para todos los canales de la app y, cuando uno vuelve, se recarga lo que ese canal muestra)
 supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede repetir)
 supabase/avisos.sql     ← la base avisa a las funciones: triggers + tarea cada 5 min (editar 2 valores y pegar)
 supabase/batalla.sql    ← la batalla naval en vivo: flotas secretas, turnos y avisos (pegar después de avisos.sql y familia.sql)

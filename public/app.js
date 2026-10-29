@@ -251,19 +251,24 @@
   // Las guarda enviarPush (funciones notificar y recordatorios) en la tabla notificaciones.
   let notis = [], canalCampana = null;
   async function cargarCampana() {
+    if (!user) return;
     const { data, error } = await sb.from("notificaciones").select("id, titulo, cuerpo, url, creado_en, leida_en")
       .eq("usuario_id", user.id).order("creado_en", { ascending: false }).limit(60);
-    if (!error) notis = data || []; // sin red se quedan las que había (el canal se abre igual)
+    if (!error) notis = data || []; // sin red se quedan las que había
     renderCampana();
-    // en su propio canal: si la tabla todavía no está en tiempo real, no se cae el resto
-    if (canalCampana) sb.removeChannel(canalCampana);
-    canalCampana = sb.channel("campana").on("postgres_changes",
+  }
+  // En su propio canal: si la tabla todavía no está en tiempo real, no se cae el resto. Si se cae, se vuelve a abrir
+  // solo (vivo-canal.js) y, al volver, trae las que llegaron mientras tanto.
+  function suscribirCampana() {
+    if (canalCampana) canalCampana.apagar();
+    canalCampana = window.VivoCanal(sb, "campana", {}, (c) => c.on("postgres_changes",
       { event: "INSERT", schema: "public", table: "notificaciones", filter: `usuario_id=eq.${user.id}` },
       (payload) => {
         notis = [payload.new, ...notis].slice(0, 60);
         renderCampana(); animar($("campana"), "suena");
         if ($("dlg-campana").open) pintarCampana();
-      }).subscribe();
+      }), null, cargarCampana);
+    canalCampana.abrir();
   }
   function renderCampana() {
     const n = notis.filter((x) => !x.leida_en).length, num = $("campana-n");
@@ -344,7 +349,8 @@
     $("bienvenida").hidden = vista;
     // La carga se va apenas está lo de arriba del Inicio (la cuenta regresiva y "Hoy te toca");
     // lo demás sigue llegando sin hacer esperar. Los vales se cargan al abrir Juntos.
-    Promise.all([render(), cargarDispo(), cargarAnimos(), cargarMomentos(), cargarNotitas(), cargarCanciones(), cargarCampana()]);
+    // (la campanita abre su canal después de traer las que había, también sin red)
+    Promise.all([render(), cargarDispo(), cargarAnimos(), cargarMomentos(), cargarNotitas(), cargarCanciones(), cargarCampana().then(suscribirCampana)]);
     // si una de estas cargas falla, igual se sigue: sin esto quedarían sin abrir el tiempo real y las notificaciones
     try { await Promise.all([cargarJuntos(), cargarPregunta(), cargarCartas(), cargarGirasol(), cargarFrasco()]); }
     catch (e) { console.error(e); }
@@ -361,10 +367,11 @@
     prepararPush();
   }
 
-  // Canal de la pareja: lo que el otro hace aparece al instante. Se vuelve a abrir si se cae (ver ponerseAlDia).
+  // Canal de la pareja: lo que el otro hace aparece al instante. Si se cae, se vuelve a abrir solo (vivo-canal.js) y,
+  // al volver, se recarga lo que se ve: lo que pasó mientras tanto no llega por el tiempo real.
   function suscribirPareja() {
-    if (canal) sb.removeChannel(canal);
-    canal = sb.channel("pareja").on("postgres_changes",
+    if (canal) canal.apagar();
+    canal = window.VivoCanal(sb, "pareja", {}, (c) => c.on("postgres_changes",
       { event: "INSERT", schema: "public", table: "eventos", filter: `pareja_id=eq.${pareja.id}` },
       (payload) => {
         const ev = payload.new;
@@ -462,27 +469,32 @@
         if (!$("tab-calendario").hidden) cargarCal();
         cargarJuntos();
       }
-    ).subscribe();
+    ), null, recargar);
+    canal.abrir();
   }
 
   // ---------- al volver a la app: ponerse al día ----------
   // El tiempo real no repite lo que pasó mientras el teléfono dormía, y a veces el canal se cae.
   // Al volver tras un rato, al recuperar la red o al cambiar el día, se recarga lo que se ve y se
-  // reabren los canales caídos. noche.js y la sala de juegos se enteran con "nosotros:aldia".
+  // revisan los canales (vivo-canal.js vuelve a abrir el que se cayó sin avisar). noche.js, focus.js,
+  // sesion.js y la sala de juegos se enteran con "nosotros:aldia".
   let ocultaDesde = 0, diaVisto = null;
-  const caido = (c) => !c || c.state === "closed" || c.state === "errored";
   function ponerseAlDia() {
     if (!pareja || !otro || S.home.hidden) return;
     diaVisto = diaPregunta();
-    if (caido(canal)) suscribirPareja();
-    if (caido(canalVivo)) conectarVivo();
-    render(); cargarDispo(); cargarAnimos(); cargarNotitas(); cargarCanciones(); cargarCampana(); cargarMomentos();
+    [canal, canalCampana, canalVivo].forEach((c) => { if (c) c.revisar(); });
+    recargar(); cargarCampana();
+    window.dispatchEvent(new Event("nosotros:aldia"));
+  }
+  // Lo que llega por el canal de la pareja, de nuevo desde la base (también cuando el canal vuelve después de caerse)
+  function recargar() {
+    if (!pareja || !otro || S.home.hidden) return;
+    render(); cargarDispo(); cargarAnimos(); cargarNotitas(); cargarCanciones(); cargarMomentos();
     cargarJuntos(); cargarPregunta(); cargarCartas(); cargarGirasol(); cargarFrasco();
     const tab = TABS.find((t) => !$("tab-" + t).hidden);
     if (tab === "juntos") { cargarHistorial(); cargarDeseos(); cargarVales(); cargarNumeros(); }
     // (Ajustes no: rehacerlo borraría lo que estás escribiendo en el formulario)
     else if (tab && tab !== "inicio" && tab !== "ajustes" && AL_ABRIR[tab]) AL_ABRIR[tab]();
-    window.dispatchEvent(new Event("nosotros:aldia"));
   }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) { ocultaDesde = Date.now(); return; }
@@ -2329,15 +2341,15 @@
 
   // ---------- corazón vivo: besitos, latido y presencia ----------
   // Canal en tiempo real que no guarda nada: quién está en la app, quién toca su corazón y los besitos al vuelo.
+  // Si se cae, se vuelve a abrir solo (vivo-canal.js) y me anoto de nuevo; quién está llega solo al unirse.
   const PATRON_LATIDO = [90, 120, 90, 600];
   const vibrar = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
   let canalVivo = null, otroAqui = false, otroTocando = false, yoTocando = false, vibraLatido = null;
   function conectarVivo() {
-    if (canalVivo) sb.removeChannel(canalVivo);
-    canalVivo = sb.channel(`vivo-${pareja.id}`, { config: { presence: { key: user.id }, broadcast: { self: false } } });
-    canalVivo
+    if (canalVivo) canalVivo.apagar();
+    canalVivo = window.VivoCanal(sb, `vivo-${pareja.id}`, { config: { presence: { key: user.id }, broadcast: { self: false } } }, (c) => c
       .on("presence", { event: "sync" }, () => {
-        const estado = canalVivo.presenceState()[otro.id] || [];
+        const estado = c.presenceState()[otro.id] || [];
         otroAqui = estado.length > 0;
         otroTocando = estado.some((p) => p.tocando);
         renderVivo();
@@ -2347,13 +2359,19 @@
         if (!$("tab-inicio").hidden) besosVoladores(n, false); else lluvia("💋", Math.min(10, 3 + n));
         toast(n > 1 ? `${otro.nombre} te mandó ${n} besitos 😘` : `${otro.nombre} te mandó un besito 😘`);
         vibrar([40, 40, 40]);
-      })
-      .subscribe((s) => { if (s === "SUBSCRIBED" && !document.hidden) canalVivo.track({ tocando: false }); });
+      }), () => marcarVivo(yoTocando));
+    canalVivo.abrir();
+  }
+  // En la presencia figuro "en la app" (y si estoy tocando mi corazón) solo con la app a la vista. Si el canal no
+  // está unido, me anoto al unirse.
+  function marcarVivo(tocando) {
+    if (!canalVivo || !canalVivo.unido()) return;
+    (document.hidden ? canalVivo.canal.untrack() : canalVivo.canal.track({ tocando })).catch(() => {});
   }
   // Si la app pasa a segundo plano, deja de figurar como "en la app"
   document.addEventListener("visibilitychange", () => {
-    if (!canalVivo) return;
-    if (document.hidden) { yoTocando = false; canalVivo.untrack(); } else canalVivo.track({ tocando: false });
+    if (document.hidden) yoTocando = false;
+    marcarVivo(false);
   });
   function renderVivo() {
     $("presente").hidden = !otroAqui;
@@ -2391,7 +2409,7 @@
     clearTimeout(besosTimer);
     besosTimer = setTimeout(async () => {
       const n = besosPend; besosPend = 0;
-      if (otroAqui && canalVivo) { canalVivo.send({ type: "broadcast", event: "beso", payload: { n } }); return; }
+      if (otroAqui && canalVivo && canalVivo.canal) { canalVivo.canal.send({ type: "broadcast", event: "beso", payload: { n } }); return; }
       // si no está en la app, le llega un "te manda un beso" (como mucho uno cada 10 minutos)
       // (no está en la app y ya le llegó un aviso de beso hace poco: no se repite)
       if (pocoDesde("ultimo-beso", 10)) { toast(`Ya le avisamos de tus besitos hace poco 😘`); return; }
@@ -2419,7 +2437,7 @@
   function empezarLatido() {
     if (!toque) return;
     toque.largo = true; yoTocando = true; vibrar(60); renderVivo();
-    if (canalVivo) canalVivo.track({ tocando: true });
+    marcarVivo(true);
     $("heart-tip").textContent = otroAqui ? `${otro.nombre} siente tu latido ahora mismo 💓` : "Mandando tu latido… 💓";
   }
   async function soltarCorazon(cancelado) {
@@ -2428,7 +2446,7 @@
     if (!t.largo) { if (!cancelado) mandarBeso(); return; }
     yoTocando = false; renderVivo();
     $("heart-tip").textContent = "Toca el corazón para mandarle besitos · mantenlo para mandar tu latido";
-    if (canalVivo) canalVivo.track({ tocando: false });
+    marcarVivo(false);
     // si no estaba en la app, el latido le llega como notificación (como mucho uno cada 10 minutos)
     if (!cancelado && !otroAqui && Date.now() - t.t >= 1500) {
       if (pocoDesde("ultimo-latido", 10)) { toast("Tu latido ya va en camino 💓"); return; }

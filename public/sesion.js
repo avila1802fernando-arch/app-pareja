@@ -583,6 +583,23 @@
     network: "Para dictar hace falta internet",
   };
   const juntar = (a, b) => { const x = a.replace(/\s+$/, ""), y = b.trim(); return !x ? y : !y ? x : `${x} ${y}`; };
+  // Une lo que el teléfono va entendiendo sin repetir. Chrome en Android manda la frase acumulada una y otra vez
+  // («hoy», «hoy me», «hoy me sentí»…) y a veces el mismo pedazo dos veces; en el computador manda pedazos nuevos.
+  // Por eso: si lo nuevo empieza con todo lo anterior, lo reemplaza; si ya estaba al final, no se agrega; si se pisan
+  // (el final de uno es el comienzo del otro), se juntan por ahí; si no, se suma.
+  function unirDictado(a, b) {
+    const A = a.trim() ? a.trim().split(/\s+/) : [], B = b.trim() ? b.trim().split(/\s+/) : [];
+    if (!A.length) return B.join(" ");
+    if (!B.length) return A.join(" ");
+    const igual = (x, y) => x.toLowerCase().replace(/[.,;:!?¡¿…"«»]/g, "") === y.toLowerCase().replace(/[.,;:!?¡¿…"«»]/g, "");
+    const empiezaCon = (L, P) => P.length <= L.length && P.every((w, i) => igual(w, L[i]));
+    if (empiezaCon(B, A)) return B.join(" ");
+    if (B.length <= A.length && B.every((w, i) => igual(w, A[A.length - B.length + i]))) return A.join(" ");
+    for (let k = Math.min(A.length, B.length) - 1; k > 0; k--) {
+      if (empiezaCon(B, A.slice(-k))) return A.concat(B.slice(k)).join(" ");
+    }
+    return `${A.join(" ")} ${B.join(" ")}`;
+  }
   function empezarDictado() {
     const R = Reconocimiento();
     if (!R || dictado || micRoto || !mirando || mirando.estado !== "abierta") return;
@@ -595,13 +612,11 @@
     const d = dictado = { rec, base: el.texto.value, sigue: true, callado: 0 };
     rec.onresult = (e) => {
       if (dictado !== d) return;
-      let final = "", provisional = "";
-      for (let i = 0; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) final += t; else provisional += t;
-      }
+      // todo lo de esta tanda, en orden (lo confirmado y lo provisional), unido sin repetir
+      let dicho = "";
+      for (let i = 0; i < e.results.length; i++) dicho = unirDictado(dicho, e.results[i][0].transcript);
       d.callado = 0;
-      el.texto.value = juntar(juntar(d.base, final), provisional);
+      el.texto.value = juntar(d.base, dicho);
       ajustarAlto(); el.texto.scrollTop = el.texto.scrollHeight;
       el.enviar.disabled = enviando || !el.texto.value.trim();
       escribiendo();

@@ -152,6 +152,15 @@ body.con-sesion .tabs,body.con-sesion .campana,body.con-sesion .fondo{visibility
 .sv-c-acuerdo::after{content:"acordado";position:absolute;top:-13px;right:12px;padding:3px 9px;border:1.5px solid currentColor;border-radius:999px;transform:rotate(6deg);
   background:var(--card);color:var(--accent);font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
 .sv-c-acuerdo,.sv-c-ejercicio{gap:6px} /* (toda <section> trae 22 px de separación) */
+/* el ciclo: dos flechas que se persiguen, en turquesa (es de los dos, no de uno); las fortalezas, con un corazoncito */
+.sv-c-ciclo{position:relative;padding:12px 14px 12px 46px;border-radius:14px;border:1.5px dashed color-mix(in srgb,var(--tinta-b) 55%,var(--line));
+  background:color-mix(in srgb,var(--tinta-b) 7%,var(--card))}
+.sv-c-ciclo .sv-c-et{color:var(--tinta-b)}
+.sv-c-ciclo::before{content:"";position:absolute;left:13px;top:13px;width:22px;height:22px;background:var(--tinta-b);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11a8 8 0 0 0-14.3-4.9L4 8'/%3E%3Cpath d='M4 3.5V8h4.5'/%3E%3Cpath d='M4 13a8 8 0 0 0 14.3 4.9L20 16'/%3E%3Cpath d='M20 20.5V16h-4.5'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11a8 8 0 0 0-14.3-4.9L4 8'/%3E%3Cpath d='M4 3.5V8h4.5'/%3E%3Cpath d='M4 13a8 8 0 0 0 14.3 4.9L20 16'/%3E%3Cpath d='M20 20.5V16h-4.5'/%3E%3C/svg%3E") center/contain no-repeat}
+.sv-c-fortalezas .sv-c-et::after{content:"";display:inline-block;width:14px;height:14px;margin-left:6px;vertical-align:-1px;background:currentColor;
+  -webkit-mask:var(--corazon-mask) no-repeat center/contain;mask:var(--corazon-mask) no-repeat center/contain}
 .sv-c-ejercicio{margin:6px 6px 2px}
 .sv-c-pendiente{font-size:.88rem;color:var(--muted)}
 .sv-c-firma{display:flex;align-items:center;gap:6px;align-self:flex-end;margin:0;font-family:var(--hand);font-size:1.4rem;line-height:1;color:var(--accent)}

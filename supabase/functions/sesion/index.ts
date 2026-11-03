@@ -15,8 +15,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { ESQUEMA_RESUMEN, INSTRUCCIONES, PEDIDO_RESUMEN, type Resumen } from "./instrucciones.ts";
 
 const MODELO = "claude-opus-5-5";
-const ESFUERZO_CHARLA = "low";     // conversación: respuestas cortas y rápidas
-const ESFUERZO_RESUMEN = "medium"; // el resumen se piensa un poco más
+const ESFUERZO_CHARLA = "medium"; // conversación: piensa lo justo para leer lo que hay debajo, sin hacerlos esperar mucho
+const ESFUERZO_RESUMEN = "high";  // el resumen (el ciclo, las fortalezas, lo de cada uno) se piensa con calma
 const ESPERA_MS = 2500;            // si escriben dos mensajes seguidos, Claude los contesta juntos
 const TOPE_DIARIO = 150;           // respuestas de Claude por pareja en 24 h: un techo para el gasto
 const SESIONES_QUE_RECUERDA = 8;   // resúmenes anteriores que Claude lee en cada sesión
@@ -265,6 +265,8 @@ function contexto(d: Datos): string {
     campo("Cómo llegaron", r?.llegada);
     for (const p of r?.personas ?? []) campo(p.nombre, p.siente_y_necesita);
     campo("Lo que entendieron", r?.entendimos);
+    campo("El ciclo que se les repite", r?.ciclo);
+    campo("Sus fortalezas", r?.fortalezas);
     campo("Lo que se valoraron", r?.valoramos);
     campo("Acuerdo", a.acuerdo ?? r?.acuerdo);
     campo("Ejercicio", a.ejercicio ?? r?.ejercicio);

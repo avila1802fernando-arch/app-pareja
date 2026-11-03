@@ -352,9 +352,9 @@
     c.setAttribute("aria-labelledby", `sv-c-${s.numero}`);
     const h = nodo("h3", null, r.tema || s.tema || "Nuestra sesión"); h.id = `sv-c-${s.numero}`;
     c.append(nodo("p", "eyebrow", `Sesión ${s.numero} · ${fecha(s.cerrada_en || s.creado_en)}`), h);
-    const seccion = (titulo, texto) => {
+    const seccion = (titulo, texto, extra) => {
       if (!texto || !texto.trim()) return;
-      const d = nodo("section", "sv-c-sec"); d.append(nodo("p", "sv-c-et", titulo), nodo("p", null, texto.trim())); c.append(d);
+      const d = nodo("section", "sv-c-sec" + (extra ? ` ${extra}` : "")); d.append(nodo("p", "sv-c-et", titulo), nodo("p", null, texto.trim())); c.append(d);
     };
     seccion("Cómo llegamos", r.llegada);
     const personas = (r.personas || []).filter((p) => p && p.siente_y_necesita);
@@ -369,6 +369,9 @@
       d.append(nodo("p", "sv-c-et", "Lo que sentimos y necesitamos"), g); c.append(d);
     }
     seccion("Lo que entendimos el uno del otro", r.entendimos);
+    // el ciclo que se les repite (algo que les pasa a los dos) y lo que hacen bien juntos
+    seccion("El ciclo que se nos repite", r.ciclo, "sv-c-ciclo");
+    seccion("Lo que hacemos bien juntos", r.fortalezas, "sv-c-fortalezas");
     seccion("Lo que nos valoramos hoy", r.valoramos);
     const acuerdo = s.acuerdo || r.acuerdo, ejercicio = s.ejercicio || r.ejercicio;
     if (acuerdo) {

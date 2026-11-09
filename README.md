@@ -68,11 +68,13 @@ supabase/schema.sql     ← tablas y seguridad (pegar en el SQL Editor; se puede
 supabase/avisos.sql     ← la base avisa a las funciones: triggers + tarea cada 5 min (editar 2 valores y pegar)
 supabase/batalla.sql    ← la batalla naval en vivo: flotas secretas, turnos y avisos (pegar después de avisos.sql y familia.sql)
 supabase/uno.sql        ← el UNO en vivo: manos secretas, el mazo, las jugadas y avisos (pegar después de avisos.sql y familia.sql)
+supabase/psicologo.sql  ← Tu espacio: el psicólogo personal, privado (solo psico_permitidos; se puede repetir)
 supabase/functions/
   _shared/push.ts       ← código común para enviar push
   notificar/index.ts    ← push por "te extraño", señales, ánimo, cartas, pregunta del día, calendario y sesiones
   recordatorios/index.ts← recordatorios 30 min antes, cartas que ya se pueden abrir y apaga "estoy libre" vencidos
   sesion/index.ts       ← Claude modera las sesiones de pareja (instrucciones.ts: cómo modera y el formato del resumen)
+  psicologo/index.ts    ← Claude como psicólogo personal (instrucciones.ts: cómo trabaja, la seguridad y lo que guarda al cerrar)
 public/vercel.json     ← encabezados para Vercel (va dentro de public: ahí lo lee)
 ```
 
@@ -233,6 +235,16 @@ Claude se usa con una llave de la API de Anthropic. Es aparte del plan de claude
 Para probar: en **Juntos** toca **Empezar nuestra primera sesión**. Claude saluda en unos segundos y al otro le llega el aviso.
 
 Ajustes (constantes al inicio de `supabase/functions/sesion/index.ts`): `MODELO` (Claude Opus 5.5), `ESFUERZO_CHARLA` y `ESFUERZO_RESUMEN` (cuánto piensa antes de contestar), `ESPERA_MS` (si escriben dos mensajes seguidos, Claude los contesta juntos) y `TOPE_DIARIO`. Cómo modera y cómo escribe el resumen está en `instrucciones.ts`. Si Claude rechaza algo por sus reglas de seguridad, Anthropic lo reintenta solo con otro modelo (`fallbacks: "default"`).
+
+### Tu espacio: un psicólogo personal (solo para quien lo tenga)
+
+Sesiones individuales con Claude como psicólogo (enfoque integrador: terapia cognitivo-conductual, ACT, DBT, esquemas, compasión, apego, entrevista motivacional; con protocolo de crisis). Aparece como una tarjeta en el Inicio **solo** en las cuentas de `psico_permitidos` (hoy, `fernando`). La base no deja que nadie más lo lea (ni siquiera saber que existe), no hay avisos ni notificaciones, y el moderador de pareja no lo lee. Al terminar cada sesión, Claude deja un resumen y pone al día «lo que entiende de ti» (su formulación del caso), que vuelve a leer la vez siguiente. Desde esa ventana se puede borrar todo. Usa la misma llave y cuesta parecido a una sesión de pareja (tope: 120 respuestas por día).
+
+1. Supabase → SQL Editor: corre **todo** `supabase/psicologo.sql` (o `npx supabase db query --remote=<ref> -f supabase/psicologo.sql`). Al final agrega a `fernando`; para dárselo a otra cuenta, otra línea igual con su usuario.
+2. `npx supabase functions deploy psicologo --no-verify-jwt --use-api`
+3. Publica la app. Pruebas de la base: `node supabase/pruebas/psicologo.mjs`.
+
+Cómo trabaja el psicólogo y qué guarda al cerrar está en `supabase/functions/psicologo/instrucciones.ts`.
 
 ## Si ya tenías una versión anterior funcionando
 

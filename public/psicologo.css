@@ -1,0 +1,60 @@
+/* Tu espacio 🌿 · el psicólogo personal (psicologo.js). Solo aparece en la cuenta que lo tiene.
+   La conversación usa las mismas piezas que las sesiones de pareja (sesion.css: .sv, .sv-m, .sv-burbuja, .sv-carta…)
+   con otra tinta: dentro de .psico el acento pasa a un verde azulado tranquilo, propio, que no es el de la pareja. */
+.psico{
+  --accent:#2f7d74;--accent-hondo:#1f5c55;--on-accent:#fff;
+  --accent-soft:color-mix(in srgb,var(--accent) 14%,var(--card));
+  --blush:color-mix(in srgb,var(--accent) 10%,var(--card));
+  --papel:color-mix(in srgb,var(--accent) 4%,var(--card));
+  --aereo:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,var(--card)));
+  --sv-mia:color-mix(in srgb,var(--accent) 14%,var(--card));
+  --sv-claude-borde:color-mix(in srgb,var(--accent) 38%,var(--line)); /* (en :root quedó con el rosa de la pareja) */
+  --sv-sombra:rgba(20,60,55,.45);
+}
+@media (prefers-color-scheme:dark){
+  .psico{--accent:#6cc7b9;--accent-hondo:#2f7d74;--on-accent:#0d2622;--sv-mia:color-mix(in srgb,var(--accent) 18%,var(--card));--sv-sombra:rgba(0,0,0,.6)}
+}
+.psico svg:not(.ico){fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- la tarjeta del Inicio ---- */
+.psico-card{position:relative;display:flex;flex-direction:column;gap:6px;padding:18px 16px 12px;border-radius:22px;overflow:hidden;
+  background:var(--papel);border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));box-shadow:0 16px 28px -24px var(--sv-sombra)}
+.psico-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--aereo)}
+.pc-cab{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px}
+.pc-ico{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.pc-ico svg{width:24px;height:24px}
+.psico-card .eyebrow{margin:0;display:flex;align-items:center;gap:5px}
+.psico-card .eyebrow .ico{width:14px;height:14px}
+.pc-titulo{margin:0;font-size:1.25rem;line-height:1.2;text-wrap:balance}
+.pc-sub{margin:2px 0 0}
+.pc-tarea{position:relative;margin:8px 0 2px;padding:12px 14px;border-radius:14px;border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--line));background:var(--card)}
+.pc-tarea .pt-titulo{margin:0 0 2px;font-family:var(--hand);font-size:1.2rem;font-weight:700;line-height:1;color:var(--accent)}
+.pc-tarea p{margin:0;font-size:.92rem;line-height:1.45}
+.pc-botones{display:flex;flex-direction:column;gap:0;margin-top:8px}
+.pc-botones .pc-empezar{width:100%}
+.pc-links{display:flex;flex-wrap:wrap;justify-content:center}
+
+/* ---- la conversación ---- */
+body.con-psico{overflow:hidden}
+body.con-psico .tabs,body.con-psico .campana,body.con-psico .fondo{visibility:hidden}
+.sv.psico .sv-m.claude .sv-quien{color:var(--accent)}
+.sv.psico .sv-m.claude .sv-burbuja{border-style:solid;border-width:1px}
+.sv.psico .sv-intro .ico{color:var(--accent)}
+/* el resumen: una hoja de cuaderno, no una carta de correo aéreo */
+.psico .sv-carta::before{height:5px}
+.psico .pv-mensaje{margin:2px 0 0;padding:12px 14px;border-radius:14px;background:var(--accent-soft);font-family:var(--hand);font-size:1.3rem;line-height:1.25;color:var(--fg)}
+.psico .pv-tarea{gap:6px;padding:14px 16px;border:2px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--accent) 6%,var(--card))}
+
+/* ---- ventanas ---- */
+.dlg.psico .stack{gap:12px}
+.dlg.psico h2{margin:0}
+.pf-lista{display:flex;flex-direction:column;gap:12px;margin:0}
+.pf-lista section{display:flex;flex-direction:column;gap:3px}
+.pf-lista .sv-c-et{font-size:1.15rem}
+.pf-lista p{margin:0;font-size:.94rem;line-height:1.5;white-space:pre-wrap}
+.pf-vacio{color:var(--muted);font-size:.92rem}
+.pf-fecha{margin:0}
+button.pf-borrar{color:#b3261e}
+@media (prefers-color-scheme:dark){button.pf-borrar{color:#ff8a80}}
+.dlg-psico-borrar .pb-ok{background:#b3261e;color:#fff}
+@media (prefers-color-scheme:dark){.dlg-psico-borrar .pb-ok{background:#ff8a80;color:#2a0b08}}

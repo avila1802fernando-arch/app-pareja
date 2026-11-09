@@ -31,7 +31,12 @@
     pluma: '<svg class="ico" aria-hidden="true"><use href="#i-lapiz"/></svg>',
     candado: '<svg class="ico" aria-hidden="true"><use href="#i-candado"/></svg>',
     mic: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>',
+    parlante: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+    parar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>',
   };
+  // Escuchar: la voz del teléfono lee en voz alta lo que dice Claude (speechSynthesis: gratis, el texto no sale del
+  // teléfono hacia otra empresa). Si el navegador no la tiene, no aparecen los botones.
+  const Voz = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window ? window.speechSynthesis : null;
   // Lo que Claude va entendiendo de ti (las mismas claves que ESQUEMA_CIERRE en la función)
   const FORMULACION = [
     ["quien_eres", "Tu vida hoy"], ["lo_que_te_trae", "Lo que te trae"], ["objetivos", "Lo que quieres lograr"],
@@ -56,6 +61,9 @@
   let fallo = false;          // la última llamada falló: se puede pedir otra vez sin esperar
   let enviando = false, volverA = null, pegadoAbajo = true, revisarTimer = null, pedirTimer = null;
   let dictado = null, micRoto = false;
+  let hablando = null;        // la respuesta que se está leyendo en voz alta: { id, boton }
+  let vozAuto = false;        // leer solas las respuestas nuevas (se recuerda en este teléfono)
+  try { vozAuto = localStorage.getItem("psico-voz") === "1"; } catch (e) {}
 
   // ---------- utilidades ----------
   const nodo = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -113,6 +121,7 @@
       <header class="sv-cab">
         <button type="button" class="sv-atras" aria-label="Volver">${ICONOS.atras}</button>
         <div class="sv-titulos"><h2 class="sv-titulo" id="pv-titulo"></h2><p class="sv-estado"></p></div>
+        <button type="button" class="pv-voz" aria-pressed="false" aria-label="Leer en voz alta las respuestas de Claude" hidden>${ICONOS.parlante}</button>
         <button type="button" class="ghost sv-terminar">Terminar</button>
       </header>
       <ol class="sv-lista" role="log" aria-live="polite" aria-label="Conversación"></ol>
@@ -134,9 +143,11 @@
       v, atras: q(".sv-atras"), titulo: q(".sv-titulo"), estado: q(".sv-estado"), terminar: q(".sv-terminar"),
       lista: q(".sv-lista"), pie: q(".sv-pie"), pedir: q(".sv-pedir"), resumiendo: q(".sv-resumiendo"),
       form: q(".sv-escribir"), texto: q("#pv-texto"), enviar: q(".sv-enviar"), anuncio: q(".sv-anuncio"),
-      mic: q(".sv-mic"), escucha: q(".sv-escucha"),
+      mic: q(".sv-mic"), escucha: q(".sv-escucha"), voz: q(".pv-voz"),
     });
     el.mic.hidden = !Reconocimiento();
+    el.voz.addEventListener("click", cambiarVozAuto);
+    pintarVozAuto();
     // "Claude está escribiendo…": siempre al final de la conversación
     const li = nodo("li", "sv-m claude sv-escribe"); li.hidden = true;
     const n = nodo("p", "sv-quien"); n.innerHTML = ICONOS.pluma; n.append("Claude");
@@ -240,6 +251,7 @@
     poner(el.estado, s.estado === "cerrada" ? `Cerrada el ${fecha(s.cerrada_en || s.creado_en)}`
       : s.estado === "resumiendo" ? "Claude está escribiendo el resumen…" : "solo tú y Claude");
     el.terminar.hidden = s.estado !== "abierta";
+    el.voz.hidden = !Voz || s.estado !== "abierta";
     el.pie.hidden = s.estado === "cerrada";
     el.form.hidden = s.estado !== "abierta";
     if (s.estado !== "abierta" && dictado) pararDictado();
@@ -287,7 +299,14 @@
     b.append(nodo("span", "sr", `${tipo === "claude" ? "Claude" : "Tú"}: `));
     conFormato(b, m.texto);
     const t = nodo("time", null, X.hora(m.creado_en, X.miTz())); t.dateTime = m.creado_en;
-    b.append(t); li.append(b);
+    if (tipo === "claude" && Voz) {
+      // abajo de la burbuja: «Escuchar» a la izquierda y la hora a la derecha
+      const pie = nodo("div", "pv-pie-burbuja"), e = boton(null, "pv-escuchar");
+      pintarEscuchar(e, hablando && hablando.id === m.id);
+      e.addEventListener("click", () => leer(m, e));
+      pie.append(e, t); b.append(pie);
+    } else b.append(t);
+    li.append(b);
     return li;
   }
 
@@ -382,7 +401,7 @@
   }
   function ocultarVista() {
     if (!el || el.v.hidden || el.v.classList.contains("sale")) return;
-    cortarDictado();
+    cortarDictado(); callar();
     const fin = () => { el.v.hidden = true; el.v.classList.remove("sale", "vv"); };
     document.body.classList.remove("con-psico");
     if (X.pocoMovimiento()) fin(); else { el.v.classList.add("sale"); setTimeout(fin, 260); }
@@ -429,6 +448,7 @@
     cortarDictado(); // se manda lo que está escrito ahora; lo que el dictado entienda después ya no se mete
     const t = el.texto.value.trim();
     if (!t || enviando || !mirando || mirando.estado !== "abierta") return;
+    callar(); desbloquearVoz(); // (dentro del toque: así la respuesta se puede leer sola también en iPhone)
     const id = mirando.id;
     enviando = true; el.enviar.disabled = true;
     const { data, error } = await X.sb.rpc("psico_escribir", { p_sesion: id, p_texto: t });
@@ -512,10 +532,104 @@
     b.disabled = false;
     el.borrar.close();
     if (error) { X.toast("No se pudo borrar. Revisa tu conexión e intenta otra vez."); return; }
+    callar();
     if (el && !el.v.hidden) ocultarVista();
     sesiones = []; perfil = null; mensajes = [];
     pintarCard();
     X.toast("Listo: tu espacio quedó vacío 🌿");
+  }
+
+  // ---------- escuchar: la voz del teléfono lee lo que dice Claude ----------
+  // Una voz en español, de preferencia la de tu país (la misma tabla que el dictado) y la que viene en el teléfono.
+  function elegirVoz() {
+    const norm = (l) => (l || "").replace("_", "-").toLowerCase();
+    const voces = Voz.getVoices().filter((v) => /^es(-|$)/.test(norm(v.lang)));
+    if (!voces.length) return null;
+    const quiero = norm(IDIOMA_POR_ZONA[X.miTz()] || "es-419");
+    return voces.find((v) => norm(v.lang) === quiero && v.localService) || voces.find((v) => norm(v.lang) === quiero)
+      || voces.find((v) => /^es-(419|us|mx|co|cl|ar|pe|ec)$/.test(norm(v.lang))) || voces[0];
+  }
+  // El texto como se dice: sin **, sin emojis (la voz diría su nombre) y cada línea como una frase
+  function paraDecir(texto) {
+    return texto.replace(/\*\*(.+?)\*\*/gs, "$1")
+      .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "")
+      .split(/\n+/).map((l) => l.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, "").trim()).filter(Boolean)
+      .map((l) => (/[.!?…:;]$/.test(l) ? l : `${l}.`)).join(" ");
+  }
+  // En pedazos cortos: Chrome corta una lectura larga a los ~15 segundos
+  function trozos(texto) {
+    const out = [];
+    let actual = "";
+    // (frase = hasta su punto; sin «lookbehind», que los iPhone viejos no entienden)
+    for (const frase of (texto.match(/[^.!?…:;]+[.!?…:;]*/g) || []).map((f) => f.trim()).filter(Boolean)) {
+      if (actual && (actual + " " + frase).length > 220) { out.push(actual); actual = frase; }
+      else actual = actual ? `${actual} ${frase}` : frase;
+    }
+    if (actual) out.push(actual);
+    // una frase muy larga, sin puntos: se corta entre palabras (de preferencia después de una coma)
+    return out.flatMap((p) => {
+      const r = [];
+      while (p.length > 260) {
+        let corte = p.lastIndexOf(", ", 220);
+        if (corte < 80) corte = p.lastIndexOf(" ", 220);
+        if (corte < 1) corte = 220;
+        r.push(p.slice(0, corte + 1).trim()); p = p.slice(corte + 1).trim();
+      }
+      if (p) r.push(p);
+      return r;
+    });
+  }
+  function pintarEscuchar(b, on) {
+    b.innerHTML = on ? ICONOS.parar : ICONOS.parlante;
+    b.append(on ? "Detener" : "Escuchar");
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-label", on ? "Dejar de escuchar" : "Escuchar esta respuesta en voz alta");
+  }
+  function leer(m, b) {
+    if (!Voz) return;
+    const mismo = hablando && hablando.id === m.id;
+    callar();
+    if (mismo) return; // tocar otra vez = detener
+    cortarDictado();   // el micrófono no debe escuchar a la voz del teléfono
+    const partes = trozos(paraDecir(m.texto));
+    if (!partes.length) return;
+    const voz = elegirVoz(), yo = hablando = { id: m.id, boton: b };
+    pintarEscuchar(b, true);
+    const fin = () => { if (hablando === yo) { hablando = null; pintarEscuchar(b, false); } };
+    try { Voz.resume(); } catch (e) {} // (en algunos Android la voz queda en pausa)
+    partes.forEach((t, i) => {
+      const u = new SpeechSynthesisUtterance(t);
+      if (voz) { u.voice = voz; u.lang = voz.lang; } else u.lang = IDIOMA_POR_ZONA[X.miTz()] || "es-419";
+      u.rate = 0.95; // un poco más pausado: es una conversación tranquila
+      if (i === partes.length - 1) u.onend = fin;
+      u.onerror = (e) => { if (e.error !== "interrupted" && e.error !== "canceled") fin(); };
+      Voz.speak(u);
+    });
+  }
+  function callar() {
+    if (!Voz) return;
+    const h = hablando;
+    hablando = null;
+    if (h) pintarEscuchar(h.boton, false);
+    try { Voz.cancel(); } catch (e) {}
+  }
+  // El iPhone solo deja hablar a la página después de un toque: una frase muda dentro del toque la deja lista
+  function desbloquearVoz() {
+    if (!Voz || !vozAuto) return;
+    try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; Voz.speak(u); } catch (e) {}
+  }
+  function pintarVozAuto() {
+    if (!el) return;
+    el.voz.classList.toggle("on", vozAuto);
+    el.voz.setAttribute("aria-pressed", String(vozAuto));
+    el.voz.title = vozAuto ? "Las respuestas se leen solas" : "Leer solas las respuestas";
+  }
+  function cambiarVozAuto() {
+    vozAuto = !vozAuto;
+    try { localStorage.setItem("psico-voz", vozAuto ? "1" : "0"); } catch (e) {}
+    pintarVozAuto();
+    if (vozAuto) { desbloquearVoz(); X.toast("Las respuestas de Claude se van a leer en voz alta 🔊"); }
+    else { callar(); X.toast("Las respuestas ya no se leen solas. Puedes tocar «Escuchar» en cada una"); }
   }
 
   // ---------- dictar con la voz (igual que en las sesiones de pareja) ----------
@@ -546,6 +660,7 @@
   function empezarDictado() {
     const R = Reconocimiento();
     if (!R || dictado || micRoto || !mirando || mirando.estado !== "abierta") return;
+    callar(); // que el micrófono no escuche a la voz del teléfono
     let rec;
     try { rec = new R(); } catch (e) { return; }
     const nav = navigator.language || "";
@@ -632,6 +747,9 @@
       el.lista.insertBefore(li, el.escribeClaude);
       if (cerca || !m.de_claude) bajar();
       if (m.de_claude) poner(el.anuncio, "Claude respondió");
+      // con «leer solas» encendido, la respuesta nueva se escucha (no si estás dictando o la app está atrás)
+      const e = li.querySelector(".pv-escuchar");
+      if (m.de_claude && vozAuto && e && !dictado && !document.hidden && !el.v.hidden) leer(m, e);
     }
     pintarEscribiendo(); actualizarPedir();
   }
@@ -697,6 +815,7 @@
     if (error || data !== true) { iniciado = false; return; }
     montar();
     if (!el) return;
+    if (Voz) try { Voz.getVoices(); } catch (e) {} // (Chrome carga las voces de a poco: que vayan llegando)
     await Promise.all([cargar(), cargarPerfil()]);
   }
 

@@ -40,6 +40,19 @@ body.con-psico .tabs,body.con-psico .campana,body.con-psico .fondo{visibility:hi
 .sv.psico .sv-m.claude .sv-quien{color:var(--accent)}
 .sv.psico .sv-m.claude .sv-burbuja{border-style:solid;border-width:1px}
 .sv.psico .sv-intro .ico{color:var(--accent)}
+/* escuchar: el botón de cada respuesta y, arriba, «leer solas» */
+.psico .sv-cab{grid-template-columns:44px minmax(0,1fr) auto auto}
+.pv-voz{width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:var(--muted);
+  border:1.5px dashed var(--line);box-shadow:none}
+.pv-voz svg{width:21px;height:21px}
+.pv-voz.on{background:var(--accent);color:var(--on-accent);border-style:solid;border-color:var(--accent)}
+.pv-pie-burbuja{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
+.pv-pie-burbuja time{margin-top:0}
+button.pv-escuchar{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 12px 6px 9px;border-radius:999px;font-size:.8rem;font-weight:700;
+  background:var(--accent-soft);color:var(--accent);box-shadow:none;white-space:nowrap}
+.pv-escuchar svg{width:17px;height:17px}
+.pv-escuchar.on{background:var(--accent);color:var(--on-accent)}
+
 /* el resumen: una hoja de cuaderno, no una carta de correo aéreo */
 .psico .sv-carta::before{height:5px}
 .psico .pv-mensaje{margin:2px 0 0;padding:12px 14px;border-radius:14px;background:var(--accent-soft);font-family:var(--hand);font-size:1.3rem;line-height:1.25;color:var(--fg)}

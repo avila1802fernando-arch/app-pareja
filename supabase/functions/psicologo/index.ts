@@ -1,6 +1,6 @@
 // Edge Function "psicologo"
 // «Tu espacio»: Claude como psicólogo personal, en sesiones individuales (public/psicologo.js). Solo para las cuentas
-// de psico_permitidos (psicologo.sql). La llama la app, con la sesión de quien la usa:
+// de psico_permitidos (psicologo.sql; cada uno con su espacio aparte). La llama la app, con la sesión de quien la usa:
 //   { sesion_id, accion: "responder" } → Claude contesta lo último que escribiste
 //   { sesion_id, accion: "cerrar" }    → Claude escribe el resumen, pone al día lo que entiende de ti y la sesión se cierra
 //
@@ -43,10 +43,11 @@ type Anterior = { numero: number; tema: string | null; tarea: string | null; res
 type DePareja = { numero: number; tema: string | null; acuerdo: string | null; ejercicio: string | null; resumen: Record<string, unknown> | null; cerrada_en: string | null };
 type Datos = {
   sesion: Sesion; mensajes: Mensaje[]; anteriores: Anterior[]; formulacion: Formulacion | null;
-  yo: { nombre: string; tz: string | null };
+  yo: { nombre: string; tz: string | null; trato: Trato };
   pareja: { nombre: string; tz: string | null; desde: string | null; conocidos: string | null; sesiones: DePareja[]; encuentro: { titulo: string; tipo: string; inicio: string } | null } | null;
 };
 type Turno = Anthropic.Beta.BetaMessageParam;
+type Trato = "el" | "ella"; // cómo hablarle (psico_permitidos.trato)
 
 // Lo que la app sabe explicar (MOTIVOS en public/psicologo.js)
 class Aviso extends Error {
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
   const { data: { user } } = await admin.auth.getUser(jwt);
   if (!user) return responder({ error: "sin_sesion" }, 401);
   const [{ data: permitido }, { data: suya }] = await Promise.all([
-    admin.from("psico_permitidos").select("usuario_id").eq("usuario_id", user.id).maybeSingle(),
+    admin.from("psico_permitidos").select("usuario_id, trato").eq("usuario_id", user.id).maybeSingle(),
     admin.from("psico_sesiones").select("id").eq("id", sesionId).eq("usuario_id", user.id).maybeSingle(),
   ]);
   if (!permitido) return responder({ error: "sin_permiso" }, 403);
@@ -78,8 +79,9 @@ Deno.serve(async (req) => {
   const claude = new Anthropic({ apiKey: llave });
 
   try {
-    if (accion === "cerrar") return responder(await cerrar(claude, sesionId));
-    return responder(await contestar(claude, sesionId));
+    const trato = permitido.trato === "ella" ? "ella" : "el";
+    if (accion === "cerrar") return responder(await cerrar(claude, sesionId, trato));
+    return responder(await contestar(claude, sesionId, trato));
   } catch (e) {
     const codigo = motivo(e);
     // (al registro va solo el código y el tipo de error, nunca lo que se habló)
@@ -102,14 +104,14 @@ function motivo(e: unknown): string {
 // ---------- contestar ----------
 // De a una llamada por vez (psico_tomar_turno). Si escribiste algo mientras Claude pensaba, la llamada de ese mensaje
 // no pudo tomar el turno: lo contesta esta, en otra vuelta.
-async function contestar(claude: Anthropic, sesionId: string) {
+async function contestar(claude: Anthropic, sesionId: string, trato: Trato) {
   await esperar(ESPERA_MS);
   for (let vuelta = 0; vuelta < 4; vuelta++) {
     const { data: tengo } = await admin.rpc("psico_tomar_turno", { p_sesion: sesionId });
     if (!tengo) return { ok: true, nota: "otra llamada está contestando" };
     let visto = 0;
     try {
-      const d = await cargar(sesionId);
+      const d = await cargar(sesionId, trato);
       const ultimo = d.mensajes.at(-1);
       if (ultimo && ultimo.de_claude) return { ok: true, nota: "nada nuevo" };
       visto = ultimo?.id ?? 0;
@@ -140,7 +142,7 @@ async function contestar(claude: Anthropic, sesionId: string) {
 }
 
 // ---------- terminar: el resumen y la formulación ----------
-async function cerrar(claude: Anthropic, sesionId: string) {
+async function cerrar(claude: Anthropic, sesionId: string, trato: Trato) {
   // si Claude está contestando algo, se espera a que termine (como mucho unos 30 s)
   for (let i = 0; i < 20; i++) {
     const { data: s } = await admin.from("psico_sesiones").select("estado, pensando_desde").eq("id", sesionId).maybeSingle();
@@ -151,7 +153,7 @@ async function cerrar(claude: Anthropic, sesionId: string) {
   const { data: tengo } = await admin.rpc("psico_empezar_cierre", { p_sesion: sesionId });
   if (!tengo) return { ok: true, nota: "ya se está cerrando" };
   try {
-    const d = await cargar(sesionId);
+    const d = await cargar(sesionId, trato);
     if (!d.mensajes.some((m) => !m.de_claude)) throw new Aviso("vacia");
     const conversacion = historia(d);
     agregar(conversacion, "user", PEDIDO_CIERRE);
@@ -190,7 +192,9 @@ async function cerrar(claude: Anthropic, sesionId: string) {
 }
 
 // ---------- datos ----------
-async function cargar(sesionId: string): Promise<Datos> {
+// Todo lo que se lee es de la persona dueña de la sesión (usuario_id): nunca del espacio de su pareja. De la pareja
+// solo entran su nombre, su zona horaria y los resúmenes de las sesiones de pareja, que ya leen los dos.
+async function cargar(sesionId: string, trato: Trato): Promise<Datos> {
   const { data: sesion } = await admin.from("psico_sesiones")
     .select("id, usuario_id, numero, estado, pensando_desde, creado_en").eq("id", sesionId).maybeSingle();
   if (!sesion) throw new Aviso("no_existe");
@@ -211,7 +215,7 @@ async function cargar(sesionId: string): Promise<Datos> {
   const p = pareja.data;
   const otroId = p ? (p.usuario_a === yo ? p.usuario_b : p.usuario_a) : null;
   if (p && otroId) {
-    // (si esto falla, se sigue sin el contexto de la pareja: lo de él es lo importante)
+    // (si esto falla, se sigue sin el contexto de la pareja: lo de esta persona es lo importante)
     const [otro, sesiones, encuentro] = await Promise.all([
       admin.from("perfiles").select("nombre, tz").eq("id", otroId).maybeSingle(),
       admin.from("sesiones").select("numero, tema, acuerdo, ejercicio, resumen, cerrada_en")
@@ -230,7 +234,7 @@ async function cargar(sesionId: string): Promise<Datos> {
     mensajes: (mensajes.data ?? []) as Mensaje[],
     anteriores: ((anteriores.data ?? []) as Anterior[]).reverse(),
     formulacion: (formulacion.data?.formulacion ?? null) as Formulacion | null,
-    yo: { nombre: perfil.data?.nombre ?? "", tz: perfil.data?.tz ?? null },
+    yo: { nombre: perfil.data?.nombre ?? "", tz: perfil.data?.tz ?? null, trato },
     pareja: deLaPareja,
   };
 }
@@ -261,11 +265,12 @@ const TITULOS_FORMULACION: [keyof Formulacion, string][] = [
   ["como_se_conecta", "Cómo se conecta"], ["avances", "Avances"], ["a_cuidar", "A cuidar"],
 ];
 
-// Lo que sabe de él. Cambia solo entre una sesión y otra (por eso va después de las instrucciones, que no cambian).
+// Lo que sabe de esta persona. Cambia solo entre una sesión y otra (por eso va después de las instrucciones, que no cambian).
 function contexto(d: Datos): string {
   const { sesion, yo, pareja } = d;
-  const l: string[] = ["# Lo que sabes de él", ""];
+  const l: string[] = ["# Lo que sabes de esta persona", ""];
   l.push(`- Se llama ${yo.nombre || "(sin nombre)"} y vive en ${dondeVive(yo.tz)}.`);
+  l.push(yo.trato === "ella" ? "- Es mujer: háblale en femenino (por ejemplo «bienvenida», «cansada», «tranquila»)." : "- Es hombre: háblale en masculino (por ejemplo «bienvenido», «cansado», «tranquilo»).");
   l.push(`- En su hora, esta sesión empezó el ${fecha(sesion.creado_en, yo.tz, true)} a las ${hora(sesion.creado_en, yo.tz)}.`);
   l.push(`- Es su sesión número ${sesion.numero} contigo.`);
   if (pareja) {
@@ -277,10 +282,10 @@ function contexto(d: Datos): string {
       l.push(`- Lo próximo que tienen en el calendario para verse: «${pareja.encuentro.titulo}» (${pareja.encuentro.tipo}), el ${fecha(pareja.encuentro.inicio, yo.tz)}: faltan ${dias} ${dias === 1 ? "día" : "días"}.`);
     }
   }
-  l.push("", "# Tu formulación de su caso (lo que has ido entendiendo de él)", "");
+  l.push("", `# Tu formulación de su caso (lo que has ido entendiendo de ${yo.trato === "ella" ? "ella" : "él"})`, "");
   const f = d.formulacion;
   const conTexto = f ? TITULOS_FORMULACION.filter(([k]) => typeof f[k] === "string" && f[k].trim()) : [];
-  if (!conTexto.length) l.push("Todavía no tienes: estás empezando a conocerlo.");
+  if (!conTexto.length) l.push(`Todavía no tienes: estás empezando a ${yo.trato === "ella" ? "conocerla" : "conocerlo"}.`);
   for (const [k, titulo] of conTexto) l.push(`${titulo}: ${f![k].trim()}`);
 
   l.push("", "# Sus sesiones anteriores contigo", "");
@@ -335,7 +340,7 @@ function agregar(lista: Turno[], role: "user" | "assistant", texto: string) {
 }
 function historia(d: Datos): Turno[] {
   const lista: Turno[] = [];
-  agregar(lista, "user", `[La app] ${d.yo.nombre || "Él"} abrió su sesión número ${d.sesion.numero}. Salúdalo y empieza.`);
+  agregar(lista, "user", `[La app] ${d.yo.nombre || "La persona"} abrió su sesión número ${d.sesion.numero}. Saluda y empieza.`);
   for (const m of d.mensajes) agregar(lista, m.de_claude ? "assistant" : "user", m.texto);
   return lista;
 }

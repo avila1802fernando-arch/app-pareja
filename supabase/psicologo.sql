@@ -1,6 +1,7 @@
--- Tu espacio 🌿 · un psicólogo personal con Claude, solo para quien esté en psico_permitidos (hoy, Fernando)
+-- Tu espacio 🌿 · un psicólogo personal con Claude, solo para quien esté en psico_permitidos (Fernando y Martina,
+-- cada uno con su espacio aparte)
 -- Sesiones individuales: lo que escribes aquí lo lees solo tú (y Claude, que contesta desde la función `psicologo`).
--- Tu pareja no ve nada: ni la tarjeta, ni las sesiones, ni que existen. Nada de esto escribe en `eventos`, así que no
+-- Tu pareja no ve nada: ni la tarjeta, ni las sesiones, ni que existen; y el psicólogo de cada uno solo lee lo suyo. Nada de esto escribe en `eventos`, así que no
 -- hay avisos, ni campanita, ni notificaciones. El moderador de las sesiones de pareja (función `sesion`) no lee estas
 -- tablas. public/psicologo.js es la otra mitad.
 -- Pegar completo en Supabase → SQL Editor → Run (o con la CLI: npx supabase db query --remote=<ref> -f supabase/psicologo.sql).
@@ -13,6 +14,11 @@ create table if not exists public.psico_permitidos (
   usuario_id uuid primary key references auth.users(id) on delete cascade,
   creado_en timestamptz not null default now()
 );
+-- Cómo le habla Claude: en masculino ('el') o en femenino ('ella')
+alter table public.psico_permitidos add column if not exists trato text not null default 'el';
+do $$ begin
+  alter table public.psico_permitidos add constraint psico_permitidos_trato check (trato in ('el', 'ella'));
+exception when duplicate_object then null; end $$;
 
 -- ========== LAS SESIONES ==========
 -- Una sola abierta a la vez. Al terminar, Claude deja el resumen (y actualiza psico_perfil).
@@ -179,8 +185,9 @@ grant execute on function public.psico_tomar_turno(uuid) to service_role;
 grant execute on function public.psico_soltar_turno(uuid) to service_role;
 grant execute on function public.psico_empezar_cierre(uuid) to service_role;
 
--- ========== FERNANDO ==========
--- (Las cuentas de Nosotros son usuario@nosotros.invalid.) Para dárselo a alguien más, otra línea igual con su usuario.
-insert into public.psico_permitidos (usuario_id)
-select id from auth.users where email = 'fernando@nosotros.invalid'
-on conflict (usuario_id) do nothing;
+-- ========== QUIÉN LO TIENE: FERNANDO Y MARTINA ==========
+-- (Las cuentas de Nosotros son usuario@nosotros.invalid.) Para dárselo a alguien más, otra fila igual con su usuario.
+insert into public.psico_permitidos (usuario_id, trato)
+select u.id, x.trato from auth.users u
+join (values ('fernando@nosotros.invalid', 'el'), ('martina@nosotros.invalid', 'ella')) as x(email, trato) on u.email = x.email
+on conflict (usuario_id) do update set trato = excluded.trato;
